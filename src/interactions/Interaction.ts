@@ -1,6 +1,5 @@
 import { Page, Locator } from '@playwright/test';
 
-// 1. Define the Enumerator
 export enum DropdownSelectType {
     RANDOM = 'random',
     INDEX = 'index',
@@ -56,7 +55,6 @@ export class Interactions {
             if (options.value === undefined) {
                 throw new Error('[Action] Error -> "value" must be provided when using DropdownSelectType.VALUE.');
             }
-            console.log(`[Action] -> Selecting option by value: "${options.value}"`);
             const selected = await locator.selectOption({ value: options.value });
             return selected[0];
         }
@@ -65,12 +63,10 @@ export class Interactions {
             if (options.index === undefined) {
                 throw new Error('[Action] Error -> "index" must be provided when using DropdownSelectType.INDEX.');
             }
-            console.log(`[Action] -> Selecting option by index: ${options.index}`);
             const selected = await locator.selectOption({ index: options.index });
             return selected[0];
         }
 
-        console.log(`[Action] -> Fetching enabled options for random selection...`);
         const enabledOptions = locator.locator('option:not([disabled]):not([value=""])');
         const count = await enabledOptions.count();
 
@@ -85,7 +81,6 @@ export class Interactions {
             throw new Error(`[Action] Error -> Option at index ${randomIndex} is missing a "value" attribute.`);
         }
 
-        console.log(`[Action] -> Picked random option index ${randomIndex} with value: "${valueToSelect}"`);
         const selected = await locator.selectOption({ value: valueToSelect });
         
         return selected[0];

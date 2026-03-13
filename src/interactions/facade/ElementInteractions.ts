@@ -1,7 +1,7 @@
 import { Page } from '@playwright/test';
-import { Interactions } from './interactions/Interaction';
-import { Navigation } from './interactions/Navigation';
-import { Verifications } from './interactions/Verification';
+import { Interactions } from '../Interaction';
+import { Navigation } from '../Navigation';
+import { Verifications } from '../Verification';
 
 export class ElementInteractions {
     public navigate: Navigation;

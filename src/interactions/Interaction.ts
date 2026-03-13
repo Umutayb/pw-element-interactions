@@ -1,28 +1,5 @@
 import { Page, Locator } from '@playwright/test';
-
-/**
- * Defines the strategy for selecting an option from a dropdown element.
- */
-export enum DropdownSelectType {
-    /** Selects a completely random, non-disabled option with a valid value. */
-    RANDOM = 'random',
-    /** Selects an option based on its zero-based index in the dropdown. */
-    INDEX = 'index',
-    /** Selects an option based on its exact 'value' attribute. */
-    VALUE = 'value'
-}
-
-/**
- * Configuration options for the `selectDropdown` method.
- */
-export interface DropdownSelectOptions {
-    /** The selection strategy to use. Defaults to RANDOM. */
-    type?: DropdownSelectType;
-    /** The specific value attribute to select (Required if type is VALUE). */
-    value?: string;
-    /** The index of the option to select (Required if type is INDEX). */
-    index?: number;
-}
+import { DropdownSelectOptions, DropdownSelectType, DragAndDropOptions } from '../enum/Options';
 
 /**
  * The `Interactions` class provides a robust set of methods for interacting 
@@ -30,12 +7,13 @@ export interface DropdownSelectOptions {
  * and handles edge cases like overlapping elements or optional UI components.
  */
 export class Interactions {
-    
+    private readonly ELEMENT_TIMEOUT = 30000;
+
     /**
      * Initializes the Interactions class.
      * @param page - The current Playwright Page object.
      */
-    constructor(private page: Page) {}
+    constructor(private page: Page) { }
 
     /**
      * Performs a standard Playwright click on the given locator.
@@ -43,7 +21,8 @@ export class Interactions {
      * @param locator - The Playwright Locator pointing to the target element.
      */
     async click(locator: Locator): Promise<void> {
-        await locator.click();
+        await locator.waitFor({ state: 'visible', timeout: this.ELEMENT_TIMEOUT });
+        await locator.click({ timeout: this.ELEMENT_TIMEOUT });
     }
 
     /**
@@ -53,6 +32,7 @@ export class Interactions {
      * @param locator - The Playwright Locator pointing to the target element.
      */
     async clickWithoutScrolling(locator: Locator): Promise<void> {
+        await locator.waitFor({ state: 'attached', timeout: this.ELEMENT_TIMEOUT });
         await locator.dispatchEvent('click');
     }
 
@@ -64,7 +44,7 @@ export class Interactions {
      */
     async clickIfPresent(locator: Locator): Promise<void> {
         if (await locator.isVisible()) {
-            await locator.click();
+            await locator.click({ timeout: this.ELEMENT_TIMEOUT });
         } else {
             console.log(`[Action] -> Locator was not visible. Skipping click.`);
         }
@@ -76,7 +56,8 @@ export class Interactions {
      * @param text - The string to type into the input field.
      */
     async fill(locator: Locator, text: string): Promise<void> {
-        await locator.fill(text);
+        await locator.waitFor({ state: 'visible', timeout: this.ELEMENT_TIMEOUT });
+        await locator.fill(text, { timeout: this.ELEMENT_TIMEOUT });
     }
 
     /**
@@ -85,29 +66,31 @@ export class Interactions {
      * @param filePath - The local file system path to the file you want to upload.
      */
     async uploadFile(locator: Locator, filePath: string): Promise<void> {
+        await locator.waitFor({ state: 'attached', timeout: this.ELEMENT_TIMEOUT });
         console.log(`[Action] -> Uploading file from path "${filePath}"`);
-        await locator.setInputFiles(filePath);
+        await locator.setInputFiles(filePath, { timeout: this.ELEMENT_TIMEOUT });
     }
 
     /**
      * Unified method to interact with `<select>` dropdown elements based on the specified `DropdownSelectType`.
      * If no options are provided, it safely defaults to randomly selecting an enabled, non-empty option.
-     * * @param locator - The Playwright Locator pointing to the `<select>` element.
+     * @param locator - The Playwright Locator pointing to the `<select>` element.
      * @param options - Configuration specifying whether to select by 'random', 'index', or 'value'.
      * @returns A promise that resolves to the exact 'value' attribute of the newly selected option.
      * @throws Error if 'value' or 'index' is missing when their respective types are chosen, or if no enabled options exist.
      */
     async selectDropdown(
-        locator: Locator, 
+        locator: Locator,
         options: DropdownSelectOptions = { type: DropdownSelectType.RANDOM }
     ): Promise<string> {
+        await locator.waitFor({ state: 'visible', timeout: this.ELEMENT_TIMEOUT });
         const type = options.type ?? DropdownSelectType.RANDOM;
 
         if (type === DropdownSelectType.VALUE) {
             if (options.value === undefined) {
                 throw new Error('[Action] Error -> "value" must be provided when using DropdownSelectType.VALUE.');
             }
-            const selected = await locator.selectOption({ value: options.value });
+            const selected = await locator.selectOption({ value: options.value }, { timeout: this.ELEMENT_TIMEOUT });
             return selected[0];
         }
 
@@ -115,11 +98,14 @@ export class Interactions {
             if (options.index === undefined) {
                 throw new Error('[Action] Error -> "index" must be provided when using DropdownSelectType.INDEX.');
             }
-            const selected = await locator.selectOption({ index: options.index });
+            const selected = await locator.selectOption({ index: options.index }, { timeout: this.ELEMENT_TIMEOUT });
             return selected[0];
         }
 
         const enabledOptions = locator.locator('option:not([disabled]):not([value=""])');
+
+        await enabledOptions.first().waitFor({ state: 'attached', timeout: this.ELEMENT_TIMEOUT }).catch(() => { });
+
         const count = await enabledOptions.count();
 
         if (count === 0) {
@@ -127,14 +113,146 @@ export class Interactions {
         }
 
         const randomIndex = Math.floor(Math.random() * count);
-        const valueToSelect = await enabledOptions.nth(randomIndex).getAttribute('value');
+        const valueToSelect = await enabledOptions.nth(randomIndex).getAttribute('value', { timeout: this.ELEMENT_TIMEOUT });
 
         if (valueToSelect === null) {
             throw new Error(`[Action] Error -> Option at index ${randomIndex} is missing a "value" attribute.`);
         }
 
-        const selected = await locator.selectOption({ value: valueToSelect });
-        
+        const selected = await locator.selectOption({ value: valueToSelect }, { timeout: this.ELEMENT_TIMEOUT });
+
         return selected[0];
+    }
+
+    /**
+     * Hovers over the specified element. Useful for triggering dropdowns or tooltips.
+     * @param locator - The Playwright Locator pointing to the target element.
+     */
+    async hover(locator: Locator): Promise<void> {
+        await locator.waitFor({ state: 'visible', timeout: this.ELEMENT_TIMEOUT });
+        await locator.hover({ timeout: this.ELEMENT_TIMEOUT });
+    }
+
+    /**
+     * Scrolls the element into view if it is not already visible in the viewport.
+     * @param locator - The Playwright Locator pointing to the target element.
+     */
+    async scrollIntoView(locator: Locator): Promise<void> {
+        await locator.waitFor({ state: 'attached', timeout: this.ELEMENT_TIMEOUT });
+        await locator.scrollIntoViewIfNeeded({ timeout: this.ELEMENT_TIMEOUT });
+    }
+    /**
+    * Drags an element either to a specified target element, a target element with an offset, or by a coordinate offset.
+    * @param locator - The Playwright Locator pointing to the element to drag.
+    * @param options - Configuration specifying a 'targetLocator', offsets, or both.
+    */
+    async dragAndDrop(locator: Locator, options: DragAndDropOptions): Promise<void> {
+        await locator.waitFor({ state: 'visible', timeout: this.ELEMENT_TIMEOUT });
+
+        if (options.target) {
+            await options.target.waitFor({ state: 'visible', timeout: this.ELEMENT_TIMEOUT });
+
+            if (options.xOffset !== undefined && options.yOffset !== undefined) {
+                const targetBox = await options.target.boundingBox();
+                if (!targetBox) {
+                    throw new Error(`[Action] Error -> Unable to get bounding box for target element.`);
+                }
+
+                // Playwright's targetPosition is relative to the top-left of the padding box.
+                // We calculate it relative to the center to keep behavior consistent.
+                const targetPosition = {
+                    x: (targetBox.width / 2) + options.xOffset,
+                    y: (targetBox.height / 2) + options.yOffset
+                };
+
+                await locator.dragTo(options.target, {
+                    targetPosition,
+                    timeout: this.ELEMENT_TIMEOUT
+                });
+                return;
+            }
+
+            await locator.dragTo(options.target, { timeout: this.ELEMENT_TIMEOUT });
+            return;
+        }
+
+        if (options.xOffset !== undefined && options.yOffset !== undefined) {
+            const box = await locator.boundingBox();
+            if (!box) {
+                throw new Error(`[Action] Error -> Unable to get bounding box for element to perform drag action.`);
+            }
+
+            const startX = box.x + box.width / 2;
+            const startY = box.y + box.height / 2;
+
+            await this.page.mouse.move(startX, startY);
+            await this.page.mouse.down();
+
+            await this.page.mouse.move(startX + options.xOffset, startY + options.yOffset, { steps: 10 });
+            await this.page.mouse.up();
+            return;
+        }
+
+        throw new Error(`[Action] Error -> You must provide either 'targetLocator', or both 'xOffset' and 'yOffset' in DragAndDropOptions.`);
+    }
+
+    /**
+     * Safely retrieves and trims the text content of an element.
+     * @param locator - The Playwright Locator pointing to the target element.
+     * @returns The trimmed string, or an empty string if null.
+     */
+    async getText(locator: Locator): Promise<string> {
+        await locator.waitFor({ state: 'attached', timeout: this.ELEMENT_TIMEOUT });
+        const text = await locator.textContent({ timeout: this.ELEMENT_TIMEOUT });
+        return text?.trim() ?? '';
+    }
+
+    /**
+     * Retrieves the value of a specified attribute (e.g., 'href', 'aria-pressed').
+     * @param locator - The Playwright Locator pointing to the target element.
+     * @param attributeName - The name of the attribute to retrieve.
+     * @returns The attribute value as a string, or null if it doesn't exist.
+     */
+    async getAttribute(locator: Locator, attributeName: string): Promise<string | null> {
+        await locator.waitFor({ state: 'attached', timeout: this.ELEMENT_TIMEOUT });
+        return await locator.getAttribute(attributeName, { timeout: this.ELEMENT_TIMEOUT });
+    }
+
+    /**
+       * Filters a locator list and returns the first element that contains the specified text.
+       * If the element is not found, it prints the available text contents of the base locator for debugging.
+       * @param page The Playwright Page instance.
+       * @param pageName The name of the page block in the JSON repository.
+       * @param elementName The specific element name to look up.
+       * @param desiredText The string of text to search for within the elements.
+       * @param strict If true, throws an error if the element is not found. Defaults to false.
+       * @returns A promise that resolves to the matched Playwright Locator, or null if not found.
+       */
+    public async getByText(
+        baseLocator: Locator,
+        pageName: string,
+        elementName: string,
+        desiredText: string,
+        strict: boolean = false
+    ): Promise<ReturnType<Page['locator']> | null> {
+        const locator = baseLocator.filter({ hasText: desiredText }).first();
+
+        if ((await locator.count()) === 0) {
+            // Fetch all text contents from the base locator for debugging
+            const rawTexts = await baseLocator.allInnerTexts();
+
+            // Explicitly type 'text' as string to resolve ts(7006)
+            const availableTexts = rawTexts
+                .map((text: string) => text.trim())
+                .filter((text: string) => text.length > 0);
+
+            const msg = `Element '${elementName}' on '${pageName}' with text "${desiredText}" not found.\nAvailable texts found in locator: ${availableTexts.length > 0 ? `\n- ${availableTexts.join('\n- ')}` : 'None (Base locator found no elements or elements had no text)'}`;
+
+            if (strict) throw new Error(msg);
+            console.warn(msg);
+            return null;
+        }
+
+        return locator;
     }
 }

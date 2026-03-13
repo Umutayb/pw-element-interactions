@@ -16,7 +16,7 @@ export class Steps {
 
     /**
      * Initializes the Steps class with the required Playwright page and element repository.
-     * * @param page - The current Playwright Page object.
+     * @param page - The current Playwright Page object.
      * @param repo - An initialized instance of `ElementRepository` containing your locators.
      */
     constructor(
@@ -35,7 +35,7 @@ export class Steps {
 
     /**
      * Navigates the browser to the specified URL.
-     * * @param url - The absolute or relative URL to navigate to.
+     * @param url - The absolute or relative URL to navigate to.
      */
     async navigateTo(url: string): Promise<void> {
         console.log(`[Step] -> Navigating to URL: "${url}"`);
@@ -56,7 +56,7 @@ export class Steps {
 
     /**
      * Retrieves an element from the repository and performs a standard click.
-     * * @param pageName - The page or component grouping name in your repository.
+     * @param pageName - The page or component grouping name in your repository.
      * @param elementName - The specific element name in your repository.
      */
     async click(pageName: string, elementName: string): Promise<void> {
@@ -66,9 +66,21 @@ export class Steps {
     }
 
     /**
+     * Retrieves an element and dispatches a native 'click' event directly to it.
+     * Bypasses default scrolling and intersection checks. Useful for obscured elements.
+     * @param pageName - The page or component grouping name in your repository.
+     * @param elementName - The specific element name in your repository.
+     */
+    async clickWithoutScrolling(pageName: string, elementName: string): Promise<void> {
+        console.log(`[Step] -> Clicking (no scroll) on '${elementName}' in '${pageName}'`);
+        const locator = await this.repo.get(this.page, pageName, elementName);
+        await this.interact.clickWithoutScrolling(locator);
+    }
+
+    /**
      * Retrieves a random element from a resolved list of locators and clicks it.
      * Useful for clicking random items in a list or grid (e.g., product cards).
-     * * @param pageName - The page or component grouping name in your repository.
+     * @param pageName - The page or component grouping name in your repository.
      * @param elementName - The specific element name in your repository representing multiple elements.
      */
     async clickRandom(pageName: string, elementName: string): Promise<void> {
@@ -80,7 +92,7 @@ export class Steps {
     /**
      * Retrieves an element and clicks it only if it is visible. 
      * Prevents test failures on optional elements like cookie banners or promotional pop-ups.
-     * * @param pageName - The page or component grouping name in your repository.
+     * @param pageName - The page or component grouping name in your repository.
      * @param elementName - The specific element name in your repository.
      */
     async clickIfPresent(pageName: string, elementName: string): Promise<void> {
@@ -90,8 +102,30 @@ export class Steps {
     }
 
     /**
+     * Retrieves an element and hovers over it. Useful for triggering dropdowns or tooltips.
+     * @param pageName - The page or component grouping name in your repository.
+     * @param elementName - The specific element name in your repository.
+     */
+    async hover(pageName: string, elementName: string): Promise<void> {
+        console.log(`[Step] -> Hovering over '${elementName}' in '${pageName}'`);
+        const locator = await this.repo.get(this.page, pageName, elementName);
+        await this.interact.hover(locator);
+    }
+
+    /**
+     * Retrieves an element and scrolls it into view if it is not already visible.
+     * @param pageName - The page or component grouping name in your repository.
+     * @param elementName - The specific element name in your repository.
+     */
+    async scrollIntoView(pageName: string, elementName: string): Promise<void> {
+        console.log(`[Step] -> Scrolling '${elementName}' in '${pageName}' into view`);
+        const locator = await this.repo.get(this.page, pageName, elementName);
+        await this.interact.scrollIntoView(locator);
+    }
+
+    /**
      * Retrieves an input field and fills it with the provided text, replacing any existing value.
-     * * @param pageName - The page or component grouping name in your repository.
+     * @param pageName - The page or component grouping name in your repository.
      * @param elementName - The specific element name in your repository.
      * @param text - The text to type into the input field.
      */
@@ -103,7 +137,7 @@ export class Steps {
 
     /**
      * Retrieves an input element of type `file` and sets its files.
-     * * @param pageName - The page or component grouping name in your repository.
+     * @param pageName - The page or component grouping name in your repository.
      * @param elementName - The specific element name in your repository.
      * @param filePath - The local file path of the file to be uploaded.
      */
@@ -133,12 +167,41 @@ export class Steps {
     }
 
     // ==========================================
+    // 📊 DATA EXTRACTION STEPS
+    // ==========================================
+
+    /**
+     * Safely retrieves and trims the text content of a specified element.
+     * @param pageName - The page or component grouping name in your repository.
+     * @param elementName - The specific element name in your repository.
+     * @returns The trimmed string, or an empty string if null.
+     */
+    async getText(pageName: string, elementName: string): Promise<string> {
+        console.log(`[Step] -> Getting text from '${elementName}' in '${pageName}'`);
+        const locator = await this.repo.get(this.page, pageName, elementName);
+        return await this.interact.getText(locator);
+    }
+
+    /**
+     * Retrieves the value of a specified attribute (e.g., 'href', 'aria-pressed') from an element.
+     * @param pageName - The page or component grouping name in your repository.
+     * @param elementName - The specific element name in your repository.
+     * @param attributeName - The name of the attribute to retrieve.
+     * @returns The attribute value as a string, or null if it doesn't exist.
+     */
+    async getAttribute(pageName: string, elementName: string, attributeName: string): Promise<string | null> {
+        console.log(`[Step] -> Getting attribute '${attributeName}' from '${elementName}' in '${pageName}'`);
+        const locator = await this.repo.get(this.page, pageName, elementName);
+        return await this.interact.getAttribute(locator, attributeName);
+    }
+
+    // ==========================================
     // ✅ VERIFICATION STEPS
     // ==========================================
 
     /**
      * Asserts that a specified element is attached to the DOM and is visible.
-     * * @param pageName - The page or component grouping name in your repository.
+     * @param pageName - The page or component grouping name in your repository.
      * @param elementName - The specific element name in your repository.
      */
     async verifyPresence(pageName: string, elementName: string): Promise<void> {
@@ -149,7 +212,7 @@ export class Steps {
 
     /**
      * Asserts that a specified element is hidden or completely detached from the DOM.
-     * * @param pageName - The page or component grouping name in your repository.
+     * @param pageName - The page or component grouping name in your repository.
      * @param elementName - The specific element name in your repository.
      */
     async verifyAbsence(pageName: string, elementName: string): Promise<void> {
@@ -160,7 +223,7 @@ export class Steps {
 
     /**
      * Asserts that the specified element exactly matches the expected text.
-     * * @param pageName - The page or component grouping name in your repository.
+     * @param pageName - The page or component grouping name in your repository.
      * @param elementName - The specific element name in your repository.
      * @param expectedText - The exact string expected inside the element.
      */
@@ -174,7 +237,7 @@ export class Steps {
      * Performs a rigorous verification of one or more images. 
      * Asserts visibility, checks for a valid 'src' attribute, ensures a positive 'naturalWidth', 
      * and evaluates the native browser `decode()` promise to ensure the image isn't broken.
-     * * @param pageName - The page or component grouping name in your repository.
+     * @param pageName - The page or component grouping name in your repository.
      * @param elementName - The specific element name in your repository.
      * @param scroll - Whether to smoothly scroll the image(s) into view before verifying (default: true).
      */
@@ -186,7 +249,7 @@ export class Steps {
 
     /**
      * Asserts that the current browser URL contains the expected substring.
-     * * @param text - The substring expected to be present within the active URL.
+     * @param text - The substring expected to be present within the active URL.
      */
     async verifyUrlContains(text: string): Promise<void> {
         console.log(`[Step] -> Verifying current URL contains: "${text}"`);

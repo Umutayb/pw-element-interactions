@@ -1,7 +1,7 @@
 import { Page } from '@playwright/test';
 import { ElementRepository } from 'pw-element-repository';
 import { ElementInteractions } from '../ElementInteractions';
-import { DropdownSelectOptions } from '../interactions/Interaction';
+import { DropdownSelectOptions, TextVerifyOptions, CountVerifyOptions } from '../enum/Options';
 
 /**
  * The `Steps` class serves as a unified Facade for test orchestration.
@@ -222,15 +222,29 @@ export class Steps {
     }
 
     /**
-     * Asserts that the specified element exactly matches the expected text.
+     * Asserts that the specified element exactly matches the expected text, or optionally checks if it is not empty.
      * @param pageName - The page or component grouping name in your repository.
      * @param elementName - The specific element name in your repository.
-     * @param expectedText - The exact string expected inside the element.
+     * @param expectedText - The exact string expected inside the element (optional if checking 'notEmpty').
+     * @param options - Configuration to alter the verification behavior.
      */
-    async verifyText(pageName: string, elementName: string, expectedText: string): Promise<void> {
-        console.log(`[Step] -> Verifying text of '${elementName}' in '${pageName}' matches: "${expectedText}"`);
+    async verifyText(pageName: string, elementName: string, expectedText?: string, options?: TextVerifyOptions): Promise<void> {
+        const logDetail = options?.notEmpty ? `is not empty` : `matches: "${expectedText}"`;
+        console.log(`[Step] -> Verifying text of '${elementName}' in '${pageName}' ${logDetail}`);
         const locator = await this.repo.get(this.page, pageName, elementName);
-        await this.verify.text(locator, expectedText);
+        await this.verify.text(locator, expectedText, options);
+    }
+
+    /**
+     * Asserts the number of elements matching the locator based on the provided conditions.
+     * @param pageName - The page or component grouping name in your repository.
+     * @param elementName - The specific element name in your repository.
+     * @param options - Configuration specifying 'exact', 'greaterThan', or 'lessThan' logic.
+     */
+    async verifyCount(pageName: string, elementName: string, options: CountVerifyOptions): Promise<void> {
+        console.log(`[Step] -> Verifying count for '${elementName}' in '${pageName}' with options: ${JSON.stringify(options)}`);
+        const locator = await this.repo.get(this.page, pageName, elementName);
+        await this.verify.count(locator, options);
     }
 
     /**

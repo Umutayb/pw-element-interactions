@@ -1,3 +1,5 @@
+import { Locator } from '@playwright/test';
+
 /**
  * Defines the strategy for selecting an option from a dropdown element.
  */
@@ -40,4 +42,17 @@ export interface CountVerifyOptions {
     greaterThan?: number;
     /** Asserts that the element count is strictly less than this value */
     lessThan?: number;
+}
+
+/**
+ * Configuration options for the `dragAndDrop` method.
+ * You must provide either a `targetLocator` OR both `xOffset` and `yOffset`.
+ */
+export interface DragAndDropOptions {
+    /** The destination element to drop the dragged element onto. */
+    target?: Locator;
+    /** The horizontal offset from the center of the element (positive moves right). */
+    xOffset?: number;
+    /** The vertical offset from the center of the element (positive moves down). */
+    yOffset?: number;
 }

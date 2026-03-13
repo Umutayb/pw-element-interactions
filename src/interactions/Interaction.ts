@@ -1,5 +1,5 @@
 import { Page, Locator } from '@playwright/test';
-import { DropdownSelectOptions, DropdownSelectType } from '../enum/Dropdown';
+import { DropdownSelectOptions, DropdownSelectType } from '../enum/Options';
 
 /**
  * The `Interactions` class provides a robust set of methods for interacting 

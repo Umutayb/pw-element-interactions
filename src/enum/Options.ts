@@ -37,7 +37,7 @@ export interface TextVerifyOptions {
  */
 export interface CountVerifyOptions {
     /** Asserts that the element count exactly matches this value */
-    exact?: number;
+    exactly?: number;
     /** Asserts that the element count is strictly greater than this value */
     greaterThan?: number;
     /** Asserts that the element count is strictly less than this value */

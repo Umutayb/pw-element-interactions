@@ -83,15 +83,13 @@ The `Steps` class automatically handles fetching the Playwright `Locator` using 
 
 ### 🖱️ Interaction
 
-* **`click(pageName: string, elementName: string)`**: Retrieves an element from the repository and performs a standard click. Automatically waits for actionability.
+* **`click(pageName: string, elementName: string)`**: Retrieves an element from the repository and performs a standard Playwright click. Automatically waits for the element to be attached, visible, stable, and actionable.
+* **`clickWithoutScrolling(pageName: string, elementName: string)`**: Dispatches a native `click` event directly to the element, bypassing Playwright's default scrolling and intersection observer checks. Highly useful for clicking elements obscured by sticky headers or transparent overlays.
+* **`clickIfPresent(pageName: string, elementName: string)`**: Checks if an element is visible before attempting to click it. Safely skips the action without failing the test if the element is hidden. Great for optional elements like cookie banners.
 * **`clickRandom(pageName: string, elementName: string)`**: Retrieves a random element from a resolved list of locators and clicks it. Useful for clicking random items in a list or grid.
-* **`clickIfPresent(pageName: string, elementName: string)`**: Retrieves an element and clicks it only if it is visible. Prevents test failures on optional UI elements like cookie banners or promotional pop-ups.
-* **`fill(pageName: string, elementName: string, text: string)`**: Retrieves an input field and fills it with the provided text, replacing any existing value.
-* **`uploadFile(pageName: string, elementName: string, filePath: string)`**: Retrieves an `<input type="file">` and uploads the file from the provided local `filePath`.
-* **`selectDropdown(pageName: string, elementName: string, options?: DropdownSelectOptions)`**: Interacts with `<select>` dropdown elements. Returns the exact `value` attribute of the selected option. Accepts:
-* `{ type: 'random' }` *(Default)* - Selects a random, non-disabled option with a valid value.
-* `{ type: 'value', value: 'string' }` - Selects by exact value.
-* `{ type: 'index', index: 1 }` - Selects by index.
+* **`fill(pageName: string, elementName: string, text: string)`**: Clears any existing value in the target input field and types the provided text.
+* **`uploadFile(pageName: string, elementName: string, filePath: string)`**: Uploads a local file from the provided `filePath` to an `<input type="file">` element.
+* **`selectDropdown(pageName: string, elementName: string, options?: DropdownSelectOptions)`**: Selects an option from a `<select>` element and returns its `value`. Defaults to a random, non-disabled option (`{ type: DropdownSelectType.RANDOM }`). Alternatively, select by exact value (`{ type: DropdownSelectType.VALUE, value: '...' }`) or zero-based index (`{ type: DropdownSelectType.INDEX, index: 1 }`).
 
 
 

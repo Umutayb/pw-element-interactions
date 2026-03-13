@@ -178,6 +178,18 @@ export class Steps {
         await this.interact.dragAndDrop(locator, options);
     }
 
+    /**
+     * Drags an element either to a specified target element, a target element with an offset, or by a coordinate offset.
+     * @param pageName - The page or component grouping name in your repository.
+     * @param elementName - The specific element name in your repository (the element to drag).
+     * @param options - Configuration specifying a 'targetLocator', offsets, or both.
+     */
+    async dragAndDropListedElement(pageName: string, elementName: string, elementText: string, options: DragAndDropOptions): Promise<void> {
+        console.log(`[Step] -> Dragging and dropping '${elementText}' in '${pageName}'`);
+        const locator = await this.repo.getByText(this.page, pageName, elementName, elementText);
+        await this.interact.dragAndDrop(locator!, options);
+    }
+
     // ==========================================
     // 📊 DATA EXTRACTION STEPS
     // ==========================================
@@ -229,8 +241,8 @@ export class Steps {
      */
     async verifyAbsence(pageName: string, elementName: string): Promise<void> {
         console.log(`[Step] -> Verifying absence of '${elementName}' in '${pageName}'`);
-        const locator = await this.repo.get(this.page, pageName, elementName);
-        await this.verify.absence(locator);
+        const selector = await this.repo.getSelector(pageName, elementName);
+        await this.verify.absence(selector);
     }
 
     /**

@@ -58,7 +58,7 @@ npm i pw-element-interactions
 * **Advanced image verification** — `verifyImages` evaluates actual browser decoding and `naturalWidth`, not just DOM presence.
 * **Smart dropdowns** — Select by value, index, or randomly, with automatic skipping of disabled and empty options.
 * **Flexible assertions** — Verify exact text, non-empty text, URL substrings, or dynamic element counts (greater than, less than, exact).
-* **Drag and drop** — Drag to other elements, to coordinate offsets, or combine both strategies.
+* **Smart interactions** — Drag to other elements, type sequentially, wait for specific element state, verify images and more!
 
 ---
 

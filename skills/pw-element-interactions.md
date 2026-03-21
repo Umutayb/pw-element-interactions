@@ -47,6 +47,14 @@ These rules are non-negotiable and override any perceived helpfulness or initiat
 
 ### 6. Before creating or modifying `playwright.config.ts`, read the existing file first — do not overwrite it.
 
+
+### 7. NEVER use navigateTo() for in-app page transitions.
+- navigateTo() is ONLY for the initial entry point of a test (e.g. opening the home page or a landing URL).
+- All subsequent page transitions MUST happen through UI interactions — clicks, form submissions, link taps, etc. — just like a real user.
+- If reaching a page through the UI requires too many steps, ask the user whether a shortcut is acceptable before using navigateTo().
+
+### 8. Run the tests to validate them.
+
 ---
 
 ## 1. Adding Locators

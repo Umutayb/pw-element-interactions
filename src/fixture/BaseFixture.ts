@@ -9,7 +9,6 @@ type StepFixture = {
     contextStore: ContextStore;
     repo: ElementRepository;
     steps: Steps;
-
 };
 
 export function baseFixture<T extends {}>(
@@ -29,6 +28,16 @@ export function baseFixture<T extends {}>(
         },
         contextStore: async ({ }, use) => {
             await use(new ContextStore());
+        },
+        page: async ({ page }, use, testInfo) => {
+            await use(page);
+            if (testInfo.status !== testInfo.expectedStatus) {
+                const screenshot = await page.screenshot({ fullPage: true });
+                await testInfo.attach('failure-screenshot', {
+                    body: screenshot,
+                    contentType: 'image/png',
+                });
+            }
         },
     });
 }

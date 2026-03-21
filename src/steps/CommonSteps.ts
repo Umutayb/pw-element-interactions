@@ -2,9 +2,7 @@ import { Page } from '@playwright/test';
 import { ElementRepository } from 'pw-element-repository';
 import { ElementInteractions } from '../interactions/facade/ElementInteractions';
 import { DropdownSelectOptions, TextVerifyOptions, CountVerifyOptions, DragAndDropOptions } from '../enum/Options';
-import { createLogger } from '../logger/Logger';
-
-const logger = (type: string) => createLogger(`${type}`);
+import { logger } from '../logger/Logger';
 
 const log = {
   navigate: logger('navigate'),

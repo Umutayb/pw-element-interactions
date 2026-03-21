@@ -39,27 +39,33 @@
       "name": "ElementsPage",
       "elements": [
         {
-          "elementName": "questionBoxTitle",
+          "elementName": "pageTitle",
           "selector": {
-            "css": ".question-box h2"
+            "css": "text:contains:Elements›Radio Buttons"
           }
         },
         {
-          "elementName": "checkMarkMessage",
+          "elementName": "questionHeading",
           "selector": {
-            "css": ".question-box form p"
+            "css": "h2"
           }
         },
         {
-          "elementName": "checkMarks",
+          "elementName": "yesRadio",
           "selector": {
-            "css": ".radio-group label"
+            "css": "radio:has:Yes"
           }
         },
         {
-          "elementName": "tools",
+          "elementName": "impressiveRadio",
           "selector": {
-            "id": "tool"
+            "css": "radio:has:Impressive"
+          }
+        },
+        {
+          "elementName": "noRadio",
+          "selector": {
+            "css": "radio:has:No"
           }
         }
       ]
@@ -68,9 +74,69 @@
       "name": "HomePage",
       "elements": [
         {
-          "elementName": "categories",
+          "elementName": "pageTitle",
           "selector": {
-            "css": "#category-card"
+            "css": "h1"
+          }
+        },
+        {
+          "elementName": "componentCount",
+          "selector": {
+            "css": "text:contains:37 components"
+          }
+        },
+        {
+          "elementName": "categoryCount",
+          "selector": {
+            "css": "text:contains:8 categories"
+          }
+        },
+        {
+          "elementName": "elementsCard",
+          "selector": {
+            "testId": "home-card-radiobuttons"
+          }
+        },
+        {
+          "elementName": "formsCard",
+          "selector": {
+            "testId": "home-card-forms"
+          }
+        },
+        {
+          "elementName": "alertsCard",
+          "selector": {
+            "testId": "home-card-alerts"
+          }
+        },
+        {
+          "elementName": "widgetsCard",
+          "selector": {
+            "testId": "home-card-tabs"
+          }
+        },
+        {
+          "elementName": "interactionsCard",
+          "selector": {
+            "testId": "home-card-sortable"
+          }
+        },
+        {
+          "elementName": "mediaCard",
+          "selector": {
+            "testId": "home-card-gallery"
+          }
+        },
+        {
+          "elementName": "authStateCard",
+          "selector": {
+            "testId": "home-card-loginForm"
+          }
+        },
+        {
+          "elementName": "edgeCasesCard",
+          "selector": {
+            "testId": "home-card-longList"
           }
         }
       ]
@@ -79,128 +145,116 @@
       "name": "FormsPage",
       "elements": [
         {
-          "elementName": "title",
+          "elementName": "formTitle",
           "selector": {
-            "css": "[id='title']"
+            "css": "h1"
           }
         },
         {
           "elementName": "nameInput",
           "selector": {
-            "css": "[id='name']"
+            "css": "textbox:has:Name:"
           }
         },
         {
           "elementName": "emailInput",
           "selector": {
-            "css": "[id='email']"
+            "css": "textbox:has:Email:"
           }
         },
         {
-          "elementName": "genderDropdown",
+          "elementName": "genderSelect",
           "selector": {
-            "css": "#gender"
-          }
-        },
-        {
-          "elementName": "genderOptions",
-          "selector": {
-            "css": "#gender"
+            "css": "combobox:has:Gender:"
           }
         },
         {
           "elementName": "mobileInput",
           "selector": {
-            "css": "[id='mobile']"
+            "css": "textbox:has:Mobile (10 Digits):"
           }
         },
         {
-          "elementName": "dateOfBirthInput",
+          "elementName": "dateInput",
           "selector": {
-            "css": "#dob"
+            "css": "textbox:has:Date of Birth:"
           }
         },
         {
           "elementName": "hobbiesInput",
           "selector": {
-            "css": "#hobbies"
+            "css": "textbox:has:Hobbies:"
           }
         },
         {
           "elementName": "addressInput",
           "selector": {
-            "css": "#currentAddress"
+            "css": "textbox:has:Current Address:"
           }
         },
         {
           "elementName": "cityInput",
           "selector": {
-            "css": "#city"
+            "css": "textbox:has:City:"
           }
         },
         {
           "elementName": "submitButton",
           "selector": {
-            "css": "#submit"
-          }
-        },
-        {
-          "elementName": "submissionEntries",
-          "selector": {
-            "css": ".submitted-info-table tr"
-          }
-        },
-        {
-          "elementName": "table",
-          "selector": {
-            "css": ".submitted-info-table"
-          }
-        },
-        {
-          "elementName": "datePickerYearsButton",
-          "selector": {
-            "css": "[aria-label='Open years overlay']"
-          }
-        },
-        {
-          "elementName": "datePickerMonthsButton",
-          "selector": {
-            "css": "[aria-label='Open months overlay']"
-          }
-        },
-        {
-          "elementName": "datePickerSubmitButton",
-          "selector": {
-            "css": ".dp__action_row .dp__action_select"
-          }
-        },
-        {
-          "elementName": "todayCell",
-          "selector": {
-            "css": ".dp__today"
-          }
-        },
-        {
-          "elementName": "spSelectionPreview",
-          "selector": {
-            "css": ".dp__selection_preview"
-          }
-        },
-        {
-          "elementName": "datePickerCells",
-          "selector": {
-            "css": "[role='gridcell']"
+            "css": "button:has:Submit"
           }
         }
       ]
     },
     {
-      "name": "AlertAndWindowsPage",
+      "name": "AlertsPage",
       "elements": [
         {
-          "elementName": "buttons",
+          "elementName": "pageTitle",
           "selector": {
-            "css": ".button"
+            "css": "h2"
+          }
+        },
+        {
+          "elementName": "welcomeMessage",
+          "selector": {
+            "css": "text:Welcome to Alerts, Frame & Windows!"
+          }
+        },
+        {
+          "elementName": "alertsButton",
+          "selector": {
+            "testId": "button-click-me"
+          }
+        },
+        {
+          "elementName": "rightClickButton",
+          "selector": {
+            "testId": "button-right-click-me"
+          }
+        },
+        {
+          "elementName": "doubleClickButton",
+          "selector": {
+            "testId": "button-double-click-me"
+          }
+        },
+        {
+          "elementName": "newTabButton",
+          "selector": {
+            "testId": "button-new-tab"
+          }
+        },
+        {
+          "elementName": "newWindowButton",
+          "selector": {
+            "testId": "button-new-window"
+          }
+        },
+        {
+          "elementName": "newWindowMessageButton",
+          "selector": {
+            "testId": "button-new-window-message"
           }
         }
       ]
@@ -209,15 +263,39 @@
       "name": "InteractionsPage",
       "elements": [
         {
-          "elementName": "title",
+          "elementName": "pageTitle",
           "selector": {
-            "id": "title"
+            "css": "h1"
           }
         },
         {
-          "elementName": "tools",
+          "elementName": "pageSubtitle",
           "selector": {
-            "id": "tool"
+            "css": "text:Drag items between the two lists"
+          }
+        },
+        {
+          "elementName": "list1Header",
+          "selector": {
+            "css": "text:First List"
+          }
+        },
+        {
+          "elementName": "list2Header",
+          "selector": {
+            "css": "text:Second List"
+          }
+        },
+        {
+          "elementName": "list1Items",
+          "selector": {
+            "css": "text:Item A, Item B, Item C"
+          }
+        },
+        {
+          "elementName": "list2Items",
+          "selector": {
+            "css": "text:Item D, Item E"
           }
         }
       ]
@@ -269,6 +347,147 @@
           "elementName": "logo",
           "selector": {
             "id": "logo"
+          }
+        }
+      ]
+    },
+    {
+      "name": "GalleryPage",
+      "elements": [
+        {
+          "elementName": "pageTitle",
+          "selector": {
+            "css": "h1"
+          }
+        },
+        {
+          "elementName": "pageSubtitle",
+          "selector": {
+            "css": "text:Click any image to view it full size"
+          }
+        },
+        {
+          "elementName": "mountainLandscape",
+          "selector": {
+            "testId": "gallery-image-0"
+          }
+        },
+        {
+          "elementName": "oceanSunset",
+          "selector": {
+            "testId": "gallery-image-1"
+          }
+        },
+        {
+          "elementName": "forestPath",
+          "selector": {
+            "testId": "gallery-image-2"
+          }
+        },
+        {
+          "elementName": "citySkyline",
+          "selector": {
+            "testId": "gallery-image-3"
+          }
+        },
+        {
+          "elementName": "desertDunes",
+          "selector": {
+            "testId": "gallery-image-4"
+          }
+        },
+        {
+          "elementName": "snowyPeaks",
+          "selector": {
+            "testId": "gallery-image-5"
+          }
+        },
+        {
+          "elementName": "autumnLeaves",
+          "selector": {
+            "testId": "gallery-image-6"
+          }
+        },
+        {
+          "elementName": "tropicalBeach",
+          "selector": {
+            "testId": "gallery-image-7"
+          }
+        }
+      ]
+    },
+    {
+      "name": "LoginFormPage",
+      "elements": [
+        {
+          "elementName": "pageTitle",
+          "selector": {
+            "css": "h1"
+          }
+        },
+        {
+          "elementName": "pageSubtitle",
+          "selector": {
+            "css": "text:Form with client-side validation and simulated authentication"
+          }
+        },
+        {
+          "elementName": "usernameInput",
+          "selector": {
+            "css": "textbox:has:Username"
+          }
+        },
+        {
+          "elementName": "passwordInput",
+          "selector": {
+            "css": "textbox:has:Password"
+          }
+        },
+        {
+          "elementName": "showPasswordButton",
+          "selector": {
+            "testId": "button-show-password"
+          }
+        },
+        {
+          "elementName": "signInButton",
+          "selector": {
+            "testId": "button-sign-in"
+          }
+        },
+        {
+          "elementName": "hintMessage",
+          "selector": {
+            "css": "text:Hint: admin / password123"
+          }
+        }
+      ]
+    },
+    {
+      "name": "LongListPage",
+      "elements": [
+        {
+          "elementName": "pageTitle",
+          "selector": {
+            "css": "h1"
+          }
+        },
+        {
+          "elementName": "pageSubtitle",
+          "selector": {
+            "css": "text:200 items with live search filtering"
+          }
+        },
+        {
+          "elementName": "searchInput",
+          "selector": {
+            "css": "textbox:has:Search by name or category..."
+          }
+        },
+        {
+          "elementName": "itemCountDisplay",
+          "selector": {
+            "css": "text:Showing 200 of 200 items"
           }
         }
       ]

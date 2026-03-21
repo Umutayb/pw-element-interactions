@@ -89,7 +89,8 @@ export class Steps {
     async clickRandom(pageName: string, elementName: string): Promise<void> {
         log.interact('Clicking a random element from "%s" in "%s"', elementName, pageName);
         const locator = await this.repo.getRandom(this.page, pageName, elementName);
-        await this.interact.click(locator!);
+        if (!locator) throw new Error(`No visible element found for "${elementName}" in "${pageName}"`);
+        await this.interact.click(locator);
     }
 
     async clickIfPresent(pageName: string, elementName: string): Promise<void> {
@@ -141,7 +142,8 @@ export class Steps {
     async dragAndDropListedElement(pageName: string, elementName: string, elementText: string, options: DragAndDropOptions): Promise<void> {
         log.interact('Dragging and dropping "%s" in "%s"', elementText, pageName);
         const locator = await this.repo.getByText(this.page, pageName, elementName, elementText);
-        await this.interact.dragAndDrop(locator!, options);
+        if (!locator) throw new Error(`No element with text "${elementText}" found for "${elementName}" in "${pageName}"`);
+        await this.interact.dragAndDrop(locator, options);
     }
 
     // ==========================================

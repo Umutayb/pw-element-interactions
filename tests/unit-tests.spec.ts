@@ -172,10 +172,56 @@ test.describe('E2E Facade Implementation Suite', () => {
     log('TC_004 Wait For State Warning Behavior — passed');
   });
 
+  test('TC_005: Click Random - Category Navigation', async ({ steps }) => {
+
+    await test.step('Navigate to the website', async () => {
+      await steps.navigateTo('http://127.0.0.1:8080/');
+    });
+
+    await test.step('Click a random category and verify navigation', async () => {
+      await steps.clickRandom('HomePage', 'categories');
+      await steps.verifyAbsence('HomePage', 'categories');
+    });
+
+    log('TC_005 Click Random — passed');
+  });
+
+  test('TC_006: Verify Count - greaterThan and lessThan', async ({ page }) => {
+    const steps = new Steps(page, repo, 3000);
+
+    await test.step('Navigate to the website', async () => {
+      await steps.navigateTo('http://127.0.0.1:8080/');
+    });
+
+    await test.step('verifyCount with greaterThan (positive)', async () => {
+      await steps.verifyCount('HomePage', 'categories', { greaterThan: 3 });
+    });
+
+    await test.step('verifyCount with lessThan (positive)', async () => {
+      await steps.verifyCount('HomePage', 'categories', { lessThan: 10 });
+    });
+
+    await test.step('verifyCount with greaterThan polls until timeout (negative)', async () => {
+      const start = Date.now();
+      let errorCaught = false;
+      try {
+        await steps.verifyCount('HomePage', 'categories', { greaterThan: 5 });
+      } catch {
+        errorCaught = true;
+      }
+      const elapsed = Date.now() - start;
+      expect(errorCaught).toBeTruthy();
+      expect(elapsed).toBeGreaterThan(2500);
+      log('greaterThan polling confirmed: timed out after %dms', elapsed);
+    });
+
+    log('TC_006 Verify Count greaterThan/lessThan — passed');
+  });
+
 });
 
-test.describe('TC_005: navigateTo resolves relative URLs via Playwright baseURL', () => {
-  test.use({ baseURL: 'http://127.0.0.1:8080/' });
+test.describe('TC_006: navigateTo resolves relative URLs via Playwright baseURL', () => {
+  test.use({ baseURL: 'https://umutayb.github.io/vue-test-app/' });
 
   test('navigates with a relative URL', async ({ steps }) => {
     await test.step('Navigate using a relative URL', async () => {
@@ -186,6 +232,10 @@ test.describe('TC_005: navigateTo resolves relative URLs via Playwright baseURL'
       await steps.verifyCount('HomePage', 'categories', { exactly: 5 });
     });
 
-    log('TC_005 navigateTo relative URL — passed');
+    await test.step('verifyUrlContains escapes regex metacharacters', async () => {
+      await steps.verifyUrlContains('vue-test-app/');
+    });
+
+    log('TC_006 navigateTo relative URL — passed');
   });
 });

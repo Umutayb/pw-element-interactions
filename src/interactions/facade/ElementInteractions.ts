@@ -26,7 +26,7 @@ export class ElementInteractions {
         this.interact = new Interactions(page, timeout);
         this.verify = new Verifications(page, timeout);
         this.navigate = new Navigation(page);
-        this.extract = new Extractions(page);
+        this.extract = new Extractions(page, timeout);
         this.utils = new Utils(timeout);
     }
 }

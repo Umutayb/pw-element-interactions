@@ -11,7 +11,8 @@
     "test:ui": "npx playwright test --headed",
     "prepublishOnly": "npm run build",
     "postinstall": "node scripts/postinstall.js",
-    "test:quiet": "TESTER_DEBUG=false npx playwright test"
+    "test:quiet": "TESTER_DEBUG=false npx playwright test",
+    "test:coverage": "npx playwright test tests/api-coverage.spec.ts"
   },
   "files": [
     "dist",

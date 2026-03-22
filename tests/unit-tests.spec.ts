@@ -2,38 +2,30 @@ import { test, expect } from './fixture/StepFixture';
 import { ElementRepository } from 'pw-element-repository';
 import { Steps } from '../src/steps/CommonSteps';
 import { DropdownSelectType } from '../src/enum/Options';
-import { DateUtilities } from '../src/utils/DateUtilities';
 import { createLogger } from '../src/logger/Logger';
 
 const log = createLogger('tests');
 
 test.describe('E2E Facade Implementation Suite', () => {
 
-  let repo: ElementRepository;
-
-  test.beforeAll(() => {
-    repo = new ElementRepository("tests/data/page-repository.json");
-  });
-
   test('TC_001: Complete Form Submission (Core API)', async ({ page, repo, steps, interactions, contextStore }) => {
 
     await test.step('Navigate to the website', async () => {
-      await steps.navigateTo('http://127.0.0.1:8080/');
+      await steps.navigateTo('/');
     });
 
     await test.step('Verify Category Count', async () => {
-      await steps.verifyCount('HomePage', 'categories', { exactly: 5 });
+      await steps.verifyCount('HomePage', 'categories', { exactly: 8 });
     });
 
     await test.step('Open Forms Page and verify navigation', async () => {
-      const formsCategory = await repo.getByText(page, 'HomePage', 'categories', 'Forms');
-      await interactions.interact.click(formsCategory!);
+      await steps.click('HomePage', 'formsCard');
       await steps.verifyAbsence('HomePage', 'categories');
     });
 
     await test.step('Verify Page Title', async () => {
       await steps.verifyUrlContains('/forms');
-      await steps.verifyText('FormsPage', 'title', 'Forms Page');
+      await steps.verifyText('FormsPage', 'title', 'Full Form');
     });
 
     await test.step('Fill Standard Inputs', async () => {
@@ -61,13 +53,13 @@ test.describe('E2E Facade Implementation Suite', () => {
       await steps.verifyPresence('FormsPage', 'todayCell');
       await steps.click('FormsPage', 'todayCell');
 
-      let dobValue = await steps.getText('FormsPage', 'spSelectionPreview');
-      dobValue = DateUtilities.reformatDateString(dobValue!, 'yyyy-M-d');
-
-      contextStore.put('Date of Birth', dobValue);
-
       await steps.verifyPresence('FormsPage', 'datePickerSubmitButton');
       await steps.click('FormsPage', 'datePickerSubmitButton');
+
+      const now = new Date();
+      const dobValue = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+      contextStore.put('Date of Birth', dobValue);
+
       await steps.click('FormsPage', 'hobbiesInput');
     });
 
@@ -88,19 +80,11 @@ test.describe('E2E Facade Implementation Suite', () => {
     log('TC_001 Complete Form Submission — passed');
   });
 
-  test('TC_002: Drag and Drop Interactions', async ({ page, steps, interactions }) => {
+  test('TC_002: Drag and Drop Interactions', async ({ page, steps, repo, interactions }) => {
 
-    await test.step('Navigate to Interactions and open Sortable tool', async () => {
-      await steps.navigateTo('http://127.0.0.1:8080/');
-
-      const interactionsCategory = await repo.getByText(page, 'HomePage', 'categories', 'Interactions');
-      await interactions.interact.click(interactionsCategory!);
-
-      await steps.verifyUrlContains('/interactions');
-
-      const sortableTool = await repo.getByText(page, 'InteractionsPage', 'tools', 'Sortable');
-      await interactions.interact.click(sortableTool!);
-
+    await test.step('Navigate to Sortable page via homepage', async () => {
+      await steps.navigateTo('/');
+      await steps.click('HomePage', 'interactionsCard');
       await steps.verifyUrlContains('/sortable');
     });
 
@@ -115,11 +99,12 @@ test.describe('E2E Facade Implementation Suite', () => {
     log('TC_002 Drag and Drop Interactions — passed');
   });
 
-  test('TC_003: Negative Assertions - Expecting Verifications to Fail', async ({ page }) => {
-    const steps = new Steps(page, repo, 500);
+  test('TC_003: Negative Assertions - Expecting Verifications to Fail', async ({ page, repo }) => {
+
+    const steps = new Steps(page, repo, 1000); // Shorten timeout for negative assertions
 
     await test.step('Navigate to the website', async () => {
-      await steps.navigateTo('http://127.0.0.1:8080/');
+      await steps.navigateTo('/');
     });
 
     await test.step('verifyAbsence on a visible element should throw', async () => {
@@ -147,11 +132,11 @@ test.describe('E2E Facade Implementation Suite', () => {
     log('TC_003 Negative Assertions — passed');
   });
 
-  test('TC_004: Wait For State - Warning behavior on incorrect state', async ({ page }) => {
+  test('TC_004: Wait For State - Warning behavior on incorrect state', async ({ page, repo }) => {
     const steps = new Steps(page, repo, 500);
 
     await test.step('Navigate to the website', async () => {
-      await steps.navigateTo('http://127.0.0.1:8080/');
+      await steps.navigateTo('/');
     });
 
     await test.step('waitForState should swallow the error and log a warning', async () => {
@@ -174,7 +159,7 @@ test.describe('E2E Facade Implementation Suite', () => {
   test('TC_005: Click Random - Category Navigation', async ({ steps }) => {
 
     await test.step('Navigate to the website', async () => {
-      await steps.navigateTo('http://127.0.0.1:8080/');
+      await steps.navigateTo('/');
     });
 
     await test.step('Click a random category and verify navigation', async () => {
@@ -185,11 +170,11 @@ test.describe('E2E Facade Implementation Suite', () => {
     log('TC_005 Click Random — passed');
   });
 
-  test('TC_006: Verify Count - greaterThan and lessThan', async ({ page }) => {
+  test('TC_006: Verify Count - greaterThan and lessThan', async ({ page, repo }) => {
     const steps = new Steps(page, repo, 3000);
 
     await test.step('Navigate to the website', async () => {
-      await steps.navigateTo('http://127.0.0.1:8080/');
+      await steps.navigateTo('/');
     });
 
     await test.step('verifyCount with greaterThan (positive)', async () => {
@@ -204,7 +189,7 @@ test.describe('E2E Facade Implementation Suite', () => {
       const start = Date.now();
       let errorCaught = false;
       try {
-        await steps.verifyCount('HomePage', 'categories', { greaterThan: 5 });
+        await steps.verifyCount('HomePage', 'categories', { greaterThan: 8 });
       } catch {
         errorCaught = true;
       }
@@ -221,16 +206,12 @@ test.describe('E2E Facade Implementation Suite', () => {
 
 test.describe('TC_007: verifyState - All Playwright element states', () => {
 
-  test('positive state assertions', async ({ page, repo, interactions }) => {
-    const steps = new Steps(page, repo, 1000);
+  test('positive state assertions', async ({ page, repo, steps, interactions }) => {
 
     await test.step('Navigate to Forms page', async () => {
-      await steps.navigateTo('http://127.0.0.1:8080/');
-      const formsCategory = await interactions.interact.getByText(
-        await page.locator('#category-card'),
-        'HomePage', 'categories', 'Forms'
-      );
-      await formsCategory!.click();
+      await steps.navigateTo('/');
+      await steps.click('HomePage', 'formsCard');
+      await steps.verifyUrlContains('/forms');
     });
 
     await test.step('visible: title is visible', async () => {
@@ -259,13 +240,8 @@ test.describe('TC_007: verifyState - All Playwright element states', () => {
     });
 
     await test.step('Navigate to Radio Buttons page', async () => {
-      await steps.navigateTo('http://127.0.0.1:8080/');
-      const elementsCategory = await repo.getByText(page, 'HomePage', 'categories', 'Elements');
-      await interactions.interact.click(elementsCategory!);
-      await steps.verifyUrlContains('/elements');
-
-      const radioButtonsTool = await repo.getByText(page, 'ElementsPage', 'tools', 'Radio Buttons');
-      await interactions.interact.click(radioButtonsTool!);
+      await steps.navigateTo('/');
+      await steps.click('HomePage', 'elementsCard');
       await steps.verifyUrlContains('/radiobuttons');
     });
 
@@ -286,7 +262,7 @@ test.describe('TC_007: verifyState - All Playwright element states', () => {
   });
 });
 
-test.describe('TC_006: navigateTo resolves relative URLs via Playwright baseURL', () => {
+test.describe('TC_008: navigateTo resolves relative URLs via Playwright baseURL', () => {
   test.use({ baseURL: 'https://umutayb.github.io/vue-test-app/' });
 
   test('navigates with a relative URL', async ({ steps }) => {
@@ -295,13 +271,13 @@ test.describe('TC_006: navigateTo resolves relative URLs via Playwright baseURL'
     });
 
     await test.step('Verify the home page loaded', async () => {
-      await steps.verifyCount('HomePage', 'categories', { exactly: 5 });
+      await steps.verifyCount('HomePage', 'categories', { exactly: 8 });
     });
 
     await test.step('verifyUrlContains escapes regex metacharacters', async () => {
       await steps.verifyUrlContains('vue-test-app/');
     });
 
-    log('TC_006 navigateTo relative URL — passed');
+    log('TC_008 navigateTo relative URL — passed');
   });
 });

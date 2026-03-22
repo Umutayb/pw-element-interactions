@@ -41,7 +41,7 @@
         {
           "elementName": "pageTitle",
           "selector": {
-            "css": "text:contains:Elements›Radio Buttons"
+            "text": "Elements›Radio Buttons"
           }
         },
         {
@@ -53,19 +53,19 @@
         {
           "elementName": "yesRadio",
           "selector": {
-            "css": "radio:has:Yes"
+            "id": "yes"
           }
         },
         {
           "elementName": "impressiveRadio",
           "selector": {
-            "css": "radio:has:Impressive"
+            "id": "impressive"
           }
         },
         {
           "elementName": "noRadio",
           "selector": {
-            "css": "radio:has:No"
+            "id": "no"
           }
         }
       ]
@@ -82,61 +82,67 @@
         {
           "elementName": "componentCount",
           "selector": {
-            "css": "text:contains:37 components"
+            "text": "37 components"
           }
         },
         {
           "elementName": "categoryCount",
           "selector": {
-            "css": "text:contains:8 categories"
+            "text": "8 categories"
           }
         },
         {
           "elementName": "elementsCard",
           "selector": {
-            "testId": "home-card-radiobuttons"
+            "css": "[data-testid='home-card-radiobuttons']"
           }
         },
         {
           "elementName": "formsCard",
           "selector": {
-            "testId": "home-card-forms"
+            "css": "[data-testid='home-card-forms']"
           }
         },
         {
           "elementName": "alertsCard",
           "selector": {
-            "testId": "home-card-alerts"
+            "css": "[data-testid='home-card-alerts']"
           }
         },
         {
           "elementName": "widgetsCard",
           "selector": {
-            "testId": "home-card-tabs"
+            "css": "[data-testid='home-card-tabs']"
           }
         },
         {
           "elementName": "interactionsCard",
           "selector": {
-            "testId": "home-card-sortable"
+            "css": "[data-testid='home-card-sortable']"
           }
         },
         {
           "elementName": "mediaCard",
           "selector": {
-            "testId": "home-card-gallery"
+            "css": "[data-testid='home-card-gallery']"
           }
         },
         {
           "elementName": "authStateCard",
           "selector": {
-            "testId": "home-card-loginForm"
+            "css": "[data-testid='home-card-loginForm']"
           }
         },
         {
           "elementName": "edgeCasesCard",
           "selector": {
-            "testId": "home-card-longList"
+            "css": "[data-testid='home-card-longList']"
+          }
+        },
+        {
+          "elementName": "categories",
+          "selector": {
+            "css": "[data-testid^='home-card-']"
           }
         }
       ]
@@ -153,55 +159,91 @@
         {
           "elementName": "nameInput",
           "selector": {
-            "css": "textbox:has:Name:"
+            "id": "name"
           }
         },
         {
           "elementName": "emailInput",
           "selector": {
-            "css": "textbox:has:Email:"
+            "id": "email"
           }
         },
         {
           "elementName": "genderSelect",
           "selector": {
-            "css": "combobox:has:Gender:"
+            "id": "gender"
           }
         },
         {
           "elementName": "mobileInput",
           "selector": {
-            "css": "textbox:has:Mobile (10 Digits):"
+            "id": "mobile"
           }
         },
         {
           "elementName": "dateInput",
           "selector": {
-            "css": "textbox:has:Date of Birth:"
+            "css": ".dp__input"
           }
         },
         {
           "elementName": "hobbiesInput",
           "selector": {
-            "css": "textbox:has:Hobbies:"
+            "id": "hobbies"
           }
         },
         {
           "elementName": "addressInput",
           "selector": {
-            "css": "textbox:has:Current Address:"
+            "id": "currentAddress"
           }
         },
         {
           "elementName": "cityInput",
           "selector": {
-            "css": "textbox:has:City:"
+            "id": "city"
           }
         },
         {
           "elementName": "submitButton",
           "selector": {
-            "css": "button:has:Submit"
+            "id": "submit"
+          }
+        },
+        {
+          "elementName": "title",
+          "selector": {
+            "css": "h1"
+          }
+        },
+        {
+          "elementName": "genderDropdown",
+          "selector": {
+            "id": "gender"
+          }
+        },
+        {
+          "elementName": "dateOfBirthInput",
+          "selector": {
+            "css": "[data-test='dp-input']"
+          }
+        },
+        {
+          "elementName": "todayCell",
+          "selector": {
+            "css": ".dp__today"
+          }
+        },
+        {
+          "elementName": "datePickerSubmitButton",
+          "selector": {
+            "css": "[data-test='select-button']"
+          }
+        },
+        {
+          "elementName": "table",
+          "selector": {
+            "css": "table"
           }
         }
       ]
@@ -218,43 +260,43 @@
         {
           "elementName": "welcomeMessage",
           "selector": {
-            "css": "text:Welcome to Alerts, Frame & Windows!"
+            "text": "Welcome to Alerts, Frame & Windows!"
           }
         },
         {
           "elementName": "alertsButton",
           "selector": {
-            "testId": "button-click-me"
+            "css": "[data-testid='button-click-me']"
           }
         },
         {
           "elementName": "rightClickButton",
           "selector": {
-            "testId": "button-right-click-me"
+            "css": "[data-testid='button-right-click-me']"
           }
         },
         {
           "elementName": "doubleClickButton",
           "selector": {
-            "testId": "button-double-click-me"
+            "css": "[data-testid='button-double-click-me']"
           }
         },
         {
           "elementName": "newTabButton",
           "selector": {
-            "testId": "button-new-tab"
+            "css": "[data-testid='button-new-tab']"
           }
         },
         {
           "elementName": "newWindowButton",
           "selector": {
-            "testId": "button-new-window"
+            "css": "[data-testid='button-new-window']"
           }
         },
         {
           "elementName": "newWindowMessageButton",
           "selector": {
-            "testId": "button-new-window-message"
+            "css": "[data-testid='button-new-window-message']"
           }
         }
       ]
@@ -271,31 +313,31 @@
         {
           "elementName": "pageSubtitle",
           "selector": {
-            "css": "text:Drag items between the two lists"
+            "text": "Drag items between the two lists"
           }
         },
         {
           "elementName": "list1Header",
           "selector": {
-            "css": "text:First List"
+            "text": "First List"
           }
         },
         {
           "elementName": "list2Header",
           "selector": {
-            "css": "text:Second List"
+            "text": "Second List"
           }
         },
         {
           "elementName": "list1Items",
           "selector": {
-            "css": "text:Item A, Item B, Item C"
+            "text": "Item A, Item B, Item C"
           }
         },
         {
           "elementName": "list2Items",
           "selector": {
-            "css": "text:Item D, Item E"
+            "text": "Item D, Item E"
           }
         }
       ]
@@ -312,7 +354,7 @@
         {
           "elementName": "dropZones",
           "selector": {
-            "css": ".drop-zone"
+            "css": ".sort-list"
           }
         }
       ]
@@ -363,55 +405,55 @@
         {
           "elementName": "pageSubtitle",
           "selector": {
-            "css": "text:Click any image to view it full size"
+            "text": "Click any image to view it full size"
           }
         },
         {
           "elementName": "mountainLandscape",
           "selector": {
-            "testId": "gallery-image-0"
+            "css": "[data-testid='gallery-image-0']"
           }
         },
         {
           "elementName": "oceanSunset",
           "selector": {
-            "testId": "gallery-image-1"
+            "css": "[data-testid='gallery-image-1']"
           }
         },
         {
           "elementName": "forestPath",
           "selector": {
-            "testId": "gallery-image-2"
+            "css": "[data-testid='gallery-image-2']"
           }
         },
         {
           "elementName": "citySkyline",
           "selector": {
-            "testId": "gallery-image-3"
+            "css": "[data-testid='gallery-image-3']"
           }
         },
         {
           "elementName": "desertDunes",
           "selector": {
-            "testId": "gallery-image-4"
+            "css": "[data-testid='gallery-image-4']"
           }
         },
         {
           "elementName": "snowyPeaks",
           "selector": {
-            "testId": "gallery-image-5"
+            "css": "[data-testid='gallery-image-5']"
           }
         },
         {
           "elementName": "autumnLeaves",
           "selector": {
-            "testId": "gallery-image-6"
+            "css": "[data-testid='gallery-image-6']"
           }
         },
         {
           "elementName": "tropicalBeach",
           "selector": {
-            "testId": "gallery-image-7"
+            "css": "[data-testid='gallery-image-7']"
           }
         }
       ]
@@ -428,37 +470,37 @@
         {
           "elementName": "pageSubtitle",
           "selector": {
-            "css": "text:Form with client-side validation and simulated authentication"
+            "text": "Form with client-side validation and simulated authentication"
           }
         },
         {
           "elementName": "usernameInput",
           "selector": {
-            "css": "textbox:has:Username"
+            "id": "login-username-input"
           }
         },
         {
           "elementName": "passwordInput",
           "selector": {
-            "css": "textbox:has:Password"
+            "id": "login-password-input"
           }
         },
         {
           "elementName": "showPasswordButton",
           "selector": {
-            "testId": "button-show-password"
+            "css": "[data-testid='login-show-password']"
           }
         },
         {
           "elementName": "signInButton",
           "selector": {
-            "testId": "button-sign-in"
+            "css": "[data-testid='login-submit']"
           }
         },
         {
           "elementName": "hintMessage",
           "selector": {
-            "css": "text:Hint: admin / password123"
+            "text": "Hint: admin / password123"
           }
         }
       ]
@@ -475,19 +517,19 @@
         {
           "elementName": "pageSubtitle",
           "selector": {
-            "css": "text:200 items with live search filtering"
+            "text": "200 items with live search filtering"
           }
         },
         {
           "elementName": "searchInput",
           "selector": {
-            "css": "textbox:has:Search by name or category..."
+            "css": "[data-testid='long-list-search']"
           }
         },
         {
           "elementName": "itemCountDisplay",
           "selector": {
-            "css": "text:Showing 200 of 200 items"
+            "text": "Showing 200 of 200 items"
           }
         }
       ]

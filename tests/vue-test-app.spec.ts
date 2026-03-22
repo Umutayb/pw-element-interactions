@@ -48,12 +48,14 @@ test.describe('Vue Test App v2 - Forms Tests', () => {
   });
 
   test('TC_003: Forms page loads correctly', async ({ page, steps }) => {
-    await test.step('Navigate to Forms page', async () => {
-      await steps.navigateTo('/forms');
+    await test.step('Navigate to Forms page via homepage', async () => {
+      await steps.navigateTo('/');
+      await steps.click('HomePage', 'formsCard');
     });
 
     await test.step('Verify page title', async () => {
       const title = await steps.getText('FormsPage', 'formTitle');
+      expect(title).toBe('Full Form');
       log('Form title: %s', title);
     });
 
@@ -61,8 +63,9 @@ test.describe('Vue Test App v2 - Forms Tests', () => {
   });
 
   test('TC_004: Verify form elements', async ({ steps }) => {
-    await test.step('Navigate to Forms page', async () => {
-      await steps.navigateTo('/forms');
+    await test.step('Navigate to Forms page via homepage', async () => {
+      await steps.navigateTo('/');
+      await steps.click('HomePage', 'formsCard');
     });
 
     await test.step('Verify name input exists', async () => {
@@ -79,19 +82,15 @@ test.describe('Vue Test App v2 - Forms Tests', () => {
 
 test.describe('Vue Test App v2 - Interactions Tests', () => {
 
-  let repo: ElementRepository;
-
-  test.beforeAll(() => {
-    repo = new ElementRepository('tests/data/page-repository.json');
-  });
-
   test('TC_005: Interactions page loads correctly', async ({ page, steps }) => {
-    await test.step('Navigate to Interactions page', async () => {
-      await steps.navigateTo('/sortable');
+    await test.step('Navigate to Sortable page via homepage', async () => {
+      await steps.navigateTo('/');
+      await steps.click('HomePage', 'interactionsCard');
     });
 
     await test.step('Verify page loaded', async () => {
       await expect(page).toHaveTitle(/vue-test-app/);
+      await steps.verifyUrlContains('/sortable');
     });
 
     log('TC_005 Interactions page loads correctly — passed');
@@ -100,19 +99,15 @@ test.describe('Vue Test App v2 - Interactions Tests', () => {
 
 test.describe('Vue Test App v2 - Elements Tests', () => {
 
-  let repo: ElementRepository;
-
-  test.beforeAll(() => {
-    repo = new ElementRepository('tests/data/page-repository.json');
-  });
-
   test('TC_006: Elements page loads correctly', async ({ page, steps }) => {
-    await test.step('Navigate to Elements page', async () => {
-      await steps.navigateTo('/radiobuttons');
+    await test.step('Navigate to Elements page via homepage', async () => {
+      await steps.navigateTo('/');
+      await steps.click('HomePage', 'elementsCard');
     });
 
     await test.step('Verify page loaded', async () => {
       await expect(page).toHaveTitle(/vue-test-app/);
+      await steps.verifyUrlContains('/radiobuttons');
     });
 
     log('TC_006 Elements page loads correctly — passed');

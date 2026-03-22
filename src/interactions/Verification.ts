@@ -8,14 +8,14 @@ import { CountVerifyOptions, TextVerifyOptions } from '../enum/Options';
  */
 export class Verifications {
     /** The standard timeout applied to all verifications in this class. */
-    private ELEMENT_TIMEOUT : number;
+    private ELEMENT_TIMEOUT: number;
 
     /**
      * Initializes the Verifications class.
      * @param page - The current Playwright Page object.
      * @param timeout - Optional override for the default element timeout.
      */
-    constructor(private page: Page, timeout: number = 30000) { 
+    constructor(private page: Page, timeout: number = 30000) {
         this.ELEMENT_TIMEOUT = timeout;
     }
 
@@ -74,22 +74,38 @@ export class Verifications {
     }
 
     /**
+  * Asserts the state of an element using Playwright's built-in locator assertions.
+  * @param locator - The Playwright Locator pointing to the target element.
+  * @param state - The expected state to verify.
+  */
+    async state(locator: Locator, state: 'enabled' | 'disabled' | 'editable' | 'checked' | 'focused' | 'visible' | 'hidden' | 'attached' | 'inViewport'): Promise<void>;
+
+    /**
      * Asserts the state of an element using Playwright's built-in locator assertions.
-     * @param locator - The Playwright Locator pointing to the target element.
+     * @param locator - A CSS/XPath selector string to locate the target element.
      * @param state - The expected state to verify.
+     * @param timeout - Optional timeout in milliseconds, overrides the default ELEMENT_TIMEOUT.
      */
-    async state(locator: Locator, state: 'enabled' | 'disabled' | 'editable' | 'checked' | 'focused' | 'visible' | 'hidden' | 'attached' | 'inViewport'): Promise<void> {
-        const timeout = this.ELEMENT_TIMEOUT;
+    async state(locator: string, state: 'enabled' | 'disabled' | 'editable' | 'checked' | 'focused' | 'visible' | 'hidden' | 'attached' | 'inViewport', timeout?: number): Promise<void>;
+
+    async state(
+        locator: Locator | string,
+        state: 'enabled' | 'disabled' | 'editable' | 'checked' | 'focused' | 'visible' | 'hidden' | 'attached' | 'inViewport',
+        timeout?: number
+    ): Promise<void> {
+        const resolvedLocator: Locator = typeof locator === 'string' ? this.page.locator(locator) : locator;
+        const resolvedTimeout = timeout ?? this.ELEMENT_TIMEOUT;
+
         switch (state) {
-            case 'enabled':    await expect(locator).toBeEnabled({ timeout }); break;
-            case 'disabled':   await expect(locator).toBeDisabled({ timeout }); break;
-            case 'editable':   await expect(locator).toBeEditable({ timeout }); break;
-            case 'checked':    await expect(locator).toBeChecked({ timeout }); break;
-            case 'focused':    await expect(locator).toBeFocused({ timeout }); break;
-            case 'visible':    await expect(locator).toBeVisible({ timeout }); break;
-            case 'hidden':     await expect(locator).toBeHidden({ timeout }); break;
-            case 'attached':   await expect(locator).toBeAttached({ timeout }); break;
-            case 'inViewport': await expect(locator).toBeInViewport({ timeout }); break;
+            case 'enabled': await expect(resolvedLocator).toBeEnabled({ timeout: resolvedTimeout }); break;
+            case 'disabled': await expect(resolvedLocator).toBeDisabled({ timeout: resolvedTimeout }); break;
+            case 'editable': await expect(resolvedLocator).toBeEditable({ timeout: resolvedTimeout }); break;
+            case 'checked': await expect(resolvedLocator).toBeChecked({ timeout: resolvedTimeout }); break;
+            case 'focused': await expect(resolvedLocator).toBeFocused({ timeout: resolvedTimeout }); break;
+            case 'visible': await expect(resolvedLocator).toBeVisible({ timeout: resolvedTimeout }); break;
+            case 'hidden': await expect(resolvedLocator).toBeHidden({ timeout: resolvedTimeout }); break;
+            case 'attached': await expect(resolvedLocator).toBeAttached({ timeout: resolvedTimeout }); break;
+            case 'inViewport': await expect(resolvedLocator).toBeInViewport({ timeout: resolvedTimeout }); break;
         }
     }
 

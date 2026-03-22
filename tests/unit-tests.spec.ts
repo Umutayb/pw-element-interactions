@@ -255,7 +255,7 @@ test.describe('TC_007: verifyState - All Playwright element states', () => {
     });
 
     await test.step('hidden: FormsPage title is hidden on a different page', async () => {
-      await steps.verifyState('FormsPage', 'title', 'hidden');
+      await steps.verifyState('FormsPage', 'title', 'hidden', 500);
     });
 
     log('TC_007 verifyState — passed');

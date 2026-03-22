@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: './tests',
   reporter: 'html',
   use: {
-    baseURL: 'https://umutayb.github.io/vue-test-app/',
+    baseURL: 'http://127.0.0.1:8080/',
     headless: true,
   },
 });

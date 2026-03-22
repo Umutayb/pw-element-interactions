@@ -5,11 +5,11 @@ import { DropdownSelectOptions, TextVerifyOptions, CountVerifyOptions, DragAndDr
 import { logger } from '../logger/Logger';
 
 const log = {
-  navigate: logger('navigate'),
-  interact: logger('interact'),
-  extract:  logger('extract'),
-  verify:   logger('verify'),
-  wait:     logger('wait'),
+    navigate: logger('navigate'),
+    interact: logger('interact'),
+    extract: logger('extract'),
+    verify: logger('verify'),
+    wait: logger('wait'),
 };
 
 /**
@@ -348,11 +348,17 @@ export class Steps {
      * @param elementName - The element name as defined under the given page.
      * @param state - The expected state: `'enabled'`, `'disabled'`, `'editable'`, `'checked'`,
      *   `'focused'`, `'visible'`, `'hidden'`, `'attached'`, or `'inViewport'`.
+     * @param timeout - Optional timeout in milliseconds, overrides the default ELEMENT_TIMEOUT.
      */
-    async verifyState(pageName: string, elementName: string, state: 'enabled' | 'disabled' | 'editable' | 'checked' | 'focused' | 'visible' | 'hidden' | 'attached' | 'inViewport'): Promise<void> {
+    async verifyState(
+        pageName: string,
+        elementName: string,
+        state: 'enabled' | 'disabled' | 'editable' | 'checked' | 'focused' | 'visible' | 'hidden' | 'attached' | 'inViewport',
+        timeout?: number
+    ): Promise<void> {
         log.verify('Verifying "%s" in "%s" is %s', elementName, pageName, state);
-        const locator = await this.repo.get(this.page, pageName, elementName);
-        await this.verify.state(locator, state);
+        const locatorString = await this.repo.getSelector(pageName, elementName);
+        await this.verify.state(locatorString, state, timeout);
     }
 
     /**

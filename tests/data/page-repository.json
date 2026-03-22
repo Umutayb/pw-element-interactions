@@ -39,27 +39,33 @@
       "name": "ElementsPage",
       "elements": [
         {
-          "elementName": "questionBoxTitle",
+          "elementName": "pageTitle",
           "selector": {
-            "css": ".question-box h2"
+            "text": "Elements›Radio Buttons"
           }
         },
         {
-          "elementName": "checkMarkMessage",
+          "elementName": "questionHeading",
           "selector": {
-            "css": ".question-box form p"
+            "css": "h2"
           }
         },
         {
-          "elementName": "checkMarks",
+          "elementName": "yesRadio",
           "selector": {
-            "css": ".radio-group label"
+            "id": "yes"
           }
         },
         {
-          "elementName": "tools",
+          "elementName": "impressiveRadio",
           "selector": {
-            "id": "tool"
+            "id": "impressive"
+          }
+        },
+        {
+          "elementName": "noRadio",
+          "selector": {
+            "id": "no"
           }
         }
       ]
@@ -68,9 +74,75 @@
       "name": "HomePage",
       "elements": [
         {
+          "elementName": "pageTitle",
+          "selector": {
+            "css": "h1"
+          }
+        },
+        {
+          "elementName": "componentCount",
+          "selector": {
+            "text": "37 components"
+          }
+        },
+        {
+          "elementName": "categoryCount",
+          "selector": {
+            "text": "8 categories"
+          }
+        },
+        {
+          "elementName": "elementsCard",
+          "selector": {
+            "css": "[data-testid='home-card-radiobuttons']"
+          }
+        },
+        {
+          "elementName": "formsCard",
+          "selector": {
+            "css": "[data-testid='home-card-forms']"
+          }
+        },
+        {
+          "elementName": "alertsCard",
+          "selector": {
+            "css": "[data-testid='home-card-alerts']"
+          }
+        },
+        {
+          "elementName": "widgetsCard",
+          "selector": {
+            "css": "[data-testid='home-card-tabs']"
+          }
+        },
+        {
+          "elementName": "interactionsCard",
+          "selector": {
+            "css": "[data-testid='home-card-sortable']"
+          }
+        },
+        {
+          "elementName": "mediaCard",
+          "selector": {
+            "css": "[data-testid='home-card-gallery']"
+          }
+        },
+        {
+          "elementName": "authStateCard",
+          "selector": {
+            "css": "[data-testid='home-card-loginForm']"
+          }
+        },
+        {
+          "elementName": "edgeCasesCard",
+          "selector": {
+            "css": "[data-testid='home-card-longList']"
+          }
+        },
+        {
           "elementName": "categories",
           "selector": {
-            "css": "#category-card"
+            "css": "[data-testid^='home-card-']"
           }
         }
       ]
@@ -79,99 +151,81 @@
       "name": "FormsPage",
       "elements": [
         {
-          "elementName": "title",
+          "elementName": "formTitle",
           "selector": {
-            "css": "[id='title']"
+            "css": "h1"
           }
         },
         {
           "elementName": "nameInput",
           "selector": {
-            "css": "[id='name']"
+            "id": "name"
           }
         },
         {
           "elementName": "emailInput",
           "selector": {
-            "css": "[id='email']"
+            "id": "email"
           }
         },
         {
-          "elementName": "genderDropdown",
+          "elementName": "genderSelect",
           "selector": {
-            "css": "#gender"
-          }
-        },
-        {
-          "elementName": "genderOptions",
-          "selector": {
-            "css": "#gender"
+            "id": "gender"
           }
         },
         {
           "elementName": "mobileInput",
           "selector": {
-            "css": "[id='mobile']"
+            "id": "mobile"
           }
         },
         {
-          "elementName": "dateOfBirthInput",
+          "elementName": "dateInput",
           "selector": {
-            "css": "#dob"
+            "css": ".dp__input"
           }
         },
         {
           "elementName": "hobbiesInput",
           "selector": {
-            "css": "#hobbies"
+            "id": "hobbies"
           }
         },
         {
           "elementName": "addressInput",
           "selector": {
-            "css": "#currentAddress"
+            "id": "currentAddress"
           }
         },
         {
           "elementName": "cityInput",
           "selector": {
-            "css": "#city"
+            "id": "city"
           }
         },
         {
           "elementName": "submitButton",
           "selector": {
-            "css": "#submit"
+            "id": "submit"
           }
         },
         {
-          "elementName": "submissionEntries",
+          "elementName": "title",
           "selector": {
-            "css": ".submitted-info-table tr"
+            "css": "h1"
           }
         },
         {
-          "elementName": "table",
+          "elementName": "genderDropdown",
           "selector": {
-            "css": ".submitted-info-table"
+            "id": "gender"
           }
         },
         {
-          "elementName": "datePickerYearsButton",
+          "elementName": "dateOfBirthInput",
           "selector": {
-            "css": "[aria-label='Open years overlay']"
-          }
-        },
-        {
-          "elementName": "datePickerMonthsButton",
-          "selector": {
-            "css": "[aria-label='Open months overlay']"
-          }
-        },
-        {
-          "elementName": "datePickerSubmitButton",
-          "selector": {
-            "css": ".dp__action_row .dp__action_select"
+            "css": "[data-test='dp-input']"
           }
         },
         {
@@ -181,26 +235,68 @@
           }
         },
         {
-          "elementName": "spSelectionPreview",
+          "elementName": "datePickerSubmitButton",
           "selector": {
-            "css": ".dp__selection_preview"
+            "css": "[data-test='select-button']"
           }
         },
         {
-          "elementName": "datePickerCells",
+          "elementName": "table",
           "selector": {
-            "css": "[role='gridcell']"
+            "css": "table"
           }
         }
       ]
     },
     {
-      "name": "AlertAndWindowsPage",
+      "name": "AlertsPage",
       "elements": [
         {
-          "elementName": "buttons",
+          "elementName": "pageTitle",
           "selector": {
-            "css": ".button"
+            "css": "h2"
+          }
+        },
+        {
+          "elementName": "welcomeMessage",
+          "selector": {
+            "text": "Welcome to Alerts, Frame & Windows!"
+          }
+        },
+        {
+          "elementName": "clickMeButton",
+          "selector": {
+            "id": "click-me"
+          }
+        },
+        {
+          "elementName": "rightClickButton",
+          "selector": {
+            "id": "right-click-me"
+          }
+        },
+        {
+          "elementName": "doubleClickButton",
+          "selector": {
+            "id": "double-click-me"
+          }
+        },
+        {
+          "elementName": "newTabButton",
+          "selector": {
+            "text": "New Tab"
+          }
+        },
+        {
+          "elementName": "newWindowButton",
+          "selector": {
+            "text": "New Window"
+          }
+        },
+        {
+          "elementName": "newWindowMessageButton",
+          "selector": {
+            "text": "New Window Message"
           }
         }
       ]
@@ -209,15 +305,39 @@
       "name": "InteractionsPage",
       "elements": [
         {
-          "elementName": "title",
+          "elementName": "pageTitle",
           "selector": {
-            "id": "title"
+            "css": "h1"
           }
         },
         {
-          "elementName": "tools",
+          "elementName": "pageSubtitle",
           "selector": {
-            "id": "tool"
+            "text": "Drag items between the two lists"
+          }
+        },
+        {
+          "elementName": "list1Header",
+          "selector": {
+            "text": "First List"
+          }
+        },
+        {
+          "elementName": "list2Header",
+          "selector": {
+            "text": "Second List"
+          }
+        },
+        {
+          "elementName": "list1Items",
+          "selector": {
+            "text": "Item A, Item B, Item C"
+          }
+        },
+        {
+          "elementName": "list2Items",
+          "selector": {
+            "text": "Item D, Item E"
           }
         }
       ]
@@ -234,7 +354,7 @@
         {
           "elementName": "dropZones",
           "selector": {
-            "css": ".drop-zone"
+            "css": ".sort-list"
           }
         }
       ]
@@ -269,6 +389,1885 @@
           "elementName": "logo",
           "selector": {
             "id": "logo"
+          }
+        }
+      ]
+    },
+    {
+      "name": "GalleryPage",
+      "elements": [
+        {
+          "elementName": "pageTitle",
+          "selector": {
+            "css": "h1"
+          }
+        },
+        {
+          "elementName": "pageSubtitle",
+          "selector": {
+            "text": "Click any image to view it full size"
+          }
+        },
+        {
+          "elementName": "galleryImages",
+          "selector": {
+            "css": "[data-testid^='gallery-image-'] img"
+          }
+        },
+        {
+          "elementName": "mountainLandscape",
+          "selector": {
+            "css": "[data-testid='gallery-image-0']"
+          }
+        },
+        {
+          "elementName": "oceanSunset",
+          "selector": {
+            "css": "[data-testid='gallery-image-1']"
+          }
+        },
+        {
+          "elementName": "forestPath",
+          "selector": {
+            "css": "[data-testid='gallery-image-2']"
+          }
+        },
+        {
+          "elementName": "citySkyline",
+          "selector": {
+            "css": "[data-testid='gallery-image-3']"
+          }
+        },
+        {
+          "elementName": "desertDunes",
+          "selector": {
+            "css": "[data-testid='gallery-image-4']"
+          }
+        },
+        {
+          "elementName": "snowyPeaks",
+          "selector": {
+            "css": "[data-testid='gallery-image-5']"
+          }
+        },
+        {
+          "elementName": "autumnLeaves",
+          "selector": {
+            "css": "[data-testid='gallery-image-6']"
+          }
+        },
+        {
+          "elementName": "tropicalBeach",
+          "selector": {
+            "css": "[data-testid='gallery-image-7']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "LoginFormPage",
+      "elements": [
+        {
+          "elementName": "pageTitle",
+          "selector": {
+            "css": "h1"
+          }
+        },
+        {
+          "elementName": "pageSubtitle",
+          "selector": {
+            "text": "Form with client-side validation and simulated authentication"
+          }
+        },
+        {
+          "elementName": "usernameInput",
+          "selector": {
+            "id": "login-username-input"
+          }
+        },
+        {
+          "elementName": "passwordInput",
+          "selector": {
+            "id": "login-password-input"
+          }
+        },
+        {
+          "elementName": "showPasswordButton",
+          "selector": {
+            "css": "[data-testid='login-show-password']"
+          }
+        },
+        {
+          "elementName": "signInButton",
+          "selector": {
+            "css": "[data-testid='login-submit']"
+          }
+        },
+        {
+          "elementName": "hintMessage",
+          "selector": {
+            "text": "Hint: admin / password123"
+          }
+        }
+      ]
+    },
+    {
+      "name": "LongListPage",
+      "elements": [
+        {
+          "elementName": "pageTitle",
+          "selector": {
+            "css": "h1"
+          }
+        },
+        {
+          "elementName": "pageSubtitle",
+          "selector": {
+            "text": "200 items with live search filtering"
+          }
+        },
+        {
+          "elementName": "searchInput",
+          "selector": {
+            "css": "[data-testid='long-list-search']"
+          }
+        },
+        {
+          "elementName": "itemCountDisplay",
+          "selector": {
+            "text": "Showing 200 of 200 items"
+          }
+        },
+        {
+          "elementName": "listItems",
+          "selector": {
+            "css": "[data-testid^='long-list-item-']"
+          }
+        },
+        {
+          "elementName": "showingCount",
+          "selector": {
+            "css": "[data-testid='long-list-count']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ButtonsPage",
+      "elements": [
+        {
+          "elementName": "primaryButton",
+          "selector": {
+            "css": "[data-testid='btn-primary']"
+          }
+        },
+        {
+          "elementName": "secondaryButton",
+          "selector": {
+            "css": "[data-testid='btn-secondary']"
+          }
+        },
+        {
+          "elementName": "dangerButton",
+          "selector": {
+            "css": "[data-testid='btn-danger']"
+          }
+        },
+        {
+          "elementName": "ghostButton",
+          "selector": {
+            "css": "[data-testid='btn-ghost']"
+          }
+        },
+        {
+          "elementName": "outlineButton",
+          "selector": {
+            "css": "[data-testid='btn-outline']"
+          }
+        },
+        {
+          "elementName": "smallButton",
+          "selector": {
+            "css": "[data-testid='btn-small']"
+          }
+        },
+        {
+          "elementName": "mediumButton",
+          "selector": {
+            "css": "[data-testid='btn-medium']"
+          }
+        },
+        {
+          "elementName": "largeButton",
+          "selector": {
+            "css": "[data-testid='btn-large']"
+          }
+        },
+        {
+          "elementName": "disabledButton",
+          "selector": {
+            "css": "[data-testid='btn-disabled']"
+          }
+        },
+        {
+          "elementName": "loadingButton",
+          "selector": {
+            "css": "[data-testid='btn-loading']"
+          }
+        },
+        {
+          "elementName": "resultText",
+          "selector": {
+            "css": "[data-testid='btn-result']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "TextInputsPage",
+      "elements": [
+        {
+          "elementName": "textInput",
+          "selector": {
+            "css": "[data-testid='input-text']"
+          }
+        },
+        {
+          "elementName": "passwordInput",
+          "selector": {
+            "css": "[data-testid='input-password']"
+          }
+        },
+        {
+          "elementName": "emailInput",
+          "selector": {
+            "css": "[data-testid='input-email']"
+          }
+        },
+        {
+          "elementName": "numberInput",
+          "selector": {
+            "css": "[data-testid='input-number']"
+          }
+        },
+        {
+          "elementName": "textareaInput",
+          "selector": {
+            "css": "[data-testid='input-textarea']"
+          }
+        },
+        {
+          "elementName": "disabledInput",
+          "selector": {
+            "css": "[data-testid='input-disabled']"
+          }
+        },
+        {
+          "elementName": "errorInput",
+          "selector": {
+            "css": "[data-testid='input-error']"
+          }
+        },
+        {
+          "elementName": "successInput",
+          "selector": {
+            "css": "[data-testid='input-success']"
+          }
+        },
+        {
+          "elementName": "valuesDisplay",
+          "selector": {
+            "css": "[data-testid='input-values']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "CheckboxesPage",
+      "elements": [
+        {
+          "elementName": "uncheckedCheckbox",
+          "selector": {
+            "css": "[data-testid='checkbox-unchecked']"
+          }
+        },
+        {
+          "elementName": "checkedCheckbox",
+          "selector": {
+            "css": "[data-testid='checkbox-checked']"
+          }
+        },
+        {
+          "elementName": "indeterminateCheckbox",
+          "selector": {
+            "css": "[data-testid='checkbox-indeterminate']"
+          }
+        },
+        {
+          "elementName": "disabledCheckbox",
+          "selector": {
+            "css": "[data-testid='checkbox-disabled']"
+          }
+        },
+        {
+          "elementName": "disabledCheckedCheckbox",
+          "selector": {
+            "css": "[data-testid='checkbox-disabled-checked']"
+          }
+        },
+        {
+          "elementName": "toggleOff",
+          "selector": {
+            "css": "[data-testid='toggle-off']"
+          }
+        },
+        {
+          "elementName": "toggleOn",
+          "selector": {
+            "css": "[data-testid='toggle-on']"
+          }
+        },
+        {
+          "elementName": "toggleDisabled",
+          "selector": {
+            "css": "[data-testid='toggle-disabled']"
+          }
+        },
+        {
+          "elementName": "stateSummary",
+          "selector": {
+            "css": "[data-testid='checkbox-state-summary']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "SlidersPage",
+      "elements": [
+        {
+          "elementName": "basicSlider",
+          "selector": {
+            "css": "[data-testid='slider-basic']"
+          }
+        },
+        {
+          "elementName": "basicSliderValue",
+          "selector": {
+            "css": "[data-testid='slider-basic-value']"
+          }
+        },
+        {
+          "elementName": "steppedSlider",
+          "selector": {
+            "css": "[data-testid='slider-steps']"
+          }
+        },
+        {
+          "elementName": "steppedSliderValue",
+          "selector": {
+            "css": "[data-testid='slider-steps-value']"
+          }
+        },
+        {
+          "elementName": "disabledSlider",
+          "selector": {
+            "css": "[data-testid='slider-disabled']"
+          }
+        },
+        {
+          "elementName": "rangeMinSlider",
+          "selector": {
+            "css": "[data-testid='slider-range-min']"
+          }
+        },
+        {
+          "elementName": "rangeMaxSlider",
+          "selector": {
+            "css": "[data-testid='slider-range-max']"
+          }
+        },
+        {
+          "elementName": "rangeValue",
+          "selector": {
+            "css": "[data-testid='slider-range-value']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "SliderIndicatorPage",
+      "elements": [
+        {
+          "elementName": "indicator",
+          "selector": {
+            "css": "[data-testid='slider-indicator']"
+          }
+        },
+        {
+          "elementName": "indicatorValue",
+          "selector": {
+            "css": "[data-testid='slider-indicator-value']"
+          }
+        },
+        {
+          "elementName": "indicatorBubble",
+          "selector": {
+            "css": "[data-testid='slider-indicator-bubble']"
+          }
+        },
+        {
+          "elementName": "tempSlider",
+          "selector": {
+            "css": "[data-testid='slider-temp']"
+          }
+        },
+        {
+          "elementName": "tempValue",
+          "selector": {
+            "css": "[data-testid='slider-temp-value']"
+          }
+        },
+        {
+          "elementName": "volumeSlider",
+          "selector": {
+            "css": "[data-testid='slider-volume']"
+          }
+        },
+        {
+          "elementName": "volumeValue",
+          "selector": {
+            "css": "[data-testid='slider-volume-value']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "DragProgressPage",
+      "elements": [
+        {
+          "elementName": "progressTrack",
+          "selector": {
+            "css": "[data-testid='drag-progress-track']"
+          }
+        },
+        {
+          "elementName": "progressFill",
+          "selector": {
+            "css": "[data-testid='drag-progress-fill']"
+          }
+        },
+        {
+          "elementName": "progressHandle",
+          "selector": {
+            "css": "[data-testid='drag-progress-handle']"
+          }
+        },
+        {
+          "elementName": "progressValue",
+          "selector": {
+            "css": "[data-testid='drag-progress-value']"
+          }
+        },
+        {
+          "elementName": "resetButton",
+          "selector": {
+            "css": "[data-testid='drag-progress-reset']"
+          }
+        },
+        {
+          "elementName": "setHalfButton",
+          "selector": {
+            "css": "[data-testid='drag-progress-set-half']"
+          }
+        },
+        {
+          "elementName": "setFullButton",
+          "selector": {
+            "css": "[data-testid='drag-progress-set-full']"
+          }
+        },
+        {
+          "elementName": "animateButton",
+          "selector": {
+            "css": "[data-testid='drag-progress-animate-btn']"
+          }
+        },
+        {
+          "elementName": "animatedValue",
+          "selector": {
+            "css": "[data-testid='drag-progress-animated-value']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "DropdownSelectPage",
+      "elements": [
+        {
+          "elementName": "singleSelect",
+          "selector": {
+            "css": "[data-testid='dropdown-single']"
+          }
+        },
+        {
+          "elementName": "singleValue",
+          "selector": {
+            "css": "[data-testid='dropdown-single-value']"
+          }
+        },
+        {
+          "elementName": "multiSelect",
+          "selector": {
+            "css": "[data-testid='dropdown-multi']"
+          }
+        },
+        {
+          "elementName": "multiValue",
+          "selector": {
+            "css": "[data-testid='dropdown-multi-value']"
+          }
+        },
+        {
+          "elementName": "customDropdownButton",
+          "selector": {
+            "css": "[data-testid='dropdown-custom']"
+          }
+        },
+        {
+          "elementName": "customDropdownList",
+          "selector": {
+            "css": "[data-testid='dropdown-custom-list']"
+          }
+        },
+        {
+          "elementName": "customDropdownValue",
+          "selector": {
+            "css": "[data-testid='dropdown-custom-value']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "FileUploadPage",
+      "elements": [
+        {
+          "elementName": "singleFileInput",
+          "selector": {
+            "css": "[data-testid='file-input-single']"
+          }
+        },
+        {
+          "elementName": "singleFileName",
+          "selector": {
+            "css": "[data-testid='file-single-name']"
+          }
+        },
+        {
+          "elementName": "multipleFileInput",
+          "selector": {
+            "css": "[data-testid='file-input-multiple']"
+          }
+        },
+        {
+          "elementName": "multipleFileList",
+          "selector": {
+            "css": "[data-testid='file-multiple-list']"
+          }
+        },
+        {
+          "elementName": "typedFileInput",
+          "selector": {
+            "css": "[data-testid='file-input-typed']"
+          }
+        },
+        {
+          "elementName": "dropZone",
+          "selector": {
+            "css": "[data-testid='file-drop-zone']"
+          }
+        },
+        {
+          "elementName": "dropList",
+          "selector": {
+            "css": "[data-testid='file-drop-list']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "AutocompletePage",
+      "elements": [
+        {
+          "elementName": "searchInput",
+          "selector": {
+            "css": "[data-testid='autocomplete-input']"
+          }
+        },
+        {
+          "elementName": "clearButton",
+          "selector": {
+            "css": "[data-testid='autocomplete-clear']"
+          }
+        },
+        {
+          "elementName": "selectedValue",
+          "selector": {
+            "css": "[data-testid='autocomplete-selected']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ModalPage",
+      "elements": [
+        {
+          "elementName": "openButton",
+          "selector": {
+            "css": "[data-testid='modal-open']"
+          }
+        },
+        {
+          "elementName": "status",
+          "selector": {
+            "css": "[data-testid='modal-status']"
+          }
+        },
+        {
+          "elementName": "overlay",
+          "selector": {
+            "css": "[data-testid='modal-overlay']"
+          }
+        },
+        {
+          "elementName": "confirmButton",
+          "selector": {
+            "css": "[data-testid='modal-confirm']"
+          }
+        },
+        {
+          "elementName": "cancelButton",
+          "selector": {
+            "text": "Cancel"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ToastPage",
+      "elements": [
+        {
+          "elementName": "successButton",
+          "selector": {
+            "css": "[data-testid='toast-trigger-success']"
+          }
+        },
+        {
+          "elementName": "errorButton",
+          "selector": {
+            "css": "[data-testid='toast-trigger-error']"
+          }
+        },
+        {
+          "elementName": "warningButton",
+          "selector": {
+            "css": "[data-testid='toast-trigger-warning']"
+          }
+        },
+        {
+          "elementName": "infoButton",
+          "selector": {
+            "css": "[data-testid='toast-trigger-info']"
+          }
+        },
+        {
+          "elementName": "container",
+          "selector": {
+            "css": "[data-testid='toast-container']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "TooltipPage",
+      "elements": [
+        {
+          "elementName": "tooltipTrigger1",
+          "selector": {
+            "css": "[data-testid='tooltip-trigger-1']"
+          }
+        },
+        {
+          "elementName": "tooltipContent1",
+          "selector": {
+            "css": "[data-testid='tooltip-content-1']"
+          }
+        },
+        {
+          "elementName": "tooltipTrigger2",
+          "selector": {
+            "css": "[data-testid='tooltip-trigger-2']"
+          }
+        },
+        {
+          "elementName": "tooltipContent2",
+          "selector": {
+            "css": "[data-testid='tooltip-content-2']"
+          }
+        },
+        {
+          "elementName": "popoverTrigger1",
+          "selector": {
+            "css": "[data-testid='popover-trigger-1']"
+          }
+        },
+        {
+          "elementName": "popoverContent1",
+          "selector": {
+            "css": "[data-testid='popover-content-1']"
+          }
+        },
+        {
+          "elementName": "popoverTrigger2",
+          "selector": {
+            "css": "[data-testid='popover-trigger-2']"
+          }
+        },
+        {
+          "elementName": "popoverContent2",
+          "selector": {
+            "css": "[data-testid='popover-content-2']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "DrawerPage",
+      "elements": [
+        {
+          "elementName": "openLeftButton",
+          "selector": {
+            "css": "[data-testid='drawer-open-left']"
+          }
+        },
+        {
+          "elementName": "openRightButton",
+          "selector": {
+            "css": "[data-testid='drawer-open-right']"
+          }
+        },
+        {
+          "elementName": "status",
+          "selector": {
+            "css": "[data-testid='drawer-status']"
+          }
+        },
+        {
+          "elementName": "closeButton",
+          "selector": {
+            "css": "[data-testid='drawer-close']"
+          }
+        },
+        {
+          "elementName": "overlay",
+          "selector": {
+            "css": "[data-testid='drawer-overlay']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "TabsPage",
+      "elements": [
+        {
+          "elementName": "container",
+          "selector": {
+            "css": "[data-testid='tabs-container']"
+          }
+        },
+        {
+          "elementName": "tab1",
+          "selector": {
+            "css": "[data-testid='tab-1']"
+          }
+        },
+        {
+          "elementName": "tab2",
+          "selector": {
+            "css": "[data-testid='tab-2']"
+          }
+        },
+        {
+          "elementName": "tab3",
+          "selector": {
+            "css": "[data-testid='tab-3']"
+          }
+        },
+        {
+          "elementName": "tab4",
+          "selector": {
+            "css": "[data-testid='tab-4']"
+          }
+        },
+        {
+          "elementName": "panel1",
+          "selector": {
+            "css": "[data-testid='tab-panel-1']"
+          }
+        },
+        {
+          "elementName": "panel2",
+          "selector": {
+            "css": "[data-testid='tab-panel-2']"
+          }
+        },
+        {
+          "elementName": "panel3",
+          "selector": {
+            "css": "[data-testid='tab-panel-3']"
+          }
+        },
+        {
+          "elementName": "panel4",
+          "selector": {
+            "css": "[data-testid='tab-panel-4']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "AccordionPage",
+      "elements": [
+        {
+          "elementName": "expandAllButton",
+          "selector": {
+            "css": "[data-testid='accordion-expand-all']"
+          }
+        },
+        {
+          "elementName": "collapseAllButton",
+          "selector": {
+            "css": "[data-testid='accordion-collapse-all']"
+          }
+        },
+        {
+          "elementName": "header1",
+          "selector": {
+            "css": "[data-testid='accordion-header-1']"
+          }
+        },
+        {
+          "elementName": "body1",
+          "selector": {
+            "css": "[data-testid='accordion-body-1']"
+          }
+        },
+        {
+          "elementName": "header2",
+          "selector": {
+            "css": "[data-testid='accordion-header-2']"
+          }
+        },
+        {
+          "elementName": "body2",
+          "selector": {
+            "css": "[data-testid='accordion-body-2']"
+          }
+        },
+        {
+          "elementName": "header3",
+          "selector": {
+            "css": "[data-testid='accordion-header-3']"
+          }
+        },
+        {
+          "elementName": "body3",
+          "selector": {
+            "css": "[data-testid='accordion-body-3']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ProgressPage",
+      "elements": [
+        {
+          "elementName": "animatedBar",
+          "selector": {
+            "css": "[data-testid='progress-animated']"
+          }
+        },
+        {
+          "elementName": "animatedValue",
+          "selector": {
+            "css": "[data-testid='progress-animated-value']"
+          }
+        },
+        {
+          "elementName": "startButton",
+          "selector": {
+            "css": "[data-testid='progress-start']"
+          }
+        },
+        {
+          "elementName": "resetButton",
+          "selector": {
+            "css": "[data-testid='progress-reset']"
+          }
+        },
+        {
+          "elementName": "circularValue",
+          "selector": {
+            "css": "[data-testid='progress-circular-value']"
+          }
+        },
+        {
+          "elementName": "staticBars",
+          "selector": {
+            "css": "[data-testid^='progress-bar-']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "TablePage",
+      "elements": [
+        {
+          "elementName": "searchInput",
+          "selector": {
+            "css": "[data-testid='table-search']"
+          }
+        },
+        {
+          "elementName": "selectedCount",
+          "selector": {
+            "css": "[data-testid='table-selected-count']"
+          }
+        },
+        {
+          "elementName": "table",
+          "selector": {
+            "css": "[data-testid='table']"
+          }
+        },
+        {
+          "elementName": "selectAllCheckbox",
+          "selector": {
+            "css": "[data-testid='table-select-all']"
+          }
+        },
+        {
+          "elementName": "rows",
+          "selector": {
+            "css": "[data-testid^='table-row-']:not([data-testid*='checkbox'])"
+          }
+        },
+        {
+          "elementName": "rowCheckboxes",
+          "selector": {
+            "css": "[data-testid^='table-row-checkbox-']"
+          }
+        },
+        {
+          "elementName": "prevButton",
+          "selector": {
+            "css": "[data-testid='table-prev']"
+          }
+        },
+        {
+          "elementName": "nextButton",
+          "selector": {
+            "css": "[data-testid='table-next']"
+          }
+        },
+        {
+          "elementName": "pageInfo",
+          "selector": {
+            "css": "[data-testid='table-page-info']"
+          }
+        },
+        {
+          "elementName": "headerName",
+          "selector": {
+            "css": "[data-testid='table-header-name']"
+          }
+        },
+        {
+          "elementName": "headerEmail",
+          "selector": {
+            "css": "[data-testid='table-header-email']"
+          }
+        },
+        {
+          "elementName": "headerRole",
+          "selector": {
+            "css": "[data-testid='table-header-role']"
+          }
+        },
+        {
+          "elementName": "headerStatus",
+          "selector": {
+            "css": "[data-testid='table-header-status']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "DraggablePage",
+      "elements": [
+        {
+          "elementName": "canvas",
+          "selector": {
+            "css": "[data-testid='draggable-canvas']"
+          }
+        },
+        {
+          "elementName": "item1",
+          "selector": {
+            "css": "[data-testid='draggable-item-1']"
+          }
+        },
+        {
+          "elementName": "item2",
+          "selector": {
+            "css": "[data-testid='draggable-item-2']"
+          }
+        },
+        {
+          "elementName": "item3",
+          "selector": {
+            "css": "[data-testid='draggable-item-3']"
+          }
+        },
+        {
+          "elementName": "item4",
+          "selector": {
+            "css": "[data-testid='draggable-item-4']"
+          }
+        },
+        {
+          "elementName": "status",
+          "selector": {
+            "css": "[data-testid='draggable-status']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "DroppablePage",
+      "elements": [
+        {
+          "elementName": "status",
+          "selector": {
+            "css": "[data-testid='droppable-status']"
+          }
+        },
+        {
+          "elementName": "redItem1",
+          "selector": {
+            "css": "[data-testid='droppable-item-1']"
+          }
+        },
+        {
+          "elementName": "blueItem1",
+          "selector": {
+            "css": "[data-testid='droppable-item-3']"
+          }
+        },
+        {
+          "elementName": "greenItem1",
+          "selector": {
+            "css": "[data-testid='droppable-item-5']"
+          }
+        },
+        {
+          "elementName": "redZone",
+          "selector": {
+            "css": "[data-testid='droppable-zone-red']"
+          }
+        },
+        {
+          "elementName": "redZoneCount",
+          "selector": {
+            "css": "[data-testid='droppable-zone-count-red']"
+          }
+        },
+        {
+          "elementName": "blueZone",
+          "selector": {
+            "css": "[data-testid='droppable-zone-blue']"
+          }
+        },
+        {
+          "elementName": "blueZoneCount",
+          "selector": {
+            "css": "[data-testid='droppable-zone-count-blue']"
+          }
+        },
+        {
+          "elementName": "greenZone",
+          "selector": {
+            "css": "[data-testid='droppable-zone-green']"
+          }
+        },
+        {
+          "elementName": "greenZoneCount",
+          "selector": {
+            "css": "[data-testid='droppable-zone-count-green']"
+          }
+        },
+        {
+          "elementName": "resetButton",
+          "selector": {
+            "css": "[data-testid='droppable-reset']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ResizablePage",
+      "elements": [
+        {
+          "elementName": "panel",
+          "selector": {
+            "css": "[data-testid='resizable-panel']"
+          }
+        },
+        {
+          "elementName": "handle",
+          "selector": {
+            "css": "[data-testid='resizable-handle']"
+          }
+        },
+        {
+          "elementName": "widthDisplay",
+          "selector": {
+            "css": "[data-testid='resizable-width']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "KanbanPage",
+      "elements": [
+        {
+          "elementName": "todoColumn",
+          "selector": {
+            "css": "[data-testid='kanban-column-todo']"
+          }
+        },
+        {
+          "elementName": "inProgressColumn",
+          "selector": {
+            "css": "[data-testid='kanban-column-inprogress']"
+          }
+        },
+        {
+          "elementName": "doneColumn",
+          "selector": {
+            "css": "[data-testid='kanban-column-done']"
+          }
+        },
+        {
+          "elementName": "card1",
+          "selector": {
+            "css": "[data-testid='kanban-card-1']"
+          }
+        },
+        {
+          "elementName": "card2",
+          "selector": {
+            "css": "[data-testid='kanban-card-2']"
+          }
+        },
+        {
+          "elementName": "cards",
+          "selector": {
+            "css": "[data-testid^='kanban-card-']"
+          }
+        },
+        {
+          "elementName": "addTodoButton",
+          "selector": {
+            "css": "[data-testid='kanban-add-todo']"
+          }
+        },
+        {
+          "elementName": "addInProgressButton",
+          "selector": {
+            "css": "[data-testid='kanban-add-inprogress']"
+          }
+        },
+        {
+          "elementName": "addDoneButton",
+          "selector": {
+            "css": "[data-testid='kanban-add-done']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "DropZonePage",
+      "elements": [
+        {
+          "elementName": "source1",
+          "selector": {
+            "css": "[data-testid='dropzone-source-1']"
+          }
+        },
+        {
+          "elementName": "source2",
+          "selector": {
+            "css": "[data-testid='dropzone-source-2']"
+          }
+        },
+        {
+          "elementName": "sources",
+          "selector": {
+            "css": "[data-testid^='dropzone-source-']"
+          }
+        },
+        {
+          "elementName": "target",
+          "selector": {
+            "css": "[data-testid='dropzone-target']"
+          }
+        },
+        {
+          "elementName": "count",
+          "selector": {
+            "css": "[data-testid='dropzone-count']"
+          }
+        },
+        {
+          "elementName": "clearButton",
+          "selector": {
+            "css": "[data-testid='dropzone-clear']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "InfiniteScrollPage",
+      "elements": [
+        {
+          "elementName": "container",
+          "selector": {
+            "css": "[data-testid='scroll-container']"
+          }
+        },
+        {
+          "elementName": "showingCount",
+          "selector": {
+            "css": "[data-testid='scroll-count']"
+          }
+        },
+        {
+          "elementName": "items",
+          "selector": {
+            "css": "[data-testid^='scroll-item-']"
+          }
+        },
+        {
+          "elementName": "loader",
+          "selector": {
+            "css": "[data-testid='scroll-loader']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "LoadingStatesPage",
+      "elements": [
+        {
+          "elementName": "spinner",
+          "selector": {
+            "css": "[data-testid='loading-spinner']"
+          }
+        },
+        {
+          "elementName": "skeletonToggle",
+          "selector": {
+            "css": "[data-testid='loading-skeleton-toggle']"
+          }
+        },
+        {
+          "elementName": "skeleton",
+          "selector": {
+            "css": "[data-testid='loading-skeleton']"
+          }
+        },
+        {
+          "elementName": "skeletonCard",
+          "selector": {
+            "css": "[data-testid='loading-skeleton-card']"
+          }
+        },
+        {
+          "elementName": "progressBar",
+          "selector": {
+            "css": "[data-testid='loading-bar']"
+          }
+        },
+        {
+          "elementName": "loadingButton",
+          "selector": {
+            "css": "[data-testid='loading-btn']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "DynamicFormPage",
+      "elements": [
+        {
+          "elementName": "form",
+          "selector": {
+            "css": "[data-testid='dynamic-form']"
+          }
+        },
+        {
+          "elementName": "field1",
+          "selector": {
+            "css": "[data-testid='dynamic-field-1']"
+          }
+        },
+        {
+          "elementName": "fields",
+          "selector": {
+            "css": "[data-testid^='dynamic-field-']"
+          }
+        },
+        {
+          "elementName": "addButton",
+          "selector": {
+            "css": "[data-testid='dynamic-add']"
+          }
+        },
+        {
+          "elementName": "submitButton",
+          "selector": {
+            "css": "[data-testid='dynamic-submit']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "CarouselPage",
+      "elements": [
+        {
+          "elementName": "slide1",
+          "selector": {
+            "css": "[data-testid='carousel-slide-1']"
+          }
+        },
+        {
+          "elementName": "slide2",
+          "selector": {
+            "css": "[data-testid='carousel-slide-2']"
+          }
+        },
+        {
+          "elementName": "prevButton",
+          "selector": {
+            "css": "[data-testid='carousel-prev']"
+          }
+        },
+        {
+          "elementName": "nextButton",
+          "selector": {
+            "css": "[data-testid='carousel-next']"
+          }
+        },
+        {
+          "elementName": "dot1",
+          "selector": {
+            "css": "[data-testid='carousel-dot-1']"
+          }
+        },
+        {
+          "elementName": "dot2",
+          "selector": {
+            "css": "[data-testid='carousel-dot-2']"
+          }
+        },
+        {
+          "elementName": "autoplayButton",
+          "selector": {
+            "css": "[data-testid='carousel-autoplay']"
+          }
+        },
+        {
+          "elementName": "indicator",
+          "selector": {
+            "css": "[data-testid='carousel-indicator']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "ProductCarouselPage",
+      "elements": [
+        {
+          "elementName": "firstCarouselImage",
+          "selector": {
+            "css": "[data-testid='product-image-0']"
+          }
+        },
+        {
+          "elementName": "productThumbnails",
+          "selector": {
+            "css": "[data-testid^='product-thumb-']"
+          }
+        },
+        {
+          "elementName": "nextButton",
+          "selector": {
+            "css": "[data-testid='product-carousel-next']"
+          }
+        },
+        {
+          "elementName": "prevButton",
+          "selector": {
+            "css": "[data-testid='product-carousel-prev']"
+          }
+        },
+        {
+          "elementName": "indicator",
+          "selector": {
+            "css": "[data-testid='product-carousel-indicator']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "PiniaCounterPage",
+      "elements": [
+        {
+          "elementName": "counterValue",
+          "selector": {
+            "css": "[data-testid='counter-value']"
+          }
+        },
+        {
+          "elementName": "incrementButton",
+          "selector": {
+            "css": "[data-testid='counter-increment']"
+          }
+        },
+        {
+          "elementName": "decrementButton",
+          "selector": {
+            "css": "[data-testid='counter-decrement']"
+          }
+        },
+        {
+          "elementName": "resetButton",
+          "selector": {
+            "css": "[data-testid='counter-reset']"
+          }
+        },
+        {
+          "elementName": "stepInput",
+          "selector": {
+            "css": "[data-testid='counter-step-input']"
+          }
+        },
+        {
+          "elementName": "history",
+          "selector": {
+            "css": "[data-testid='counter-history']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "MultiStepFormPage",
+      "elements": [
+        {
+          "elementName": "step1Indicator",
+          "selector": {
+            "css": "[data-testid='multistep-step-1']"
+          }
+        },
+        {
+          "elementName": "step2Indicator",
+          "selector": {
+            "css": "[data-testid='multistep-step-2']"
+          }
+        },
+        {
+          "elementName": "step3Indicator",
+          "selector": {
+            "css": "[data-testid='multistep-step-3']"
+          }
+        },
+        {
+          "elementName": "currentStep",
+          "selector": {
+            "css": "[data-testid='multistep-current-step']"
+          }
+        },
+        {
+          "elementName": "firstNameInput",
+          "selector": {
+            "css": "[data-testid='multistep-first-name']"
+          }
+        },
+        {
+          "elementName": "lastNameInput",
+          "selector": {
+            "css": "[data-testid='multistep-last-name']"
+          }
+        },
+        {
+          "elementName": "nextButton",
+          "selector": {
+            "css": "[data-testid='multistep-next']"
+          }
+        },
+        {
+          "elementName": "prevButton",
+          "selector": {
+            "css": "[data-testid='multistep-back']"
+          }
+        },
+        {
+          "elementName": "submitButton",
+          "selector": {
+            "css": "[data-testid='multistep-submit']"
+          }
+        },
+        {
+          "elementName": "emailInput",
+          "selector": {
+            "css": "[data-testid='multistep-email']"
+          }
+        },
+        {
+          "elementName": "phoneInput",
+          "selector": {
+            "css": "[data-testid='multistep-phone']"
+          }
+        },
+        {
+          "elementName": "messageInput",
+          "selector": {
+            "css": "[data-testid='multistep-message']"
+          }
+        },
+        {
+          "elementName": "summary",
+          "selector": {
+            "css": "[data-testid='multistep-summary']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "StateViewerPage",
+      "elements": [
+        {
+          "elementName": "emptyButton",
+          "selector": {
+            "css": "[data-testid='state-btn-empty']"
+          }
+        },
+        {
+          "elementName": "loadingButton",
+          "selector": {
+            "css": "[data-testid='state-btn-loading']"
+          }
+        },
+        {
+          "elementName": "errorButton",
+          "selector": {
+            "css": "[data-testid='state-btn-error']"
+          }
+        },
+        {
+          "elementName": "populatedButton",
+          "selector": {
+            "css": "[data-testid='state-btn-populated']"
+          }
+        },
+        {
+          "elementName": "currentState",
+          "selector": {
+            "css": "[data-testid='state-current']"
+          }
+        },
+        {
+          "elementName": "emptyView",
+          "selector": {
+            "css": "[data-testid='state-empty-view']"
+          }
+        },
+        {
+          "elementName": "loadingView",
+          "selector": {
+            "css": "[data-testid='state-loading-view']"
+          }
+        },
+        {
+          "elementName": "errorView",
+          "selector": {
+            "css": "[data-testid='state-error-view']"
+          }
+        },
+        {
+          "elementName": "populatedView",
+          "selector": {
+            "css": "[data-testid='state-populated-view']"
+          }
+        }
+      ]
+    },
+    {
+      "name": "SidebarNav",
+      "elements": [
+        {
+          "elementName": "buttonsLink",
+          "selector": {
+            "css": "[data-testid='nav-item-buttons']"
+          }
+        },
+        {
+          "elementName": "textInputsLink",
+          "selector": {
+            "css": "[data-testid='nav-item-textInputs']"
+          }
+        },
+        {
+          "elementName": "checkboxesLink",
+          "selector": {
+            "css": "[data-testid='nav-item-checkboxes']"
+          }
+        },
+        {
+          "elementName": "slidersLink",
+          "selector": {
+            "css": "[data-testid='nav-item-sliders']"
+          }
+        },
+        {
+          "elementName": "sliderIndicatorLink",
+          "selector": {
+            "css": "[data-testid='nav-item-sliderIndicator']"
+          }
+        },
+        {
+          "elementName": "dragProgressLink",
+          "selector": {
+            "css": "[data-testid='nav-item-dragProgress']"
+          }
+        },
+        {
+          "elementName": "dropdownLink",
+          "selector": {
+            "css": "[data-testid='nav-item-dropDown']"
+          }
+        },
+        {
+          "elementName": "fileUploadLink",
+          "selector": {
+            "css": "[data-testid='nav-item-fileUpload']"
+          }
+        },
+        {
+          "elementName": "autocompleteLink",
+          "selector": {
+            "css": "[data-testid='nav-item-autocomplete']"
+          }
+        },
+        {
+          "elementName": "alertsLink",
+          "selector": {
+            "css": "[data-testid='nav-item-alerts']"
+          }
+        },
+        {
+          "elementName": "modalLink",
+          "selector": {
+            "css": "[data-testid='nav-item-modal']"
+          }
+        },
+        {
+          "elementName": "toastLink",
+          "selector": {
+            "css": "[data-testid='nav-item-toast']"
+          }
+        },
+        {
+          "elementName": "tooltipLink",
+          "selector": {
+            "css": "[data-testid='nav-item-tooltip']"
+          }
+        },
+        {
+          "elementName": "drawerLink",
+          "selector": {
+            "css": "[data-testid='nav-item-drawer']"
+          }
+        },
+        {
+          "elementName": "tabsLink",
+          "selector": {
+            "css": "[data-testid='nav-item-tabs']"
+          }
+        },
+        {
+          "elementName": "accordionLink",
+          "selector": {
+            "css": "[data-testid='nav-item-accordion']"
+          }
+        },
+        {
+          "elementName": "progressLink",
+          "selector": {
+            "css": "[data-testid='nav-item-progress']"
+          }
+        },
+        {
+          "elementName": "tableLink",
+          "selector": {
+            "css": "[data-testid='nav-item-table']"
+          }
+        },
+        {
+          "elementName": "sortableLink",
+          "selector": {
+            "css": "[data-testid='nav-item-sortable']"
+          }
+        },
+        {
+          "elementName": "draggableLink",
+          "selector": {
+            "css": "[data-testid='nav-item-draggable']"
+          }
+        },
+        {
+          "elementName": "droppableLink",
+          "selector": {
+            "css": "[data-testid='nav-item-droppable']"
+          }
+        },
+        {
+          "elementName": "resizableLink",
+          "selector": {
+            "css": "[data-testid='nav-item-resizable']"
+          }
+        },
+        {
+          "elementName": "tallPageLink",
+          "selector": {
+            "css": "[data-testid='nav-item-tall']"
+          }
+        },
+        {
+          "elementName": "kanbanLink",
+          "selector": {
+            "css": "[data-testid='nav-item-kanban']"
+          }
+        },
+        {
+          "elementName": "dropzoneLink",
+          "selector": {
+            "css": "[data-testid='nav-item-dropzone']"
+          }
+        },
+        {
+          "elementName": "infiniteScrollLink",
+          "selector": {
+            "css": "[data-testid='nav-item-infiniteScroll']"
+          }
+        },
+        {
+          "elementName": "loadingLink",
+          "selector": {
+            "css": "[data-testid='nav-item-loading']"
+          }
+        },
+        {
+          "elementName": "dynamicFormLink",
+          "selector": {
+            "css": "[data-testid='nav-item-dynamicForm']"
+          }
+        },
+        {
+          "elementName": "galleryLink",
+          "selector": {
+            "css": "[data-testid='nav-item-gallery']"
+          }
+        },
+        {
+          "elementName": "carouselLink",
+          "selector": {
+            "css": "[data-testid='nav-item-carousel']"
+          }
+        },
+        {
+          "elementName": "productCarouselLink",
+          "selector": {
+            "css": "[data-testid='nav-item-productCarousel']"
+          }
+        },
+        {
+          "elementName": "loginFormLink",
+          "selector": {
+            "css": "[data-testid='nav-item-loginForm']"
+          }
+        },
+        {
+          "elementName": "piniaCounterLink",
+          "selector": {
+            "css": "[data-testid='nav-item-piniaCounter']"
+          }
+        },
+        {
+          "elementName": "longListLink",
+          "selector": {
+            "css": "[data-testid='nav-item-longList']"
+          }
+        },
+        {
+          "elementName": "multistepLink",
+          "selector": {
+            "css": "[data-testid='nav-item-multistep']"
+          }
+        },
+        {
+          "elementName": "stateViewerLink",
+          "selector": {
+            "css": "[data-testid='nav-item-stateViewer']"
+          }
+        },
+        {
+          "elementName": "otpLink",
+          "selector": {
+            "testid": "nav-item-otpInput"
+          }
+        }
+      ]
+    },
+    {
+      "name": "OtpPage",
+      "elements": [
+        {
+          "elementName": "addBasicDigitBtn",
+          "selector": {
+            "css": "[data-testid='otp-add-digit-basic']"
+          }
+        },
+        {
+          "elementName": "basicGeneratedCode",
+          "selector": {
+            "css": "[data-testid='otp-generated-code-basic'] .generated-code__value"
+          }
+        },
+        {
+          "elementName": "basicOtpInput",
+          "selector": {
+            "css": "[data-testid='otp-section-basic'] input:nth-of-type(1)"
           }
         }
       ]

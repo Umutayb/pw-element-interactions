@@ -422,3 +422,118 @@ await interactions.verify.count(customLocator, { greaterThan: 2 });
 ```
 
 All core `interact`, `verify`, and `navigate` methods are available on `ElementInteractions`.
+
+---
+
+## 7. Email API
+
+Send and receive emails in tests. Supports plain-text, inline HTML, and HTML file templates.
+
+### Setup
+
+```ts
+// tests/fixtures/base.ts
+import { test as base } from '@playwright/test';
+import { baseFixture } from 'pw-element-interactions';
+
+export const test = baseFixture(base, 'tests/data/page-repository.json', {
+  emailCredentials: {
+    senderEmail: process.env.SENDER_EMAIL!,
+    senderPassword: process.env.SENDER_PASSWORD!,
+    senderSmtpHost: process.env.SENDER_SMTP_HOST!,
+    receiverEmail: process.env.RECEIVER_EMAIL!,
+    receiverPassword: process.env.RECEIVER_PASSWORD!,
+    // receiverImapHost: 'imap.gmail.com',  // default
+    // receiverImapPort: 993,               // default
+  }
+});
+```
+
+Or configure after construction:
+```ts
+steps.configureEmail({
+  senderEmail: 'sender@example.com',
+  senderPassword: 'app-password',
+  senderSmtpHost: 'smtp.example.com',
+  receiverEmail: 'receiver@example.com',
+  receiverPassword: 'app-password',
+});
+```
+
+### Sending Emails
+
+```ts
+import { EmailSendOptions } from 'pw-element-interactions';
+
+// Simple text email
+await steps.email.send({ to: 'user@example.com', subject: 'Test', text: 'Hello' });
+
+// Inline HTML email
+await steps.email.send({ to: 'user@example.com', subject: 'Report', html: '<h1>Results</h1>' });
+
+// HTML file template (e.g. test report)
+await steps.email.send({ to: 'user@example.com', subject: 'Report', htmlFile: 'emails/report.html' });
+```
+
+### Receiving Emails
+
+Use composable filters to search for emails. Combine as many filters as needed — all filters are applied with AND logic. Filtering tries exact match first, then falls back to partial case-insensitive match (with a warning log).
+
+```ts
+import { EmailFilterType } from 'pw-element-interactions';
+
+// Single filter — get the latest matching email
+const email = await steps.email.receive({
+  filters: [{ type: EmailFilterType.SUBJECT, value: 'Your OTP' }]
+});
+await steps.navigateTo('file://' + email.filePath);
+
+// Multiple filters — combine subject, sender, and content
+const email2 = await steps.email.receive({
+  filters: [
+    { type: EmailFilterType.SUBJECT, value: 'Verification' },
+    { type: EmailFilterType.FROM, value: 'noreply@example.com' },
+    { type: EmailFilterType.CONTENT, value: 'verification code' },
+  ]
+});
+
+// Get ALL matching emails
+const allEmails = await steps.email.receiveAll({
+  filters: [
+    { type: EmailFilterType.FROM, value: 'alerts@example.com' },
+    { type: EmailFilterType.SINCE, value: new Date('2025-01-01') },
+  ]
+});
+```
+
+### Cleaning the Inbox
+
+```ts
+// Delete emails matching filters
+await steps.email.clean({
+  filters: [{ type: EmailFilterType.FROM, value: 'noreply@example.com' }]
+});
+
+// Delete all emails in the inbox
+await steps.email.clean();
+```
+
+### Email Filter Types
+
+| Type | Value | Description |
+|---|---|---|
+| `EmailFilterType.SUBJECT` | `string` | Filter by email subject |
+| `EmailFilterType.FROM` | `string` | Filter by sender address |
+| `EmailFilterType.TO` | `string` | Filter by recipient address |
+| `EmailFilterType.CONTENT` | `string` | Filter by email body (HTML or plain text) |
+| `EmailFilterType.SINCE` | `Date` | Only include emails after this date |
+
+### Email Receive Options
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `filters` | `EmailFilter[]` | — | **Required.** Array of filters to apply (AND logic) |
+| `folder` | `string` | `'INBOX'` | IMAP folder to search |
+| `waitTimeout` | `number` | `30000` | Max ms to poll for the email |
+| `pollInterval` | `number` | `3000` | Ms between poll attempts |
+| `downloadDir` | `string` | `os.tmpdir()/pw-emails` | Where to save downloaded HTML |

@@ -6,6 +6,7 @@ export { Navigation } from './interactions/Navigation';
 export { Verifications } from './interactions/Verification';
 export { Interactions } from './interactions/Interaction';
 export { Extractions } from './interactions/Extraction';
+export { Email } from './interactions/Email';
 
 // Utilities
 export { DateUtilities } from './utils/DateUtilities';
@@ -18,4 +19,4 @@ export { ElementInteractions } from './interactions/facade/ElementInteractions';
 export { Steps } from './steps/CommonSteps';
 
 // Test Fixture
-export { baseFixture }  from './fixture/BaseFixture';
+export { baseFixture, BaseFixtureOptions } from './fixture/BaseFixture';

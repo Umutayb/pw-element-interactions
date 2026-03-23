@@ -41,8 +41,10 @@ function getClassMethods(cls: any): string[] {
 }
 
 test('API Coverage Report', async () => {
-  const testFilePath = path.resolve(__dirname, 'unit-tests.spec.ts');
-  const testSource = fs.readFileSync(testFilePath, 'utf-8');
+  // Scan all spec files (excluding this coverage file and vue-test-app)
+  const testDir = path.resolve(__dirname);
+  const specFiles = fs.readdirSync(testDir).filter(f => f.endsWith('.spec.ts') && f !== 'api-coverage.spec.ts' && f !== 'vue-test-app.spec.ts');
+  const testSource = specFiles.map(f => fs.readFileSync(path.join(testDir, f), 'utf-8')).join('\n');
 
   const apis: MethodInfo[] = [];
 

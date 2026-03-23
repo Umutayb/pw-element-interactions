@@ -311,3 +311,75 @@ await interactions.verify.count(locator, { greaterThan: 2 });
 ```
 
 All `interact`, `verify`, and `navigate` methods are available on `ElementInteractions`.
+
+---
+
+## 6. Email API
+
+Send and receive emails in tests. Supports plain-text, inline HTML, and HTML file templates.
+
+### Setup
+
+```ts
+export const test = baseFixture(base, 'tests/data/page-repository.json', {
+  emailCredentials: {
+    senderEmail: process.env.SENDER_EMAIL!,
+    senderPassword: process.env.SENDER_PASSWORD!,
+    senderSmtpHost: process.env.SENDER_SMTP_HOST!,
+    receiverEmail: process.env.RECEIVER_EMAIL!,
+    receiverPassword: process.env.RECEIVER_PASSWORD!,
+  }
+});
+```
+
+### Sending
+
+```ts
+// Plain text
+await steps.email.send({ to: 'user@example.com', subject: 'Test', text: 'Hello' });
+
+// HTML file from project directory
+await steps.email.send({ to: 'user@example.com', subject: 'Report', htmlFile: 'emails/report.html' });
+```
+
+### Receiving
+
+Use composable filters (`EmailFilterType`) to search. Combine any number of filters (AND logic). Tries exact match first, falls back to partial case-insensitive match with a warning.
+
+```ts
+import { EmailFilterType } from 'pw-element-interactions';
+
+// Get latest matching email
+const email = await steps.email.receive({
+  filters: [{ type: EmailFilterType.SUBJECT, value: 'Your OTP' }]
+});
+await steps.navigateTo('file://' + email.filePath);
+
+// Combine multiple filters
+const email2 = await steps.email.receive({
+  filters: [
+    { type: EmailFilterType.SUBJECT, value: 'Verification' },
+    { type: EmailFilterType.FROM, value: 'noreply@example.com' },
+    { type: EmailFilterType.CONTENT, value: 'verification code' },
+  ]
+});
+
+// Get ALL matching emails
+const allEmails = await steps.email.receiveAll({
+  filters: [{ type: EmailFilterType.FROM, value: 'alerts@example.com' }]
+});
+```
+
+### Cleaning the Inbox
+
+```ts
+// Delete emails matching filters
+await steps.email.clean({
+  filters: [{ type: EmailFilterType.FROM, value: 'noreply@example.com' }]
+});
+
+// Delete all emails
+await steps.email.clean();
+```
+
+Filter types: `SUBJECT`, `FROM`, `TO`, `CONTENT` (body text/HTML), `SINCE` (Date).

@@ -1,7 +1,8 @@
 import { Page, Response } from '@playwright/test';
 import { ElementRepository } from 'pw-element-repository';
 import { ElementInteractions } from '../interactions/facade/ElementInteractions';
-import { DropdownSelectOptions, TextVerifyOptions, CountVerifyOptions, DragAndDropOptions, ListedElementOptions, FillFormValue, GetAllOptions, ScreenshotOptions } from '../enum/Options';
+import { Email } from '../interactions/Email';
+import { DropdownSelectOptions, TextVerifyOptions, CountVerifyOptions, DragAndDropOptions, ListedElementOptions, FillFormValue, GetAllOptions, ScreenshotOptions, EmailCredentials, EmailSendOptions, EmailReceiveOptions, ReceivedEmail } from '../enum/Options';
 import { logger } from '../logger/Logger';
 
 const log = {
@@ -10,6 +11,7 @@ const log = {
     extract: logger('extract'),
     verify: logger('verify'),
     wait: logger('wait'),
+    email: logger('email'),
 };
 
 /**
@@ -26,22 +28,40 @@ export class Steps {
     private utils;
 
     /**
+     * Email sub-API for sending and receiving emails in tests.
+     * Only available when `emailCredentials` are provided to the constructor or via `configureEmail()`.
+     */
+    public email: Email | null = null;
+
+    /**
      * Initializes the Steps class with the required Playwright page and element repository.
      * @param page - The current Playwright Page object.
      * @param repo - An initialized instance of `ElementRepository` containing your locators.
      * @param timeout - Optional global timeout override (in milliseconds).
+     * @param emailCredentials - Optional email credentials to enable the email sub-API.
      */
     constructor(
         private page: Page,
         private repo: ElementRepository,
-        timeout?: number
+        timeout?: number,
+        emailCredentials?: EmailCredentials
     ) {
-        const interactions = new ElementInteractions(page, timeout);
+        const interactions = new ElementInteractions(page, timeout, emailCredentials);
         this.interact = interactions.interact;
         this.navigate = interactions.navigate;
         this.extract = interactions.extract;
         this.verify = interactions.verify;
         this.utils = interactions.utils;
+        this.email = interactions.email;
+    }
+
+    /**
+     * Configures the email sub-API with credentials after construction.
+     * Useful when credentials are loaded from environment variables at runtime.
+     */
+    configureEmail(credentials: EmailCredentials): void {
+        this.email = new Email(credentials);
+        log.email('Email configured for sender=%s, receiver=%s', credentials.senderEmail, credentials.receiverEmail);
     }
 
     // ==========================================

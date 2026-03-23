@@ -110,3 +110,45 @@ export const logger = (type: string): Debug.Debugger => {
   }[type] || log.color;
   return log;
 };
+
+/**
+ * Pre-instantiated, color-coded loggers for standard execution events.
+ * * @example
+ * ```ts
+ * import { log } from '../logger/Logger';
+ * * log.info('Starting up...');
+ * log.warn('Retrying connection...');
+ * log.success('Data loaded successfully');
+ * ```
+ */
+export const log = {
+  /**
+   * Standard informational logger (Blue).
+   * Use this for general execution steps and state changes.
+   */
+  info: logger('info'),
+
+  /**
+   * Warning logger (Amber).
+   * Use this for non-fatal issues, retries, or deprecations.
+   */
+  warn: logger('warn'),
+
+  /**
+   * Error logger (Red).
+   * Use this for critical failures, exceptions, or timeouts.
+   */
+  error: logger('error'),
+
+  /**
+   * Success logger (Green).
+   * Use this for passing assertions or completed milestones.
+   */
+  success: logger('success'),
+
+  /**
+   * Important/Highlight logger (Purple).
+   * Use this to draw attention to major lifecycle events or critical data dumps.
+   */
+  important: logger('important'),
+};

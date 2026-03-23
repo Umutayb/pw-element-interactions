@@ -452,6 +452,153 @@ All core `interact`, `verify`, and `navigate` methods are available on `ElementI
 
 ---
 
+## 📧 Email API
+
+Send and receive emails in your tests. Supports plain text, inline HTML, and HTML file templates for full customisation.
+
+### Setup
+
+Pass email credentials to `baseFixture` via the options parameter:
+
+```ts
+// tests/fixtures/base.ts
+import { test as base, expect } from '@playwright/test';
+import { baseFixture } from 'pw-element-interactions';
+
+export const test = baseFixture(base, 'tests/data/page-repository.json', {
+  emailCredentials: {
+    senderEmail: process.env.SENDER_EMAIL!,
+    senderPassword: process.env.SENDER_PASSWORD!,
+    senderSmtpHost: process.env.SENDER_SMTP_HOST!,
+    receiverEmail: process.env.RECEIVER_EMAIL!,
+    receiverPassword: process.env.RECEIVER_PASSWORD!,
+  }
+});
+export { expect };
+```
+
+Or configure credentials at runtime:
+
+```ts
+test('email flow', async ({ steps }) => {
+  steps.configureEmail({
+    senderEmail: 'sender@example.com',
+    senderPassword: 'app-password',
+    senderSmtpHost: 'smtp.gmail.com',
+    receiverEmail: 'receiver@example.com',
+    receiverPassword: 'app-password',
+  });
+});
+```
+
+### Sending Emails
+
+```ts
+// Plain text
+await steps.email.send({
+  to: 'user@example.com',
+  subject: 'Test Email',
+  text: 'Hello from Playwright!'
+});
+
+// Inline HTML
+await steps.email.send({
+  to: 'user@example.com',
+  subject: 'HTML Email',
+  html: '<h1>Hello</h1><p>Inline HTML content</p>'
+});
+
+// HTML file from project directory — great for branded templates
+await steps.email.send({
+  to: 'user@example.com',
+  subject: 'Monthly Report',
+  htmlFile: 'emails/report-template.html'
+});
+```
+
+### Receiving Emails
+
+Use composable filters to search the inbox. Combine as many filters as needed — all are applied with AND logic. Filtering tries exact match first, then falls back to partial case-insensitive match (with a warning log).
+
+```ts
+import { EmailFilterType } from 'pw-element-interactions';
+
+// Single filter — get the latest matching email
+const email = await steps.email.receive({
+  filters: [{ type: EmailFilterType.SUBJECT, value: 'Your OTP Code' }]
+});
+
+// Open the downloaded HTML in the browser
+await steps.navigateTo('file://' + email.filePath);
+
+// Now interact with the email content like any web page
+const otpCode = await steps.getText('EmailPage', 'otpCode');
+
+// Combine multiple filters
+const email2 = await steps.email.receive({
+  filters: [
+    { type: EmailFilterType.SUBJECT, value: 'Verification' },
+    { type: EmailFilterType.FROM, value: 'noreply@example.com' },
+    { type: EmailFilterType.CONTENT, value: 'verification code' },
+  ]
+});
+
+// Get ALL matching emails
+const allEmails = await steps.email.receiveAll({
+  filters: [
+    { type: EmailFilterType.FROM, value: 'alerts@example.com' },
+    { type: EmailFilterType.SINCE, value: new Date('2025-01-01') },
+  ]
+});
+```
+
+### Cleaning the Inbox
+
+Delete emails matching filters, or clean the entire inbox:
+
+```ts
+// Delete emails from a specific sender
+await steps.email.clean({
+  filters: [{ type: EmailFilterType.FROM, value: 'noreply@example.com' }]
+});
+
+// Delete all emails in the inbox
+await steps.email.clean();
+```
+
+**Filter types (`EmailFilterType`):**
+
+| Type | Value Type | Description |
+|---|---|---|
+| `SUBJECT` | `string` | Filter by email subject |
+| `FROM` | `string` | Filter by sender address |
+| `TO` | `string` | Filter by recipient address |
+| `CONTENT` | `string` | Filter by email body (HTML or plain text) |
+| `SINCE` | `Date` | Only include emails received after this date |
+
+**`receive()` / `receiveAll()` options:**
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `filters` | `EmailFilter[]` | — | **Required.** Composable filters (AND logic) |
+| `folder` | `string` | `'INBOX'` | IMAP folder to search |
+| `waitTimeout` | `number` | `30000` | Max time (ms) to wait for a match |
+| `pollInterval` | `number` | `3000` | How often (ms) to poll the inbox |
+| `downloadDir` | `string` | `os.tmpdir()/pw-emails` | Where to save the downloaded HTML |
+
+**`ReceivedEmail` return type:**
+
+| Property | Type | Description |
+|---|---|---|
+| `filePath` | `string` | Absolute path to the downloaded HTML file |
+| `subject` | `string` | Email subject line |
+| `from` | `string` | Sender address |
+| `date` | `Date` | When the email was sent |
+| `html` | `string` | Raw HTML content |
+| `text` | `string` | Plain text content |
+
+---
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please read the guidelines below before opening a PR.

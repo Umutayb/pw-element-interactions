@@ -27,8 +27,8 @@
   },
   "devDependencies": {
     "@civitas-cerebrum/context-store": "^0.0.2",
-    "@civitas-cerebrum/element-repository": "file:../pw-element-repository",
-    "@civitas-cerebrum/email-client": "file:../email-client",
+    "@civitas-cerebrum/element-repository": "^0.0.5",
+    "@civitas-cerebrum/email-client": "^0.0.1",
     "@playwright/test": "^1.58.2",
     "@types/debug": "^4.1.13",
     "@types/node": "^20.0.0",

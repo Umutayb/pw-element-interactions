@@ -62,7 +62,7 @@ test.describe('TC_007: verifyState - All Playwright element states', () => {
 });
 
 test.describe('TC_008: navigateTo resolves relative URLs via Playwright baseURL', () => {
-  test.use({ baseURL: 'https://umutayb.github.io/vue-test-app/' });
+  test.use({ baseURL: 'https://civitas-cerebrum.github.io/vue-test-app/' });
 
   test('navigates with a relative URL', async ({ steps }) => {
     await test.step('Navigate using a relative URL', async () => {

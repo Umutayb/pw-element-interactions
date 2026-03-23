@@ -1,16 +1,23 @@
 /**
  * Environment variables for email configuration.
- * These are loaded from .env.local for local development or process.env for CI.
+ * Priority: process.env > .env file (local development)
  * DO NOT commit .env files to version control.
  * Use .env.example as a template.
  */
 
 import { config as dotenvConfig } from 'dotenv';
 
-// Load environment variables from .env.local (local dev) or .env (CI)
-const configResult = dotenvConfig({ path: '.env.local' });
-if (!configResult.parsed) {
-  dotenvConfig({ path: '.env' });
+// Load from .env file only if process.env doesn't already have values
+// This allows CI to use GitHub Secrets via process.env, while locals use .env file
+const alreadyConfigured = [
+  'SENDER_EMAIL',
+  'SENDER_PASSWORD',
+  'RECEIVER_EMAIL',
+  'RECEIVER_PASSWORD',
+].every((key) => process.env[key]);
+
+if (!alreadyConfigured) {
+  dotenvConfig();
 }
 
 export interface EmailEnvConfig {

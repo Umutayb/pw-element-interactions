@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
-import { Email } from '../src/interactions/Email';
-import { EmailFilterType, EmailCredentials, ReceivedEmail, EmailFilter } from '../src/enum/Options';
+import { EmailClient } from '@civitas-cerebrum/email-client';
+import { EmailFilterType, EmailCredentials, ReceivedEmail, EmailFilter } from '@civitas-cerebrum/email-client';
 
 const dummyCredentials: EmailCredentials = {
     senderEmail: 'sender@test.com',
@@ -23,10 +23,10 @@ function makeEmail(overrides: Partial<ReceivedEmail> = {}): ReceivedEmail {
 }
 
 test.describe('Email Filter Logic', () => {
-    let email: Email;
+    let emailClient: EmailClient;
 
     test.beforeEach(() => {
-        email = new Email(dummyCredentials);
+        emailClient = new EmailClient(dummyCredentials);
     });
 
     // ─── Exact match tests ───────────────────────────────────────────
@@ -37,7 +37,7 @@ test.describe('Email Filter Logic', () => {
             makeEmail({ subject: 'Welcome aboard' }),
         ];
         const filters: EmailFilter[] = [{ type: EmailFilterType.SUBJECT, value: 'Your OTP Code' }];
-        const result = email.applyFilters(candidates, filters);
+        const result = emailClient.applyFilters(candidates, filters);
 
         expect(result).toHaveLength(1);
         expect(result[0].subject).toBe('Your OTP Code');
@@ -49,7 +49,7 @@ test.describe('Email Filter Logic', () => {
             makeEmail({ from: 'support@example.com' }),
         ];
         const filters: EmailFilter[] = [{ type: EmailFilterType.FROM, value: 'noreply@example.com' }];
-        const result = email.applyFilters(candidates, filters);
+        const result = emailClient.applyFilters(candidates, filters);
 
         expect(result).toHaveLength(1);
         expect(result[0].from).toBe('noreply@example.com');
@@ -61,7 +61,7 @@ test.describe('Email Filter Logic', () => {
             makeEmail({ html: '<p>Welcome to our service</p>' }),
         ];
         const filters: EmailFilter[] = [{ type: EmailFilterType.CONTENT, value: '<p>Your verification code is 999</p>' }];
-        const result = email.applyFilters(candidates, filters);
+        const result = emailClient.applyFilters(candidates, filters);
 
         expect(result).toHaveLength(1);
         expect(result[0].html).toContain('999');
@@ -73,7 +73,7 @@ test.describe('Email Filter Logic', () => {
             makeEmail({ html: '', text: 'Welcome email' }),
         ];
         const filters: EmailFilter[] = [{ type: EmailFilterType.CONTENT, value: 'Plain text OTP: 5678' }];
-        const result = email.applyFilters(candidates, filters);
+        const result = emailClient.applyFilters(candidates, filters);
 
         expect(result).toHaveLength(1);
         expect(result[0].text).toContain('5678');
@@ -91,7 +91,7 @@ test.describe('Email Filter Logic', () => {
             { type: EmailFilterType.SUBJECT, value: 'OTP' },
             { type: EmailFilterType.FROM, value: 'noreply@example.com' },
         ];
-        const result = email.applyFilters(candidates, filters);
+        const result = emailClient.applyFilters(candidates, filters);
 
         expect(result).toHaveLength(1);
         expect(result[0].subject).toBe('OTP');
@@ -108,7 +108,7 @@ test.describe('Email Filter Logic', () => {
             { type: EmailFilterType.FROM, value: 'noreply@example.com' },
             { type: EmailFilterType.CONTENT, value: '<p>Code: 456</p>' },
         ];
-        const result = email.applyFilters(candidates, filters);
+        const result = emailClient.applyFilters(candidates, filters);
 
         expect(result).toHaveLength(1);
         expect(result[0].html).toContain('456');
@@ -122,7 +122,7 @@ test.describe('Email Filter Logic', () => {
             makeEmail({ subject: 'Welcome aboard' }),
         ];
         const filters: EmailFilter[] = [{ type: EmailFilterType.SUBJECT, value: 'otp code' }];
-        const result = email.applyFilters(candidates, filters);
+        const result = emailClient.applyFilters(candidates, filters);
 
         expect(result).toHaveLength(1);
         expect(result[0].subject).toBe('Your OTP Code - Action Required');
@@ -134,7 +134,7 @@ test.describe('Email Filter Logic', () => {
             makeEmail({ from: 'support@other.com' }),
         ];
         const filters: EmailFilter[] = [{ type: EmailFilterType.FROM, value: 'noreply@example.com' }];
-        const result = email.applyFilters(candidates, filters);
+        const result = emailClient.applyFilters(candidates, filters);
 
         expect(result).toHaveLength(1);
         expect(result[0].from).toBe('NoReply@Example.COM');
@@ -146,7 +146,7 @@ test.describe('Email Filter Logic', () => {
             makeEmail({ html: '<p>Newsletter</p>' }),
         ];
         const filters: EmailFilter[] = [{ type: EmailFilterType.CONTENT, value: 'verification code' }];
-        const result = email.applyFilters(candidates, filters);
+        const result = emailClient.applyFilters(candidates, filters);
 
         expect(result).toHaveLength(1);
         expect(result[0].html).toContain('ABC123');
@@ -160,7 +160,7 @@ test.describe('Email Filter Logic', () => {
             { type: EmailFilterType.SUBJECT, value: 'otp' },
             { type: EmailFilterType.FROM, value: 'noreply' },
         ];
-        const result = email.applyFilters(candidates, filters);
+        const result = emailClient.applyFilters(candidates, filters);
 
         expect(result).toHaveLength(1);
     });
@@ -174,7 +174,7 @@ test.describe('Email Filter Logic', () => {
             makeEmail({ subject: 'Your OTP is ready' }),   // partial match for "OTP"
         ];
         const filters: EmailFilter[] = [{ type: EmailFilterType.SUBJECT, value: 'OTP' }];
-        const result = email.applyFilters(candidates, filters);
+        const result = emailClient.applyFilters(candidates, filters);
 
         expect(result).toHaveLength(1);
         expect(result[0].subject).toBe('OTP');
@@ -189,7 +189,7 @@ test.describe('Email Filter Logic', () => {
         const filters: EmailFilter[] = [
             { type: EmailFilterType.SINCE, value: new Date('2025-01-01') },
         ];
-        const result = email.applyFilters(candidates, filters);
+        const result = emailClient.applyFilters(candidates, filters);
 
         expect(result).toHaveLength(1);
     });
@@ -203,7 +203,7 @@ test.describe('Email Filter Logic', () => {
             { type: EmailFilterType.SINCE, value: new Date('2025-01-01') },
             { type: EmailFilterType.SUBJECT, value: 'Match' },
         ];
-        const result = email.applyFilters(candidates, filters);
+        const result = emailClient.applyFilters(candidates, filters);
 
         expect(result).toHaveLength(1);
         expect(result[0].subject).toBe('Match');
@@ -213,14 +213,14 @@ test.describe('Email Filter Logic', () => {
 
     test('No candidates — returns empty array', () => {
         const filters: EmailFilter[] = [{ type: EmailFilterType.SUBJECT, value: 'Anything' }];
-        const result = email.applyFilters([], filters);
+        const result = emailClient.applyFilters([], filters);
 
         expect(result).toHaveLength(0);
     });
 
     test('No filters (empty array) — returns all candidates unchanged', () => {
         const candidates = [makeEmail(), makeEmail({ subject: 'Other' })];
-        const result = email.applyFilters(candidates, []);
+        const result = emailClient.applyFilters(candidates, []);
 
         expect(result).toHaveLength(2);
     });
@@ -231,7 +231,7 @@ test.describe('Email Filter Logic', () => {
             makeEmail({ subject: 'Also unrelated' }),
         ];
         const filters: EmailFilter[] = [{ type: EmailFilterType.SUBJECT, value: 'OTP Code' }];
-        const result = email.applyFilters(candidates, filters);
+        const result = emailClient.applyFilters(candidates, filters);
 
         expect(result).toHaveLength(0);
     });
@@ -244,7 +244,7 @@ test.describe('Email Filter Logic', () => {
             { type: EmailFilterType.SUBJECT, value: 'OTP' },
             { type: EmailFilterType.FROM, value: 'noreply@example.com' },
         ];
-        const result = email.applyFilters(candidates, filters);
+        const result = emailClient.applyFilters(candidates, filters);
 
         expect(result).toHaveLength(0);
     });
@@ -254,7 +254,7 @@ test.describe('Email Filter Logic', () => {
             makeEmail({ html: '<p>Hello world</p>', text: 'Hello world' }),
         ];
         const filters: EmailFilter[] = [{ type: EmailFilterType.CONTENT, value: 'verification code' }];
-        const result = email.applyFilters(candidates, filters);
+        const result = emailClient.applyFilters(candidates, filters);
 
         expect(result).toHaveLength(0);
     });
@@ -267,7 +267,7 @@ test.describe('Email Filter Logic', () => {
             { type: EmailFilterType.SUBJECT, value: 'otp' },
             { type: EmailFilterType.FROM, value: 'noreply@example.com' },
         ];
-        const result = email.applyFilters(candidates, filters);
+        const result = emailClient.applyFilters(candidates, filters);
 
         expect(result).toHaveLength(0);
     });
@@ -281,7 +281,7 @@ test.describe('Email Filter Logic', () => {
             makeEmail({ subject: 'Welcome', from: 'support@example.com' }),
         ];
         const filters: EmailFilter[] = [{ type: EmailFilterType.SUBJECT, value: 'OTP Code' }];
-        const result = email.applyFilters(candidates, filters);
+        const result = emailClient.applyFilters(candidates, filters);
 
         expect(result).toHaveLength(2);
     });
@@ -290,13 +290,38 @@ test.describe('Email Filter Logic', () => {
 
     test('receive() throws when filters array is empty', async () => {
         await expect(
-            email.receive({ filters: [], waitTimeout: 100 })
+            emailClient.receive({ filters: [], waitTimeout: 100 })
         ).rejects.toThrow('At least one email filter is required');
     });
 
     test('receiveAll() throws when filters array is empty', async () => {
         await expect(
-            email.receiveAll({ filters: [], waitTimeout: 100 })
+            emailClient.receiveAll({ filters: [], waitTimeout: 100 })
         ).rejects.toThrow('At least one email filter is required');
+    });
+});
+
+import { test as fixtureTest, expect as fixtureExpect } from './fixture/StepFixture';
+
+fixtureTest.describe('Fixture Wiring', () => {
+
+    fixtureTest('baseFixture without emailCredentials — steps.email is null', async ({ steps }) => {
+        fixtureExpect(steps.email).toBeNull();
+    });
+
+    fixtureTest('baseFixture without emailCredentials — interactions.email is null', async ({ interactions }) => {
+        fixtureExpect(interactions.email).toBeNull();
+    });
+
+    fixtureTest('configureEmail sets steps.email at runtime', async ({ steps }) => {
+        fixtureExpect(steps.email).toBeNull();
+        steps.configureEmail({
+            senderEmail: 'sender@test.com',
+            senderPassword: 'pass',
+            senderSmtpHost: 'smtp.test.com',
+            receiverEmail: 'receiver@test.com',
+            receiverPassword: 'pass',
+        });
+        fixtureExpect(steps.email).not.toBeNull();
     });
 });

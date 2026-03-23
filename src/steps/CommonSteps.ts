@@ -1,7 +1,7 @@
 import { Page } from '@playwright/test';
 import { ElementRepository } from 'pw-element-repository';
 import { ElementInteractions } from '../interactions/facade/ElementInteractions';
-import { DropdownSelectOptions, TextVerifyOptions, CountVerifyOptions, DragAndDropOptions } from '../enum/Options';
+import { DropdownSelectOptions, TextVerifyOptions, CountVerifyOptions, DragAndDropOptions, ListedElementOptions } from '../enum/Options';
 import { logger } from '../logger/Logger';
 
 const log = {
@@ -501,6 +501,94 @@ export class Steps {
     async verifyTabCount(expectedCount: number): Promise<void> {
         log.verify('Verifying tab count is %d', expectedCount);
         await this.verify.tabCount(expectedCount);
+    }
+
+    // ==========================================
+    // 📋 LISTED ELEMENT STEPS
+    // ==========================================
+
+    /**
+     * Clicks a specific element within a list (e.g. a table row, card, or list item)
+     * identified by its visible text or an HTML attribute. Optionally drills into a
+     * child element before clicking.
+     *
+     * The base locator is resolved from the repository using `pageName` and `elementName`,
+     * then filtered using the criteria in `options` to find the exact match.
+     *
+     * @param pageName - The page name as defined in `page-repository.json`.
+     * @param elementName - The element name as defined under the given page (should resolve to a list of elements).
+     * @param options - Match criteria: provide `text` to match by visible text, or `attribute` to match by an HTML
+     *   attribute name-value pair. Optionally include `child` (a CSS selector string or a `{ pageName, elementName }`
+     *   page-repository reference) to target a sub-element within the matched item.
+     * @throws Error if neither `text` nor `attribute` is provided, or if no matching element is found.
+     */
+    async clickListedElement(pageName: string, elementName: string, options: ListedElementOptions): Promise<void> {
+        log.interact('Clicking listed element in "%s" > "%s" with options: %O', pageName, elementName, options);
+        const baseLocator = await this.repo.get(this.page, pageName, elementName);
+        const target = await this.interact.getListedElement(baseLocator, options, this.repo);
+        await this.interact.click(target);
+    }
+
+    /**
+     * Verifies a specific element within a list by checking its text content or an HTML attribute.
+     * The element is first located by matching visible text or an attribute from the list,
+     * then the assertion is performed on the resolved (and optionally child-targeted) element.
+     *
+     * Verification behavior is determined by the `options` fields:
+     * - `expectedText` — asserts that the resolved element's text content matches this value.
+     * - `expected` — asserts that the resolved element has the specified attribute name-value pair.
+     * - If neither is provided, the method asserts that the matched element is visible.
+     *
+     * @param pageName - The page name as defined in `page-repository.json`.
+     * @param elementName - The element name as defined under the given page (should resolve to a list of elements).
+     * @param options - Match and assertion criteria. Must include `text` or `attribute` for identification.
+     *   Optionally include `child` to drill into a sub-element, and `expectedText` or `expected` for the assertion.
+     * @throws Error if neither `text` nor `attribute` is provided, if the element is not found,
+     *   or if the assertion fails.
+     */
+    async verifyListedElement(pageName: string, elementName: string, options: ListedElementOptions): Promise<void> {
+        log.verify('Verifying listed element in "%s" > "%s" with options: %O', pageName, elementName, options);
+        const baseLocator = await this.repo.get(this.page, pageName, elementName);
+        const target = await this.interact.getListedElement(baseLocator, options, this.repo);
+
+        if (options.expectedText !== undefined) {
+            await this.verify.text(target, options.expectedText);
+            return;
+        }
+
+        if (options.expected) {
+            await this.verify.attribute(target, options.expected.name, options.expected.value);
+            return;
+        }
+
+        await this.verify.presence(target);
+    }
+
+    /**
+     * Extracts data from a specific element within a list — either its text content
+     * or the value of a specified HTML attribute.
+     *
+     * The element is first located by matching visible text or an attribute from the list,
+     * then data is extracted from the resolved (and optionally child-targeted) element.
+     *
+     * @param pageName - The page name as defined in `page-repository.json`.
+     * @param elementName - The element name as defined under the given page (should resolve to a list of elements).
+     * @param options - Match and extraction criteria. Must include `text` or `attribute` for identification.
+     *   Optionally include `child` to drill into a sub-element. If `extractAttribute` is set, that attribute's
+     *   value is returned; otherwise the element's text content is returned.
+     * @returns The extracted text content or attribute value, or `null` if unavailable.
+     * @throws Error if neither `text` nor `attribute` is provided, or if the element is not found.
+     */
+    async getListedElementData(pageName: string, elementName: string, options: ListedElementOptions): Promise<string | null> {
+        log.extract('Extracting data from listed element in "%s" > "%s" with options: %O', pageName, elementName, options);
+        const baseLocator = await this.repo.get(this.page, pageName, elementName);
+        const target = await this.interact.getListedElement(baseLocator, options, this.repo);
+
+        if (options.extractAttribute) {
+            return await this.extract.getAttribute(target, options.extractAttribute);
+        }
+
+        return await this.extract.getText(target);
     }
 
     // ==========================================

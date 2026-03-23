@@ -128,6 +128,24 @@ await steps.backOrForward('BACKWARDS'); // or 'FORWARDS'
 await steps.setViewport(1280, 720);
 ```
 
+#### Tab / Window Management
+
+```ts
+// Execute an action that opens a new tab, then switch to it
+const newPage = await steps.switchToNewTab(async () => {
+  await steps.click('PageName', 'newTabLink');
+});
+
+// Close a tab and return to the remaining page
+const remainingPage = await steps.closeTab(newPage);
+
+// Get the current number of open tabs
+const count = steps.getTabCount();
+
+// Assert the number of open tabs
+await steps.verifyTabCount(2);
+```
+
 ### 🖱️ Interaction
 
 ```ts
@@ -135,12 +153,18 @@ await steps.click('PageName', 'elementName');
 await steps.clickWithoutScrolling('PageName', 'elementName');
 await steps.clickIfPresent('PageName', 'elementName');
 await steps.clickRandom('PageName', 'elementName');
+await steps.rightClick('PageName', 'elementName');
+await steps.doubleClick('PageName', 'elementName');
+await steps.check('PageName', 'elementName');
+await steps.uncheck('PageName', 'elementName');
 await steps.hover('PageName', 'elementName');
 await steps.scrollIntoView('PageName', 'elementName');
 await steps.fill('PageName', 'elementName', 'my input');
 await steps.typeSequentially('PageName', 'elementName', 'my input');
 await steps.typeSequentially('PageName', 'elementName', 'my input', 50); // custom delay ms
 await steps.uploadFile('PageName', 'elementName', 'tests/fixtures/file.pdf');
+await steps.setSliderValue('PageName', 'elementName', 75);
+await steps.pressKey('Enter'); // or 'Escape', 'Tab', etc.
 await steps.dragAndDrop('PageName', 'elementName', { target: otherLocator });
 await steps.dragAndDrop('PageName', 'elementName', { xOffset: 100, yOffset: 0 });
 await steps.dragAndDropListedElement('PageName', 'elementName', 'Item Label', { target: otherLocator });
@@ -184,6 +208,21 @@ await steps.verifyTextContains('PageName', 'elementName', 'partial text');
 await steps.verifyState('PageName', 'elementName', 'enabled');  // 'disabled', 'editable', 'checked', 'focused', 'visible', 'hidden', 'attached', 'inViewport'
 await steps.verifyAttribute('PageName', 'elementName', 'href', '/expected-path');
 await steps.verifyUrlContains('/dashboard');
+await steps.verifyInputValue('PageName', 'elementName', 'expected value');
+await steps.verifyTabCount(2);
+```
+
+### 📋 Listed Elements
+
+```ts
+import { ListedElementOptions } from 'pw-element-interactions';
+
+await steps.clickListedElement('PageName', 'tableRows', { text: 'John' });
+await steps.clickListedElement('PageName', 'tableRows', { attribute: { name: 'data-id', value: '5' }, child: 'button.edit' });
+await steps.verifyListedElement('PageName', 'entries', { text: 'Name', child: 'td:nth-child(2)', expectedText: 'John Doe' });
+await steps.verifyListedElement('PageName', 'tableRows', { attribute: { name: 'data-id', value: '5' }, expected: { name: 'class', value: 'active' } });
+const text = await steps.getListedElementData('PageName', 'entries', { text: 'Name' });
+const href = await steps.getListedElementData('PageName', 'tableRows', { text: 'John', child: 'a.link', extractAttribute: 'href' });
 ```
 
 ### ⏳ Waiting
@@ -217,7 +256,13 @@ await repo.get(page, 'PageName', 'elementName');
 await repo.getAll(page, 'PageName', 'elementName');
 await repo.getRandom(page, 'PageName', 'elementName');
 await repo.getByText(page, 'PageName', 'elementName', 'Desired Text');
-repo.getSelector('PageName', 'elementName'); // sync, returns raw selector string
+await repo.getByAttribute(page, 'PageName', 'elementName', 'data-status', 'active');
+await repo.getByAttribute(page, 'PageName', 'elementName', 'href', '/path', { exact: false }); // partial match
+await repo.getByIndex(page, 'PageName', 'elementName', 2);    // zero-based index
+await repo.getByRole(page, 'PageName', 'elementName', 'button'); // explicit HTML role attribute
+await repo.getVisible(page, 'PageName', 'elementName');        // first visible match
+repo.getSelector('PageName', 'elementName');                    // sync, returns raw selector string
+repo.setDefaultTimeout(10000);                                  // change default wait timeout
 ```
 
 ---

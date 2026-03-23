@@ -1,5 +1,5 @@
 import { Page, Locator } from '@playwright/test';
-import { DropdownSelectOptions, DropdownSelectType, DragAndDropOptions } from '../enum/Options';
+import { DropdownSelectOptions, DropdownSelectType, DragAndDropOptions, ListedElementOptions } from '../enum/Options';
 import { Utils } from '../utils/ElementUtilities';
 
 /**
@@ -302,5 +302,52 @@ export class Interactions {
      */
     async pressKey(key: string): Promise<void> {
         await this.page.keyboard.press(key);
+    }
+
+    /**
+     * Resolves a specific element from a list by matching its visible text or an HTML attribute.
+     * Optionally drills into a child element within the matched item.
+     *
+     * This is the core utility behind `clickListedElement`, `verifyListedElement`,
+     * and `getListedElementData` in the Steps API.
+     *
+     * @param baseLocator - A Playwright Locator that resolves to the list of elements (e.g. table rows, list items).
+     * @param options - Match criteria and optional child targeting. Must include either `text` or `attribute`.
+     * @param repo - Optional ElementRepository instance, required when `options.child` is a page-repo reference.
+     * @returns The resolved Playwright Locator for the matched (and optionally child-targeted) element.
+     * @throws Error if neither `text` nor `attribute` is specified, or if no matching element is found.
+     */
+    async getListedElement(
+        baseLocator: Locator,
+        options: ListedElementOptions,
+        repo?: { getSelector(pageName: string, elementName: string): string }
+    ): Promise<Locator> {
+        let matched: Locator;
+
+        if (options.text) {
+            matched = baseLocator.filter({ hasText: options.text }).first();
+        } else if (options.attribute) {
+            matched = baseLocator.and(
+                this.page.locator(`[${options.attribute.name}="${options.attribute.value}"]`)
+            ).first();
+        } else {
+            throw new Error('ListedElementOptions requires either "text" or "attribute" to identify the element.');
+        }
+
+        await this.utils.waitForState(matched, 'visible');
+
+        if (!options.child) {
+            return matched;
+        }
+
+        if (typeof options.child === 'string') {
+            return matched.locator(options.child);
+        }
+
+        if (!repo) {
+            throw new Error('An ElementRepository instance is required when "child" is a page-repository reference.');
+        }
+        const childSelector = repo.getSelector(options.child.pageName, options.child.elementName);
+        return matched.locator(childSelector);
     }
 }

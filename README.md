@@ -251,6 +251,22 @@ test('Navigate to Forms category', async ({ page, repo, steps }) => {
 });
 ```
 
+**Full Repository API:**
+
+```ts
+await repo.get(page, 'PageName', 'elementName');               // single locator
+await repo.getAll(page, 'PageName', 'elementName');             // array of locators
+await repo.getRandom(page, 'PageName', 'elementName');          // random from matches
+await repo.getByText(page, 'PageName', 'elementName', 'Text'); // filter by visible text
+await repo.getByAttribute(page, 'PageName', 'elementName', 'data-status', 'active'); // filter by attribute
+await repo.getByAttribute(page, 'PageName', 'elementName', 'href', '/path', { exact: false }); // partial match
+await repo.getByIndex(page, 'PageName', 'elementName', 2);     // zero-based index
+await repo.getByRole(page, 'PageName', 'elementName', 'button'); // explicit HTML role attribute
+await repo.getVisible(page, 'PageName', 'elementName');         // first visible match
+repo.getSelector('PageName', 'elementName');                     // sync, returns raw selector string
+repo.setDefaultTimeout(10000);                                   // change default wait timeout
+```
+
 ### 5. Extend with your own fixtures
 
 Because `baseFixture` returns a standard Playwright `test` object, you can layer your own fixtures on top:
@@ -295,6 +311,9 @@ Every method below automatically fetches the Playwright `Locator` using your `pa
 * **`refresh()`** — Reloads the current page.
 * **`backOrForward(direction: 'BACKWARDS' | 'FORWARDS')`** — Navigates the browser history stack in the given direction.
 * **`setViewport(width: number, height: number)`** — Resizes the browser viewport to the specified pixel dimensions.
+* **`switchToNewTab(action: () => Promise<void>)`** — Executes an action that opens a new tab (e.g. clicking a link with `target="_blank"`), waits for the new tab, and returns the new `Page` object.
+* **`closeTab(targetPage?: Page)`** — Closes the specified tab (or the current one) and returns the remaining active page.
+* **`getTabCount()`** — Returns the number of currently open tabs/pages in the browser context.
 
 ### 🖱️ Interaction
 
@@ -302,6 +321,10 @@ Every method below automatically fetches the Playwright `Locator` using your `pa
 * **`clickWithoutScrolling(pageName, elementName)`** — Dispatches a native `click` event directly, bypassing Playwright's scrolling and intersection observer checks. Useful for elements obscured by sticky headers or overlays.
 * **`clickIfPresent(pageName, elementName)`** — Clicks an element only if it is visible; skips silently otherwise. Ideal for optional elements like cookie banners.
 * **`clickRandom(pageName, elementName)`** — Clicks a random element from all matches. Useful for lists or grids.
+* **`rightClick(pageName, elementName)`** — Right-clicks an element to trigger a context menu.
+* **`doubleClick(pageName, elementName)`** — Double-clicks an element.
+* **`check(pageName, elementName)`** — Checks a checkbox or radio button. No-op if already checked.
+* **`uncheck(pageName, elementName)`** — Unchecks a checkbox. No-op if already unchecked.
 * **`hover(pageName, elementName)`** — Hovers over an element to trigger dropdowns or tooltips.
 * **`scrollIntoView(pageName, elementName)`** — Smoothly scrolls an element into the viewport.
 * **`dragAndDrop(pageName, elementName, options: DragAndDropOptions)`** — Drags an element to a target element (`{ target: Locator }`), by coordinate offset (`{ xOffset, yOffset }`), or both.
@@ -309,6 +332,8 @@ Every method below automatically fetches the Playwright `Locator` using your `pa
 * **`fill(pageName, elementName, text: string)`** — Clears and fills an input field with the provided text.
 * **`uploadFile(pageName, elementName, filePath: string)`** — Uploads a file to an `<input type="file">` element.
 * **`selectDropdown(pageName, elementName, options?: DropdownSelectOptions)`** — Selects an option from a `<select>` element and returns its `value`. Defaults to `{ type: DropdownSelectType.RANDOM }`. Also supports `VALUE` (exact match) and `INDEX` (zero-based).
+* **`setSliderValue(pageName, elementName, value: number)`** — Sets a range input (`<input type="range">`) to the specified numeric value.
+* **`pressKey(key: string)`** — Presses a keyboard key at the page level (e.g. `'Enter'`, `'Escape'`, `'Tab'`).
 * **`typeSequentially(pageName, elementName, text: string, delay?: number)`** — Types text character by character with a configurable delay (default `100ms`). Ideal for OTP inputs or fields with `keyup` listeners.
 
 ### 📊 Data Extraction
@@ -327,6 +352,51 @@ Every method below automatically fetches the Playwright `Locator` using your `pa
 * **`verifyState(pageName, elementName, state)`** — Asserts the state of an element. Supported states: `'enabled'`, `'disabled'`, `'editable'`, `'checked'`, `'focused'`, `'visible'`, `'hidden'`, `'attached'`, `'inViewport'`.
 * **`verifyAttribute(pageName, elementName, attributeName: string, expectedValue: string)`** — Asserts that an element has a specific HTML attribute with an exact value.
 * **`verifyUrlContains(text: string)`** — Asserts that the current URL contains the expected substring.
+* **`verifyInputValue(pageName, elementName, expectedValue: string)`** — Asserts that an input, textarea, or select element has the expected value.
+* **`verifyTabCount(expectedCount: number)`** — Asserts the number of currently open tabs/pages in the browser context.
+
+### 📋 Listed Elements
+
+Operate on a specific element within a list (table rows, cards, list items) by matching its visible text or an HTML attribute. Optionally drill into a child element within the matched item.
+
+```ts
+import { ListedElementOptions } from 'pw-element-interactions';
+```
+
+* **`clickListedElement(pageName, elementName, options: ListedElementOptions)`** — Finds and clicks a specific element from a list. Identify the target by `{ text }` or `{ attribute: { name, value } }`, and optionally drill into a child with `{ child: 'css-selector' }` or `{ child: { pageName, elementName } }`.
+* **`verifyListedElement(pageName, elementName, options: ListedElementOptions)`** — Finds a listed element and asserts against it. Use `{ expectedText }` to verify text, `{ expected: { name, value } }` to verify an attribute, or omit both to assert visibility.
+* **`getListedElementData(pageName, elementName, options: ListedElementOptions)`** — Extracts data from a listed element. Returns the element's text content by default, or an attribute value when `{ extractAttribute: 'attrName' }` is specified.
+
+```ts
+// Click the row containing "John"
+await steps.clickListedElement('UsersPage', 'tableRows', { text: 'John' });
+
+// Click a child button inside the row matching an attribute
+await steps.clickListedElement('UsersPage', 'tableRows', {
+  attribute: { name: 'data-id', value: '5' },
+  child: 'button.edit'
+});
+
+// Verify text of a child cell in the row containing "Name"
+await steps.verifyListedElement('FormsPage', 'submissionEntries', {
+  text: 'Name',
+  child: 'td:nth-child(2)',
+  expectedText: 'John Doe'
+});
+
+// Verify an attribute on a listed element
+await steps.verifyListedElement('UsersPage', 'tableRows', {
+  attribute: { name: 'data-id', value: '5' },
+  expected: { name: 'class', value: 'active' }
+});
+
+// Extract an href from a child link inside a listed element
+const href = await steps.getListedElementData('UsersPage', 'tableRows', {
+  text: 'John',
+  child: 'a.profile-link',
+  extractAttribute: 'href'
+});
+```
 
 ### ⏳ Wait
 

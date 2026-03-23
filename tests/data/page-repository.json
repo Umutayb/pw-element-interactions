@@ -245,6 +245,18 @@
           "selector": {
             "css": "table"
           }
+        },
+        {
+          "elementName": "submissionRows",
+          "selector": {
+            "css": "table tr"
+          }
+        },
+        {
+          "elementName": "submissionValue",
+          "selector": {
+            "css": "td:nth-child(2)"
+          }
         }
       ]
     },

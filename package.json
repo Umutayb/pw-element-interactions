@@ -1,5 +1,5 @@
 {
-  "name": "pw-element-interactions",
+  "name": "@civitas-cerebrum/element-interactions",
   "version": "0.1.1",
   "description": "A robust, readable interaction and assertion Facade for Playwright. Abstract away boilerplate into semantic, English-like methods, making your test automation framework cleaner, easier to maintain, and accessible to non-developers.",
   "main": "dist/index.js",
@@ -21,16 +21,17 @@
   ],
   "peerDependencies": {
     "@civitas-cerebrum/context-store": ">=0.0.2",
-    "@playwright/test": ">=1.0.0",
-    "pw-element-repository": ">=0.0.4"
+    "@civitas-cerebrum/element-repository": ">=0.0.4",
+    "@civitas-cerebrum/email-client": ">=0.0.1",
+    "@playwright/test": ">=1.0.0"
   },
   "devDependencies": {
     "@civitas-cerebrum/context-store": "^0.0.2",
+    "@civitas-cerebrum/element-repository": "file:../pw-element-repository",
+    "@civitas-cerebrum/email-client": "file:../email-client",
     "@playwright/test": "^1.58.2",
     "@types/debug": "^4.1.13",
     "@types/node": "^20.0.0",
-    "@types/nodemailer": "^7.0.11",
-    "pw-element-repository": "^0.0.4",
     "typescript": "^5.0.0"
   },
   "keywords": [
@@ -54,8 +55,6 @@
   "author": "Umut Ay Bora",
   "license": "MIT",
   "dependencies": {
-    "debug": "^4.4.3",
-    "imapflow": "^1.2.16",
-    "nodemailer": "^8.0.3"
+    "debug": "^4.4.3"
   }
 }

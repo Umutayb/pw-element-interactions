@@ -7,3 +7,5 @@
 /.playwright-mcp
 api-coverage-report.txt
 /docs/superpowers
+.env
+.env.local

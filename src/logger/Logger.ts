@@ -1,4 +1,4 @@
-import Debug from 'debug';
+import Debug from "debug";
 
 /**
  * The library-wide namespace prefix.

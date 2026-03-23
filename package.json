@@ -20,7 +20,11 @@
     "scripts/postinstall.js"
   ],
   "peerDependencies": {
-    "@playwright/test": ">=1.0.0"
+    "@civitas-cerebrum/context-store": "^0.0.2",
+    "@civitas-cerebrum/element-repository": "^0.0.5",
+    "@civitas-cerebrum/email-client": "^0.0.1",
+    "@playwright/test": ">=1.0.0",
+    "debug": "^4.4.3"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
@@ -48,10 +52,5 @@
   },
   "author": "Umut Ay Bora",
   "license": "MIT",
-  "dependencies": {
-    "@civitas-cerebrum/context-store": "^0.0.2",
-    "@civitas-cerebrum/element-repository": "^0.0.5",
-    "@civitas-cerebrum/email-client": "^0.0.1",
-    "debug": "^4.4.3"
-  }
+  "dependencies": {}
 }

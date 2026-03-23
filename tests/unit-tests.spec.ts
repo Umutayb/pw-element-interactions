@@ -2532,13 +2532,8 @@ test.describe('TC_065: verifyListOrder — assert sort direction', () => {
       await steps.verifyUrlContains('/table');
     });
 
-    await test.step('Default name order is ascending — verify with getAll', async () => {
-      const names = await steps.getAll('TablePage', 'rows', { child: { pageName: 'TablePage', elementName: 'nameCell' } });
-      // Default order: Alice, Bob, Carol, David, Eve — alphabetical ascending
-      expect(names).toEqual(['Alice Martin', 'Bob Chen', 'Carol White', 'David Kim', 'Eve Torres']);
-      // Verify the list is sorted ascending
-      const sorted = [...names].sort((a, b) => a.localeCompare(b));
-      expect(names).toEqual(sorted);
+    await test.step('Default name order is ascending — verify with verifyListOrder', async () => {
+      await steps.verifyListOrder('TablePage', 'nameCells', 'asc');
     });
 
     await test.step('Click Name header twice to sort descending', async () => {
@@ -2546,10 +2541,8 @@ test.describe('TC_065: verifyListOrder — assert sort direction', () => {
       await steps.click('TablePage', 'headerName');
     });
 
-    await test.step('Verify descending order', async () => {
-      const names = await steps.getAll('TablePage', 'rows', { child: { pageName: 'TablePage', elementName: 'nameCell' } });
-      const sorted = [...names].sort((a, b) => b.localeCompare(a));
-      expect(names).toEqual(sorted);
+    await test.step('Verify descending order with verifyListOrder', async () => {
+      await steps.verifyListOrder('TablePage', 'nameCells', 'desc');
     });
 
     log('TC_065 verifyListOrder — passed');
@@ -2640,11 +2633,8 @@ test.describe('TC_069: verifyOrder — assert exact element text order', () => {
       await steps.verifyUrlContains('/table');
     });
 
-    await test.step('Verify exact order of names using getAll with repo child ref', async () => {
-      const names = await steps.getAll('TablePage', 'rows', {
-        child: { pageName: 'TablePage', elementName: 'nameCell' }
-      });
-      expect(names).toEqual(['Alice Martin', 'Bob Chen', 'Carol White', 'David Kim', 'Eve Torres']);
+    await test.step('Verify exact order of names using verifyOrder', async () => {
+      await steps.verifyOrder('TablePage', 'nameCells', ['Alice Martin', 'Bob Chen', 'Carol White', 'David Kim', 'Eve Torres']);
     });
 
     log('TC_069 verifyOrder — passed');

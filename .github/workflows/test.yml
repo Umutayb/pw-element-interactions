@@ -37,7 +37,7 @@ jobs:
           docker compose up --build -d
 
       - name: 🧪 Run Tests
-        run: npm test
+        run: npm test -- --update-snapshots
         env:
           SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
           SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}

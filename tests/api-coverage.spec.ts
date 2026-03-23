@@ -18,7 +18,7 @@ import { Verifications } from '../src/interactions/Verification';
 import { Extractions } from '../src/interactions/Extraction';
 import { Navigation } from '../src/interactions/Navigation';
 import { ContextStore } from '@civitas-cerebrum/context-store';
-import { ElementRepository } from 'pw-element-repository';
+import { ElementRepository } from '@civitas-cerebrum/element-repository';
 
 interface MethodInfo {
   name: string;

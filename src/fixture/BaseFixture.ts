@@ -1,9 +1,9 @@
 import { ElementInteractions } from '../interactions/facade/ElementInteractions';
+import { ElementRepository } from '@civitas-cerebrum/element-repository';
+import { EmailCredentials } from '@civitas-cerebrum/email-client';
 import { ContextStore } from '@civitas-cerebrum/context-store';
-import { ElementRepository } from 'pw-element-repository';
 import { test as base } from '@playwright/test';
 import { Steps } from '../steps/CommonSteps';
-import { EmailCredentials } from '../enum/Options';
 
 type StepFixture = {
     interactions: ElementInteractions;

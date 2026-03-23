@@ -3,10 +3,9 @@ import { Interactions } from '../Interaction';
 import { Navigation } from '../Navigation';
 import { Verifications } from '../Verification';
 import { Extractions } from '../Extraction';
-import { Email } from '../Email';
+import { EmailClient, EmailCredentials } from '@civitas-cerebrum/email-client';
 import { Utils } from '../../utils/ElementUtilities';
 import { logger } from '../../logger/Logger';
-import { EmailCredentials } from '../../enum/Options';
 
 /**
  * A facade class that centralizes package capabilities.
@@ -18,7 +17,7 @@ export class ElementInteractions {
     public verify: Verifications;
     public extract: Extractions;
     public navigate: Navigation;
-    public email: Email | null = null;
+    public email: EmailClient | null = null;
     public utils: Utils;
     public log;
 
@@ -34,7 +33,7 @@ export class ElementInteractions {
         this.navigate = new Navigation(page);
         this.extract = new Extractions(page, timeout);
         if (emailCredentials) {
-            this.email = new Email(emailCredentials);
+            this.email = new EmailClient(emailCredentials);
         }
         this.utils = new Utils(timeout);
         this.log = {

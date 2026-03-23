@@ -6,7 +6,6 @@ export { Navigation } from './interactions/Navigation';
 export { Verifications } from './interactions/Verification';
 export { Interactions } from './interactions/Interaction';
 export { Extractions } from './interactions/Extraction';
-export { Email } from './interactions/Email';
 
 // Utilities
 export { DateUtilities } from './utils/DateUtilities';
@@ -20,3 +19,14 @@ export { Steps } from './steps/CommonSteps';
 
 // Test Fixture
 export { baseFixture, BaseFixtureOptions } from './fixture/BaseFixture';
+
+// Re-exports from @civitas-cerebrum/email-client
+export { EmailClient } from '@civitas-cerebrum/email-client';
+export type {
+    EmailCredentials,
+    EmailFilter,
+    EmailSendOptions,
+    EmailReceiveOptions,
+    ReceivedEmail,
+} from '@civitas-cerebrum/email-client';
+export { EmailFilterType } from '@civitas-cerebrum/email-client';

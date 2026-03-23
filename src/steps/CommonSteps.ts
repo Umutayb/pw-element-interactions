@@ -1,8 +1,8 @@
 import { Page, Response } from '@playwright/test';
-import { ElementRepository } from 'pw-element-repository';
+import { ElementRepository } from '@civitas-cerebrum/element-repository';
 import { ElementInteractions } from '../interactions/facade/ElementInteractions';
-import { Email } from '../interactions/Email';
-import { DropdownSelectOptions, TextVerifyOptions, CountVerifyOptions, DragAndDropOptions, ListedElementOptions, FillFormValue, GetAllOptions, ScreenshotOptions, EmailCredentials, EmailSendOptions, EmailReceiveOptions, ReceivedEmail } from '../enum/Options';
+import { EmailClient, EmailCredentials, EmailSendOptions, EmailReceiveOptions, ReceivedEmail } from '@civitas-cerebrum/email-client';
+import { DropdownSelectOptions, TextVerifyOptions, CountVerifyOptions, DragAndDropOptions, ListedElementOptions, FillFormValue, GetAllOptions, ScreenshotOptions } from '../enum/Options';
 import { logger } from '../logger/Logger';
 
 const log = {
@@ -31,7 +31,7 @@ export class Steps {
      * Email sub-API for sending and receiving emails in tests.
      * Only available when `emailCredentials` are provided to the constructor or via `configureEmail()`.
      */
-    public email: Email | null = null;
+    public email: EmailClient | null = null;
 
     /**
      * Initializes the Steps class with the required Playwright page and element repository.
@@ -60,7 +60,7 @@ export class Steps {
      * Useful when credentials are loaded from environment variables at runtime.
      */
     configureEmail(credentials: EmailCredentials): void {
-        this.email = new Email(credentials);
+        this.email = new EmailClient(credentials);
         log.email('Email configured for sender=%s, receiver=%s', credentials.senderEmail, credentials.receiverEmail);
     }
 

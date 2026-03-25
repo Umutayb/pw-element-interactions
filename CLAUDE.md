@@ -188,7 +188,7 @@ Every method takes `pageName` and `elementName` as its first two arguments, matc
 ```ts
 await steps.navigateTo('/path');
 await steps.refresh();
-await steps.backOrForward('BACKWARDS'); // or 'FORWARDS'
+await steps.backOrForward('back'); // or 'forward'
 await steps.setViewport(1280, 720);
 
 // Tab management
@@ -204,7 +204,7 @@ const count = steps.getTabCount();
 ```ts
 await steps.click('PageName', 'elementName');
 await steps.clickWithoutScrolling('PageName', 'elementName');
-await steps.clickIfPresent('PageName', 'elementName');
+const clicked = await steps.clickIfPresent('PageName', 'elementName'); // returns boolean
 await steps.clickRandom('PageName', 'elementName');
 await steps.rightClick('PageName', 'elementName');
 await steps.doubleClick('PageName', 'elementName');
@@ -331,7 +331,7 @@ await steps.retryUntil(
   async () => { await steps.click('PageName', 'refreshButton'); },
   async () => { await steps.verifyText('PageName', 'status', 'Ready'); },
   3,    // maxRetries (default: 3)
-  1000  // delayMs (default: 1000)
+  1000  // delayMs between attempts (default: 1000)
 );
 
 await steps.clearInput('PageName', 'searchField');
@@ -449,30 +449,19 @@ export const test = baseFixture(base, 'tests/data/page-repository.json', {
 });
 ```
 
-Or configure after construction:
-```ts
-steps.configureEmail({
-  senderEmail: 'sender@example.com',
-  senderPassword: 'app-password',
-  senderSmtpHost: 'smtp.example.com',
-  receiverEmail: 'receiver@example.com',
-  receiverPassword: 'app-password',
-});
-```
-
 ### Sending Emails
 
 ```ts
 import { EmailSendOptions } from '@civitas-cerebrum/element-interactions';
 
 // Simple text email
-await steps.email.send({ to: 'user@example.com', subject: 'Test', text: 'Hello' });
+await steps.sendEmail({ to: 'user@example.com', subject: 'Test', text: 'Hello' });
 
 // Inline HTML email
-await steps.email.send({ to: 'user@example.com', subject: 'Report', html: '<h1>Results</h1>' });
+await steps.sendEmail({ to: 'user@example.com', subject: 'Report', html: '<h1>Results</h1>' });
 
 // HTML file template (e.g. test report)
-await steps.email.send({ to: 'user@example.com', subject: 'Report', htmlFile: 'emails/report.html' });
+await steps.sendEmail({ to: 'user@example.com', subject: 'Report', htmlFile: 'emails/report.html' });
 ```
 
 ### Receiving Emails
@@ -484,13 +473,13 @@ import { EmailFilterType } from '@civitas-cerebrum/element-interactions';
 // Note: EmailFilterType and other email types can also be imported from '@civitas-cerebrum/email-client'
 
 // Single filter — get the latest matching email
-const email = await steps.email.receive({
+const email = await steps.receiveEmail({
   filters: [{ type: EmailFilterType.SUBJECT, value: 'Your OTP' }]
 });
 await steps.navigateTo('file://' + email.filePath);
 
 // Multiple filters — combine subject, sender, and content
-const email2 = await steps.email.receive({
+const email2 = await steps.receiveEmail({
   filters: [
     { type: EmailFilterType.SUBJECT, value: 'Verification' },
     { type: EmailFilterType.FROM, value: 'noreply@example.com' },
@@ -499,7 +488,7 @@ const email2 = await steps.email.receive({
 });
 
 // Get ALL matching emails
-const allEmails = await steps.email.receiveAll({
+const allEmails = await steps.receiveAllEmails({
   filters: [
     { type: EmailFilterType.FROM, value: 'alerts@example.com' },
     { type: EmailFilterType.SINCE, value: new Date('2025-01-01') },
@@ -511,12 +500,12 @@ const allEmails = await steps.email.receiveAll({
 
 ```ts
 // Delete emails matching filters
-await steps.email.clean({
+await steps.cleanEmails({
   filters: [{ type: EmailFilterType.FROM, value: 'noreply@example.com' }]
 });
 
 // Delete all emails in the inbox
-await steps.email.clean();
+await steps.cleanEmails();
 ```
 
 ### Email Filter Types

@@ -28,21 +28,18 @@ export interface DropdownSelectOptions {
  * Configuration options for the `text` verification method.
  */
 export interface TextVerifyOptions {
-    /** If true, asserts that the element has text content, ignoring 'expectedText' */
-    notEmpty?: boolean;
+    /** Asserts that the element has text content, ignoring 'expectedText'. */
+    notEmpty: true;
 }
 
 /**
  * Configuration options for the `count` verification method.
+ * At least one constraint is required: exactly, greaterThan, or lessThan.
  */
-export interface CountVerifyOptions {
-    /** Asserts that the element count exactly matches this value */
-    exactly?: number;
-    /** Asserts that the element count is strictly greater than this value */
-    greaterThan?: number;
-    /** Asserts that the element count is strictly less than this value */
-    lessThan?: number;
-}
+export type CountVerifyOptions =
+    | { exactly: number; greaterThan?: never; lessThan?: never }
+    | { exactly?: never; greaterThan: number; lessThan?: number }
+    | { exactly?: never; greaterThan?: number; lessThan: number };
 
 /**
  * Configuration options for the `dragAndDrop` method.

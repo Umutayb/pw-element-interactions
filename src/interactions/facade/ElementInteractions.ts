@@ -32,9 +32,7 @@ export class ElementInteractions {
         this.verify = new Verifications(page, timeout);
         this.navigate = new Navigation(page);
         this.extract = new Extractions(page, timeout);
-        if (emailCredentials) {
-            this.email = new EmailClient(emailCredentials);
-        }
+        this.email = emailCredentials ? new EmailClient(emailCredentials) : null;
         this.utils = new Utils(timeout);
         this.log = {
             info: logger('info'),

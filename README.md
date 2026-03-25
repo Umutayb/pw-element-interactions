@@ -643,6 +643,6 @@ PRs that skip step 1 will not be merged.
 
 **Logging.** Core interaction methods must not contain any logs. `Steps` wrappers are responsible for logging what action is being performed.
 
-**Unit tests.** Every new method must include a unit test. Tests run against the [Vue test app](https://github.com/Umutayb/vue-test-app), which is built from its Docker image during CI. If the component you need doesn't exist in the test app, open a PR there first and wait for it to merge before updating this repository.
+**Unit tests.** Every new method must include a unit test. Tests run against the [Vue test app](https://github.com/civitas-cerebrum/vue-test-app), which is built from its Docker image during CI. If the component you need doesn't exist in the test app, open a PR there first and wait for it to merge before updating this repository.
 
 **Documentation.** Every new `Steps` method must be added to the [API Reference](#️-api-reference-steps) section of this README, following the existing format. PRs without documentation will not be merged.

@@ -9,3 +9,5 @@ api-coverage-report.txt
 /docs/superpowers
 .env
 .env.local
+/.yalc
+yalc.lock

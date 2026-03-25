@@ -260,7 +260,7 @@ test.describe('TC_015: File Upload Page', () => {
     });
 
     await test.step('Upload a single file and verify filename displayed', async () => {
-      await steps.uploadFile('FileUploadPage', 'singleFileInput', 'tests/fixtures/test-upload.txt');
+      await steps.uploadFile('FileUploadPage', 'singleFileInput', 'tests/test-files/test-upload.txt');
       await steps.verifyTextContains('FileUploadPage', 'singleFileName', 'test-upload.txt');
     });
 

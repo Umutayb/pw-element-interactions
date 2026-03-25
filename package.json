@@ -12,7 +12,8 @@
     "prepublishOnly": "npm run build",
     "postinstall": "node scripts/postinstall.js",
     "test:quiet": "TESTER_DEBUG=false npx playwright test",
-    "test:coverage": "RUN_COVERAGE=1 npx playwright test tests/api-coverage.spec.ts"
+    "test:coverage": "npx test-coverage --format github-plain",
+    "test:with-coverage": "npx playwright test && npx test-coverage --format github-plain"
   },
   "files": [
     "dist",
@@ -23,6 +24,7 @@
     "@playwright/test": ">=1.0.0"
   },
   "devDependencies": {
+    "@civitas-cerebrum/test-coverage": "^0.0.2",
     "@playwright/test": "^1.58.2",
     "@types/debug": "^4.1.13",
     "@types/node": "^20.0.0",
@@ -51,7 +53,7 @@
   "dependencies": {
     "@civitas-cerebrum/context-store": "^0.0.2",
     "@civitas-cerebrum/element-repository": "^0.0.6",
-    "@civitas-cerebrum/email-client": "^0.0.1",
+    "@civitas-cerebrum/email-client": "file:.yalc/@civitas-cerebrum/email-client",
     "debug": "^4.4.3",
     "dotenv": "^17.3.1"
   }

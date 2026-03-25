@@ -1,14 +1,3 @@
-/**
- * API Coverage Report
- *
- * Programmatically inspects the Steps (primary), ElementRepository,
- * ElementInteractions (advanced/raw), and ContextStore APIs, then scans
- * the test file to report which methods are exercised and which are not.
- *
- * Run:  npx playwright test tests/api-coverage.spec.ts
- * View: cat api-coverage-report.txt
- */
-
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -27,12 +16,15 @@ interface MethodInfo {
   covered: boolean;
 }
 
-function getClassMethods(cls: any): string[] {
+// Extract public methods from a class prototype
+function getPublicClassMethods(cls: any): string[] {
   const methods: string[] = [];
   const proto = cls.prototype;
   if (!proto) return methods;
+  
   for (const name of Object.getOwnPropertyNames(proto)) {
-    if (name === 'constructor') continue;
+    // Ignore constructors, private methods (starting with _), and non-functions
+    if (name === 'constructor' || name.startsWith('_')) continue;
     if (typeof proto[name] === 'function') {
       methods.push(name);
     }
@@ -41,59 +33,61 @@ function getClassMethods(cls: any): string[] {
 }
 
 test('API Coverage Report', async () => {
-  // Scan all spec files (excluding this coverage file and vue-test-app)
   const testDir = path.resolve(__dirname);
-  const specFiles = fs.readdirSync(testDir).filter(f => f.endsWith('.spec.ts') && f !== 'api-coverage.spec.ts' && f !== 'vue-test-app.spec.ts');
-  const testSource = specFiles.map(f => fs.readFileSync(path.join(testDir, f), 'utf-8')).join('\n');
+
+  // ─── DYNAMIC DIRECTORY CRAWLER (Recursive) ────────────────────────
+  const walkDir = (dir: string, fileList: string[] = []): string[] => {
+    const files = fs.readdirSync(dir);
+    for (const file of files) {
+      const filePath = path.join(dir, file);
+      if (fs.statSync(filePath).isDirectory()) {
+        walkDir(filePath, fileList);
+      } else {
+        // Grab .spec.ts files, excluding this one and vue-test-app
+        if (file.endsWith('.spec.ts') && !file.includes('api-coverage') && !file.includes('vue-test-app')) {
+          fileList.push(filePath);
+        }
+      }
+    }
+    return fileList;
+  };
+
+  const allTestFiles = walkDir(testDir);
+  const testSource = allTestFiles.map(f => fs.readFileSync(f, 'utf-8')).join('\n');
 
   const apis: MethodInfo[] = [];
 
-  // ── Steps API (primary) ──
-  for (const m of getClassMethods(Steps)) {
-    apis.push({
-      name: `steps.${m}`,
-      category: 'Steps',
-      tier: 'primary',
-      covered: new RegExp(`steps\\.${m}\\b`).test(testSource),
-    });
+  // Helper to check if a method is called. 
+  // We look for ".methodName(" to allow for any instance name (e.g., mySteps.methodName() or repo.methodName())
+  const checkCoverage = (method: string) => {
+    const pattern = new RegExp(`\\.\\b${method}\\b\\s*\\(`);
+    return pattern.test(testSource);
+  };
+
+  // ── Primary APIs ──
+  for (const m of getPublicClassMethods(Steps)) {
+    apis.push({ name: m, category: 'Steps', tier: 'primary', covered: checkCoverage(m) });
   }
 
-  // ── ElementRepository API (primary) ──
-  for (const m of getClassMethods(ElementRepository)) {
-    apis.push({
-      name: `repo.${m}`,
-      category: 'ElementRepository',
-      tier: 'primary',
-      covered: new RegExp(`repo\\.${m}\\b`).test(testSource),
-    });
+  for (const m of getPublicClassMethods(ElementRepository)) {
+    apis.push({ name: m, category: 'ElementRepository', tier: 'primary', covered: checkCoverage(m) });
   }
 
-  // ── ContextStore API (primary) ──
-  for (const m of getClassMethods(ContextStore)) {
-    apis.push({
-      name: `contextStore.${m}`,
-      category: 'ContextStore',
-      tier: 'primary',
-      covered: new RegExp(`contextStore\\.${m}\\b`).test(testSource),
-    });
+  for (const m of getPublicClassMethods(ContextStore)) {
+    apis.push({ name: m, category: 'ContextStore', tier: 'primary', covered: checkCoverage(m) });
   }
 
-  // ── ElementInteractions sub-APIs (advanced/raw) ──
-  const subApis: { prefix: string; cls: any }[] = [
-    { prefix: 'interactions.interact', cls: Interactions },
-    { prefix: 'interactions.verify', cls: Verifications },
-    { prefix: 'interactions.extract', cls: Extractions },
-    { prefix: 'interactions.navigate', cls: Navigation },
+  // ── Advanced/Raw APIs ──
+  const advancedClasses = [
+    { name: 'Interactions', cls: Interactions },
+    { name: 'Verifications', cls: Verifications },
+    { name: 'Extractions', cls: Extractions },
+    { name: 'Navigation', cls: Navigation },
   ];
-  for (const { prefix, cls } of subApis) {
-    for (const m of getClassMethods(cls)) {
-      const searchPattern = `${prefix.split('.')[1]}\\.${m}`;
-      apis.push({
-        name: `${prefix}.${m}`,
-        category: 'ElementInteractions (raw)',
-        tier: 'advanced',
-        covered: new RegExp(searchPattern).test(testSource),
-      });
+
+  for (const { name: catName, cls } of advancedClasses) {
+    for (const m of getPublicClassMethods(cls)) {
+      apis.push({ name: m, category: catName, tier: 'advanced', covered: checkCoverage(m) });
     }
   }
 
@@ -103,74 +97,61 @@ test('API Coverage Report', async () => {
   const primaryCovered = primaryApis.filter((a) => a.covered);
   const advancedCovered = advancedApis.filter((a) => a.covered);
 
-  const lines: string[] = [];
-  lines.push('');
-  lines.push('========================================================');
-  lines.push('                  API COVERAGE REPORT                    ');
-  lines.push('========================================================');
+  const lines: string[] = [
+    '',
+    '========================================================',
+    '                  API COVERAGE REPORT                    ',
+    '========================================================',
+    '',
+    '  PRIMARY APIs (Steps + Repo + ContextStore)',
+    '  ------------------------------------------'
+  ];
 
-  // ── Primary APIs ──
-  lines.push('');
-  lines.push('  PRIMARY APIs (Steps + Repo + ContextStore)');
-  lines.push('  ------------------------------------------');
-
-  const primaryCategories = [...new Set(primaryApis.map((a) => a.category))];
-  for (const cat of primaryCategories) {
-    const catApis = primaryApis.filter((a) => a.category === cat);
-    const catCovered = catApis.filter((a) => a.covered);
-    const catPct = ((catCovered.length / catApis.length) * 100).toFixed(0);
-    lines.push('');
-    lines.push(`  ${cat}: ${catCovered.length}/${catApis.length} (${catPct}%)`);
-
-    for (const api of catApis) {
-      const icon = api.covered ? '  [x]' : '  [ ]';
-      lines.push(`    ${icon} ${api.name}`);
+  const buildCategoryReport = (apiList: MethodInfo[]) => {
+    const categories = [...new Set(apiList.map((a) => a.category))];
+    for (const cat of categories) {
+      const catApis = apiList.filter((a) => a.category === cat);
+      const catCovered = catApis.filter((a) => a.covered);
+      const catPct = catApis.length ? ((catCovered.length / catApis.length) * 100).toFixed(0) : '0';
+      
+      lines.push('', `  ${cat}: ${catCovered.length}/${catApis.length} (${catPct}%)`);
+      for (const api of catApis) {
+        lines.push(`    ${api.covered ? '  [x]' : '  [ ]'} ${api.name}`);
+      }
     }
-  }
+  };
 
-  lines.push('');
-  lines.push(`  Primary coverage: ${primaryCovered.length}/${primaryApis.length} (${((primaryCovered.length / primaryApis.length) * 100).toFixed(1)}%)`);
+  buildCategoryReport(primaryApis);
+  lines.push('', `  Primary coverage: ${primaryCovered.length}/${primaryApis.length} (${primaryApis.length ? ((primaryCovered.length / primaryApis.length) * 100).toFixed(1) : 0}%)`);
 
-  // ── Advanced APIs ──
-  lines.push('');
-  lines.push('  ADVANCED APIs (ElementInteractions raw sub-APIs)');
-  lines.push('  ------------------------------------------------');
-  lines.push('  These are the internal APIs that Steps wraps.');
-  lines.push('  Direct usage is for advanced/custom locator scenarios.');
+  lines.push(
+    '',
+    '  ADVANCED APIs (ElementInteractions raw sub-APIs)',
+    '  ------------------------------------------------',
+    '  These are the internal APIs that Steps wraps.',
+    '  Direct usage is for advanced/custom locator scenarios.'
+  );
 
-  const advancedCategories = [...new Set(advancedApis.map((a) => a.category))];
-  for (const cat of advancedCategories) {
-    const catApis = advancedApis.filter((a) => a.category === cat);
-    const catCovered = catApis.filter((a) => a.covered);
-    const catPct = ((catCovered.length / catApis.length) * 100).toFixed(0);
-    lines.push('');
-    lines.push(`  ${cat}: ${catCovered.length}/${catApis.length} (${catPct}%)`);
-
-    for (const api of catApis) {
-      const icon = api.covered ? '  [x]' : '  [ ]';
-      lines.push(`    ${icon} ${api.name}`);
-    }
-  }
-
-  lines.push('');
-  lines.push(`  Advanced coverage: ${advancedCovered.length}/${advancedApis.length} (${((advancedCovered.length / advancedApis.length) * 100).toFixed(1)}%)`);
+  buildCategoryReport(advancedApis);
+  lines.push('', `  Advanced coverage: ${advancedCovered.length}/${advancedApis.length} (${advancedApis.length ? ((advancedCovered.length / advancedApis.length) * 100).toFixed(1) : 0}%)`);
 
   // ── Overall summary ──
   const allCovered = apis.filter((a) => a.covered);
-  lines.push('');
-  lines.push('========================================================');
-  lines.push(`  OVERALL: ${allCovered.length}/${apis.length} methods (${((allCovered.length / apis.length) * 100).toFixed(1)}%)`);
-  lines.push(`  PRIMARY: ${primaryCovered.length}/${primaryApis.length} methods (${((primaryCovered.length / primaryApis.length) * 100).toFixed(1)}%)`);
-  lines.push(`  ADVANCED: ${advancedCovered.length}/${advancedApis.length} methods (${((advancedCovered.length / advancedApis.length) * 100).toFixed(1)}%)`);
-  lines.push('========================================================');
+  lines.push(
+    '',
+    '========================================================',
+    `  OVERALL: ${allCovered.length}/${apis.length} methods (${apis.length ? ((allCovered.length / apis.length) * 100).toFixed(1) : 0}%)`,
+    `  PRIMARY: ${primaryCovered.length}/${primaryApis.length} methods (${primaryApis.length ? ((primaryCovered.length / primaryApis.length) * 100).toFixed(1) : 0}%)`,
+    `  ADVANCED: ${advancedCovered.length}/${advancedApis.length} methods (${advancedApis.length ? ((advancedCovered.length / advancedApis.length) * 100).toFixed(1) : 0}%)`,
+    '========================================================'
+  );
 
-  // ── Uncovered primary methods ──
-  const uncoveredPrimary = primaryApis.filter((a) => !a.covered);
-  if (uncoveredPrimary.length > 0) {
-    lines.push('');
-    lines.push('  Uncovered primary methods:');
-    for (const api of uncoveredPrimary) {
-      lines.push(`    [ ] ${api.name}`);
+  const uncoveredTotal = apis.filter((a) => !a.covered);
+  
+  if (uncoveredTotal.length > 0) {
+    lines.push('', '  Uncovered methods (not in any test):');
+    for (const api of uncoveredTotal) {
+      lines.push(`    [ ] [${api.category}] ${api.name}`);
     }
   }
 
@@ -186,9 +167,6 @@ test('API Coverage Report', async () => {
     body: report,
     contentType: 'text/plain',
   });
-
-  // ── Enforce 100% Coverage ──
-  const uncoveredTotal = apis.filter((a) => !a.covered);
 
   expect(
     uncoveredTotal.length,

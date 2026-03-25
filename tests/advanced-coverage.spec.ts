@@ -115,7 +115,7 @@ test.describe('TC_047: Raw Interactions - interact methods', () => {
 
     await test.step('interact.uploadFile', async () => {
       const input = await repo.get(page, 'FileUploadPage', 'singleFileInput');
-      await interactions.interact.uploadFile(input!, 'tests/fixtures/test-upload.txt');
+      await interactions.interact.uploadFile(input!, 'tests/test-files/test-upload.txt');
     });
 
     await test.step('Navigate to Draggable for dragAndDrop', async () => {

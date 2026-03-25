@@ -1,7 +1,7 @@
 import { Page, Response } from '@playwright/test';
 import { ElementRepository } from '@civitas-cerebrum/element-repository';
 import { ElementInteractions } from '../interactions/facade/ElementInteractions';
-import { EmailClient, EmailCredentials, EmailSendOptions, EmailReceiveOptions, ReceivedEmail } from '@civitas-cerebrum/email-client';
+import { EmailCredentials, EmailSendOptions, EmailReceiveOptions, ReceivedEmail } from '@civitas-cerebrum/email-client';
 import { DropdownSelectOptions, TextVerifyOptions, CountVerifyOptions, DragAndDropOptions, ListedElementOptions, FillFormValue, GetAllOptions, ScreenshotOptions } from '../enum/Options';
 import { logger } from '../logger/Logger';
 
@@ -10,8 +10,8 @@ const log = {
     interact: logger('interact'),
     extract: logger('extract'),
     verify: logger('verify'),
-    wait: logger('wait'),
     email: logger('email'),
+    wait: logger('wait'),
 };
 
 /**
@@ -26,12 +26,7 @@ export class Steps {
     private extract;
     private verify;
     private utils;
-
-    /**
-     * Email sub-API for sending and receiving emails in tests.
-     * Only available when `emailCredentials` are provided to the constructor or via `configureEmail()`.
-     */
-    public email: EmailClient | null = null;
+    private email;
 
     /**
      * Initializes the Steps class with the required Playwright page and element repository.
@@ -53,15 +48,6 @@ export class Steps {
         this.verify = interactions.verify;
         this.utils = interactions.utils;
         this.email = interactions.email;
-    }
-
-    /**
-     * Configures the email sub-API with credentials after construction.
-     * Useful when credentials are loaded from environment variables at runtime.
-     */
-    configureEmail(credentials: EmailCredentials): void {
-        this.email = new EmailClient(credentials);
-        log.email('Email configured for sender=%s, receiver=%s', credentials.senderEmail, credentials.receiverEmail);
     }
 
     // ==========================================
@@ -979,5 +965,69 @@ export class Steps {
         const opts = typeof pageNameOrOptions === 'object' ? pageNameOrOptions : options;
         log.extract('Taking page screenshot');
         return await this.navigate.screenshot(undefined, opts);
+    }
+
+    // ==========================================
+    // 📧 EMAIL STEPS
+    // ==========================================
+
+    /**
+     * Sends an email using the configured SMTP credentials.
+     * @param options - The email configuration (to, subject, text, html, or htmlFile).
+     */
+    async sendEmail(options: EmailSendOptions): Promise<void> {
+        if (!this.email) {
+            throw new Error('Email client is not configured. Please provide credentials to the fixture or call configureEmail() first.');
+        }
+
+        log.email('Sending email to "%s" with subject "%s"', options.to, options.subject);
+        await this.email.send(options);
+    }
+
+    /**
+     * Polls the inbox and returns the latest email matching the provided filters.
+     * @param options - The receive options, including mandatory filters.
+     * @returns The matched email, including its downloaded file path and content.
+     */
+    async receiveEmail(options: EmailReceiveOptions): Promise<ReceivedEmail> {
+        if (!this.email) {
+            throw new Error('Email client is not configured. Please provide credentials to the fixture or call configureEmail() first.');
+        }
+
+        log.email('Receiving email with %d filter(s)', options.filters.length);
+        return await this.email.receive(options);
+    }
+
+    /**
+     * Polls the inbox and returns all emails matching the provided filters.
+     * @param options - The receive options, including mandatory filters.
+     * @returns An array of matched emails.
+     */
+    async receiveAllEmails(options: EmailReceiveOptions): Promise<ReceivedEmail[]> {
+        if (!this.email) {
+            throw new Error('Email client is not configured. Please provide credentials to the fixture or call configureEmail() first.');
+        }
+
+        log.email('Receiving all matching emails with %d filter(s)', options.filters.length);
+        return await this.email.receiveAll(options);
+    }
+
+    /**
+     * Deletes emails from the inbox. If filters are provided, only matching emails are deleted.
+     * Otherwise, the entire inbox is cleared.
+     * @param options - Optional receive options containing filters to target specific emails.
+     */
+    async cleanEmails(options?: EmailReceiveOptions): Promise<void> {
+        if (!this.email) {
+            throw new Error('Email client is not configured. Please provide credentials to the fixture or call configureEmail() first.');
+        }
+
+        const filterCount = options?.filters?.length ?? 0;
+        if (filterCount > 0) {
+            log.email('Cleaning specific emails matching %d filter(s)', filterCount);
+        } else {
+            log.email('Cleaning ALL emails from the inbox');
+        }
+        await this.email.clean(options);
     }
 }

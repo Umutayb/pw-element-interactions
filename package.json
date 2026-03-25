@@ -1,7 +1,6 @@
 {
   "name": "@civitas-cerebrum/element-interactions",
   "version": "0.1.1",
-  "type": "module",
   "description": "A robust, readable interaction and assertion Facade for Playwright. Abstract away boilerplate into semantic, English-like methods, making your test automation framework cleaner, easier to maintain, and accessible to non-developers.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -11,7 +10,7 @@
     "test": "npx playwright test",
     "test:ui": "npx playwright test --headed",
     "prepublishOnly": "npm run build",
-    "postinstall": "node scripts/postinstall.js",
+    "postinstall": "node scripts/postinstall.cjs",
     "test:quiet": "TESTER_DEBUG=false npx playwright test",
     "test:coverage": "npx test-coverage --format github-plain",
     "test:with-coverage": "npx playwright test && npx test-coverage --format github-plain"
@@ -19,7 +18,7 @@
   "files": [
     "dist",
     "skills",
-    "scripts/postinstall.js"
+    "scripts/postinstall.cjs"
   ],
   "peerDependencies": {
     "@playwright/test": ">=1.0.0"

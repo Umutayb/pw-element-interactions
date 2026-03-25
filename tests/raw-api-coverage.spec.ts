@@ -196,18 +196,19 @@ test.describe('TC_084: Raw API — interact.uploadFile', () => {
   });
 });
 
-test.describe('TC_085: Raw API — extract.getByText', () => {
+test.describe('TC_085: Raw API — interact.getByText (strict mode)', () => {
 
-  test('getByText via extraction methods', async ({ page, interactions, steps }) => {
+  test('getByText throws when strict=true and text not found', async ({ page, interactions, steps }) => {
 
-    await test.step('extract.getByText via raw API', async () => {
+    await test.step('getByText strict=true throws on missing text', async () => {
       await steps.navigateTo('/');
-      const navLinks = page.locator('[data-testid="nav-sidebar"] a');
-      const link = await interactions.interact.getByText(navLinks, 'Text Inputs');
-      expect(link).toBeTruthy();
+      const baseLocator = page.locator('[data-testid^="home-card-"]');
+      await expect(
+        interactions.interact.getByText(baseLocator, 'THIS_TEXT_DOES_NOT_EXIST_XYZ', true)
+      ).rejects.toThrow('getByText: element with text "THIS_TEXT_DOES_NOT_EXIST_XYZ" not found');
     });
 
-    log('TC_085 Raw API extract.getByText — passed');
+    log('TC_085 Raw API interact.getByText strict mode — passed');
   });
 });
 

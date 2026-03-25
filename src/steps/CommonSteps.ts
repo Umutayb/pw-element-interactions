@@ -1,6 +1,7 @@
 import { Page, Response } from '@playwright/test';
 import { ElementRepository } from '@civitas-cerebrum/element-repository';
 import { ElementInteractions } from '../interactions/facade/ElementInteractions';
+import { Utils } from '../utils/ElementUtilities';
 import { EmailCredentials, EmailSendOptions, EmailReceiveOptions, ReceivedEmail, EmailMarkOptions, EmailMarkAction, EmailFilter } from '@civitas-cerebrum/email-client';
 import { DropdownSelectOptions, TextVerifyOptions, CountVerifyOptions, DragAndDropOptions, ListedElementOptions, ListedElementMatch, VerifyListedOptions, GetListedDataOptions, FillFormValue, GetAllOptions, ScreenshotOptions } from '../enum/Options';
 import { logger } from '../logger/Logger';
@@ -46,7 +47,7 @@ export class Steps {
         this.navigate = interactions.navigate;
         this.extract = interactions.extract;
         this.verify = interactions.verify;
-        this.utils = interactions.utils;
+        this.utils = new Utils(timeout);
         this.email = interactions.email;
     }
 

@@ -1,7 +1,7 @@
 import { Page, Response } from '@playwright/test';
 import { ElementRepository } from '@civitas-cerebrum/element-repository';
 import { ElementInteractions } from '../interactions/facade/ElementInteractions';
-import { EmailCredentials, EmailSendOptions, EmailReceiveOptions, ReceivedEmail } from '@civitas-cerebrum/email-client';
+import { EmailCredentials, EmailSendOptions, EmailReceiveOptions, ReceivedEmail, EmailMarkOptions, EmailMarkAction, EmailFilter } from '@civitas-cerebrum/email-client';
 import { DropdownSelectOptions, TextVerifyOptions, CountVerifyOptions, DragAndDropOptions, ListedElementOptions, FillFormValue, GetAllOptions, ScreenshotOptions } from '../enum/Options';
 import { logger } from '../logger/Logger';
 
@@ -1029,5 +1029,53 @@ export class Steps {
             log.email('Cleaning ALL emails from the inbox');
         }
         await this.email.clean(options);
+    }
+
+    /**
+     * Marks emails in the mailbox with a specific action (READ, UNREAD, FLAGGED, UNFLAGGED, or ARCHIVED).
+     * @param action - The marking action to apply (e.g., EmailMarkAction.READ, EmailMarkAction.FLAGGED, etc.).
+     * @param options - Optional options to target specific emails with filters.
+     * @returns The number of emails successfully marked.
+     *
+     * @example
+     * ```ts
+     * // Mark all OTP emails as read
+     * await steps.markEmail('markEmailsAsRead', EmailMarkAction.READ, {
+     *   filters: [{ type: EmailFilterType.SUBJECT, value: 'OTP' }]
+     * });
+     *
+     * // Mark all emails as unread
+     * await steps.markEmail('markEmailsAsUnread', EmailMarkAction.UNREAD);
+     *
+     * // Mark specific emails as flagged
+     * await steps.markEmail('flagImportantEmails', EmailMarkAction.FLAGGED, {
+     *   filters: [{ type: EmailFilterType.FROM, value: 'noreply@example.com' }]
+     * });
+     *
+     * // Archive emails matching a filter
+     * await steps.markEmail('archiveEmails', EmailMarkAction.ARCHIVED, {
+     *   filters: [{ type: EmailFilterType.SUBJECT, value: 'Report' }]
+     * });
+     * ```
+     */
+    async markEmail(
+        action: EmailMarkAction | string[],
+        options?: { filters?: EmailFilter[]; folder?: string; archiveFolder?: string }
+    ): Promise<number> {
+        if (!this.email) {
+            throw new Error('Email client is not configured. Please provide credentials to the fixture or call configureEmail() first.');
+        }
+
+        const markOptions: EmailMarkOptions = {
+            action,
+            filters: options?.filters,
+            folder: options?.folder,
+            archiveFolder: options?.archiveFolder,
+        };
+
+        log.email('Marking emails with action "%s"', Array.isArray(action) ? action.join(',') : action);
+        const result = await this.email.mark(markOptions);
+        log.email('Successfully marked %d email(s)', result);
+        return result;
     }
 }

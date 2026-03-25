@@ -169,10 +169,10 @@ export class Steps {
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
      */
-    async clickIfPresent(pageName: string, elementName: string): Promise<void> {
+    async clickIfPresent(pageName: string, elementName: string): Promise<boolean> {
         log.interact('Clicking on "%s" in "%s" (if present)', elementName, pageName);
         const locator = await this.repo.get(this.page, pageName, elementName);
-        await this.interact.clickIfPresent(locator);
+        return this.interact.clickIfPresent(locator);
     }
 
     /**

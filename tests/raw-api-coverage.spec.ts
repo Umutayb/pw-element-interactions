@@ -23,8 +23,9 @@ test.describe('TC_077: Raw API — interact.clickWithoutScrolling, clickIfPresen
     await test.step('clickIfPresent via raw API', async () => {
       await steps.navigateTo('/');
       const card = page.locator('[data-testid="home-card-forms"]');
-      // clickIfPresent returns void — just verify it doesn't throw
-      await interactions.interact.clickIfPresent(card);
+      const result = await interactions.interact.clickIfPresent(card);
+      expect(typeof result).toBe('boolean');
+      expect(result).toBe(true);
     });
 
     log('TC_077 Raw API interact.clickWithoutScrolling, clickIfPresent — passed');

@@ -48,10 +48,12 @@ export class Interactions {
      * without failing the test. Great for optional elements like cookie banners or promotional pop-ups.
      * @param locator - The Playwright Locator pointing to the target element.
      */
-    async clickIfPresent(locator: Locator): Promise<void> {
+    async clickIfPresent(locator: Locator): Promise<boolean> {
         if (await locator.isVisible()) {
             await locator.click({ timeout: this.ELEMENT_TIMEOUT });
+            return true;
         }
+        return false;
     }
 
     /**

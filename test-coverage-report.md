@@ -2,10 +2,10 @@
 ## 📊 API Coverage Report
 
 
-![API Coverage](https://img.shields.io/badge/API%20Coverage-78.0%25-yellow)
+![API Coverage](https://img.shields.io/badge/API%20Coverage-100.0%25-brightgreen)
 
 
-Build Failed: coverage 78.0% is below threshold 100%
+Build Passed: 100% API Coverage!
 
 
 <details>
@@ -15,44 +15,44 @@ Build Failed: coverage 78.0% is below threshold 100%
 **DateUtilities: 1/1**
   [x] reformatDateString
 
-**Extractions: 5/6**
-  [ ] getText
+**Extractions: 6/6**
+  [x] getText
   [x] getAttribute
   [x] getAllTexts
   [x] getInputValue
   [x] getCount
   [x] getCssProperty
 
-**Interactions: 8/20**
+**Interactions: 20/20**
   [x] click
-  [ ] clickWithoutScrolling
-  [ ] clickIfPresent
+  [x] clickWithoutScrolling
+  [x] clickIfPresent
   [x] fill
-  [ ] uploadFile
+  [x] uploadFile
   [x] selectDropdown
-  [ ] hover
-  [ ] scrollIntoView
+  [x] hover
+  [x] scrollIntoView
   [x] dragAndDrop
   [x] getByText
-  [ ] typeSequentially
-  [ ] rightClick
-  [ ] doubleClick
-  [ ] check
-  [ ] uncheck
-  [ ] setSliderValue
-  [ ] pressKey
+  [x] typeSequentially
+  [x] rightClick
+  [x] doubleClick
+  [x] check
+  [x] uncheck
+  [x] setSliderValue
+  [x] pressKey
   [x] clearInput
   [x] selectMultiple
   [x] getListedElement
 
-**Navigation: 3/10**
-  [ ] toUrl
-  [ ] reload
-  [ ] backOrForward
-  [ ] setViewport
-  [ ] switchToNewTab
-  [ ] closeTab
-  [ ] getTabCount
+**Navigation: 10/10**
+  [x] toUrl
+  [x] reload
+  [x] backOrForward
+  [x] setViewport
+  [x] switchToNewTab
+  [x] closeTab
+  [x] getTabCount
   [x] waitForNetworkIdle
   [x] waitForResponse
   [x] screenshot
@@ -127,17 +127,17 @@ Build Failed: coverage 78.0% is below threshold 100%
   [x] getTimeout
   [x] waitForState
 
-**Verifications: 9/15**
+**Verifications: 15/15**
   [x] text
   [x] textContains
-  [ ] presence
+  [x] presence
   [x] absence
-  [ ] state
-  [ ] urlContains
-  [ ] attribute
-  [ ] images
+  [x] state
+  [x] urlContains
+  [x] attribute
+  [x] images
   [x] inputValue
-  [ ] tabCount
+  [x] tabCount
   [x] order
   [x] cssProperty
   [x] listOrder

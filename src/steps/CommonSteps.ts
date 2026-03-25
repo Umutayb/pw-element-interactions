@@ -73,9 +73,9 @@ export class Steps {
 
     /**
      * Navigates the browser history backwards or forwards.
-     * @param direction - The direction to navigate: `'BACKWARDS'` or `'FORWARDS'`.
+     * @param direction - The direction to navigate: `'back'` or `'forward'`.
      */
-    async backOrForward(direction: 'BACKWARDS' | 'FORWARDS'): Promise<void> {
+    async backOrForward(direction: 'back' | 'forward'): Promise<void> {
         log.navigate('Navigating browser: "%s"', direction);
         await this.navigate.backOrForward(direction);
     }

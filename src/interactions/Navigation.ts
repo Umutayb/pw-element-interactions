@@ -48,10 +48,10 @@ export class Navigation {
     /**
      * Navigates the browser history stack either backwards or forwards.
      * Mirrors the behavior of the browser's native Back and Forward buttons.
-     * @param direction - The direction to move in history: either 'BACKWARDS' or 'FORWARDS'.
+     * @param direction - The direction to move in history: either 'back' or 'forward'.
      */
-    async backOrForward(direction: 'BACKWARDS' | 'FORWARDS'): Promise<void> {
-        if (direction === 'BACKWARDS') {
+    async backOrForward(direction: 'back' | 'forward'): Promise<void> {
+        if (direction === 'back') {
             await this.page.goBack();
         } else {
             await this.page.goForward();

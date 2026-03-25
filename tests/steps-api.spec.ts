@@ -25,9 +25,9 @@ test.describe('TC_041: Steps - Navigation, Viewport & Scroll', () => {
     await test.step('Navigate to a second page then backOrForward', async () => {
       await steps.click('SidebarNav', 'textInputsLink');
       await steps.verifyUrlContains('/text-inputs');
-      await steps.backOrForward('BACKWARDS');
+      await steps.backOrForward('back');
       await steps.verifyUrlContains('/buttons');
-      await steps.backOrForward('FORWARDS');
+      await steps.backOrForward('forward');
       await steps.verifyUrlContains('/text-inputs');
     });
 

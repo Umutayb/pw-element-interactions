@@ -18,8 +18,8 @@ export class ElementInteractions {
     public extract: Extractions;
     public navigate: Navigation;
     public email: EmailClient | null = null;
-    public utils: Utils;
-    public log;
+    private utils: Utils;
+    private log;
 
     /**
      * Initializes the ElementInteractions facade.

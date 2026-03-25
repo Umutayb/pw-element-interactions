@@ -125,7 +125,7 @@ test.describe('TC_075: Raw API — extract.getAllTexts, extract.getCount, extrac
   });
 });
 
-test.describe('TC_076: Raw API — navigate.screenshot, navigate.waitForNetworkIdle, navigate.waitForResponse', () => {
+test.describe('TC_076: Raw API — extract.screenshot, navigate.waitForNetworkIdle, navigate.waitForResponse', () => {
 
   test('navigation utilities via raw interactions', async ({ page, interactions, steps }) => {
 
@@ -134,14 +134,14 @@ test.describe('TC_076: Raw API — navigate.screenshot, navigate.waitForNetworkI
     });
 
     await test.step('Page screenshot via raw API', async () => {
-      const buf = await interactions.navigate.screenshot();
+      const buf = await interactions.extract.screenshot();
       expect(buf).toBeTruthy();
       expect(buf.length).toBeGreaterThan(0);
     });
 
     await test.step('Element screenshot via raw API', async () => {
       const heading = page.locator('h1');
-      const buf = await interactions.navigate.screenshot(heading);
+      const buf = await interactions.extract.screenshot(heading);
       expect(buf).toBeTruthy();
     });
 

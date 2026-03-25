@@ -959,12 +959,12 @@ export class Steps {
         if (typeof pageNameOrOptions === 'string' && elementName) {
             log.extract('Taking screenshot of "%s" in "%s"', elementName, pageNameOrOptions);
             const locator = await this.repo.get(this.page, pageNameOrOptions, elementName);
-            return await this.navigate.screenshot(locator, options);
+            return await this.extract.screenshot(locator, options);
         }
 
         const opts = typeof pageNameOrOptions === 'object' ? pageNameOrOptions : options;
         log.extract('Taking page screenshot');
-        return await this.navigate.screenshot(undefined, opts);
+        return await this.extract.screenshot(undefined, opts);
     }
 
     // ==========================================

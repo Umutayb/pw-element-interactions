@@ -1,5 +1,4 @@
-import { Page, Locator, Response } from '@playwright/test';
-import { ScreenshotOptions } from '../enum/Options';
+import { Page, Response } from '@playwright/test';
 import { logger } from '../logger/Logger';
 
 const log = logger('navigate');
@@ -130,19 +129,4 @@ export class Navigation {
         return response;
     }
 
-    /**
-     * Captures a screenshot of the full page or a specific element.
-     * @param locator - If provided, screenshots only this element. If omitted, screenshots the full page.
-     * @param options - Optional configuration: `fullPage` for scrollable capture, `path` to save to disk.
-     * @returns The screenshot image as a Buffer.
-     */
-    async screenshot(locator?: Locator, options?: ScreenshotOptions): Promise<Buffer> {
-        if (locator) {
-            return await locator.screenshot({ path: options?.path }) as Buffer;
-        }
-        return await this.page.screenshot({
-            fullPage: options?.fullPage,
-            path: options?.path,
-        }) as Buffer;
-    }
 }

@@ -1,5 +1,6 @@
 import { Page, Locator } from '@playwright/test';
 import { Utils } from '../utils/ElementUtilities';
+import { ScreenshotOptions } from '../enum/Options';
 
 export class Extractions {
     private ELEMENT_TIMEOUT : number;
@@ -79,5 +80,21 @@ export class Extractions {
             (el, prop) => window.getComputedStyle(el).getPropertyValue(prop),
             property
         );
+    }
+
+    /**
+     * Captures a screenshot of the full page or a specific element.
+     * @param locator - If provided, screenshots only this element. If omitted, screenshots the full page.
+     * @param options - Optional configuration: `fullPage` for scrollable capture, `path` to save to disk.
+     * @returns The screenshot image as a Buffer.
+     */
+    async screenshot(locator?: Locator, options?: ScreenshotOptions): Promise<Buffer> {
+        if (locator) {
+            return await locator.screenshot({ path: options?.path }) as Buffer;
+        }
+        return await this.page.screenshot({
+            fullPage: options?.fullPage,
+            path: options?.path,
+        }) as Buffer;
     }
 }

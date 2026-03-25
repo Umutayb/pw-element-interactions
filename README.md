@@ -360,12 +360,12 @@ Every method below automatically fetches the Playwright `Locator` using your `pa
 Operate on a specific element within a list (table rows, cards, list items) by matching its visible text or an HTML attribute. Optionally drill into a child element within the matched item.
 
 ```ts
-import { ListedElementOptions } from '@civitas-cerebrum/element-interactions';
+import { ListedElementMatch, VerifyListedOptions, GetListedDataOptions } from '@civitas-cerebrum/element-interactions';
 ```
 
-* **`clickListedElement(pageName, elementName, options: ListedElementOptions)`** — Finds and clicks a specific element from a list. Identify the target by `{ text }` or `{ attribute: { name, value } }`, and optionally drill into a child with `{ child: 'css-selector' }` or `{ child: { pageName, elementName } }`.
-* **`verifyListedElement(pageName, elementName, options: ListedElementOptions)`** — Finds a listed element and asserts against it. Use `{ expectedText }` to verify text, `{ expected: { name, value } }` to verify an attribute, or omit both to assert visibility.
-* **`getListedElementData(pageName, elementName, options: ListedElementOptions)`** — Extracts data from a listed element. Returns the element's text content by default, or an attribute value when `{ extractAttribute: 'attrName' }` is specified.
+* **`clickListedElement(pageName, elementName, options: ListedElementMatch)`** — Finds and clicks a specific element from a list. Identify the target by `{ text }` or `{ attribute: { name, value } }`, and optionally drill into a child with `{ child: 'css-selector' }` or `{ child: { pageName, elementName } }`.
+* **`verifyListedElement(pageName, elementName, options: VerifyListedOptions)`** — Finds a listed element and asserts against it. Use `{ expectedText }` to verify text, `{ expected: { name, value } }` to verify an attribute, or omit both to assert visibility.
+* **`getListedElementData(pageName, elementName, options: GetListedDataOptions)`** — Extracts data from a listed element. Returns the element's text content by default, or an attribute value when `{ extractAttribute: 'attrName' }` is specified.
 
 ```ts
 // Click the row containing "John"

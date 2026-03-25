@@ -358,7 +358,7 @@ Every method takes `pageName` and `elementName` as its first two arguments, matc
 
 **Imports** — add at the top of your test file as needed:
 ```ts
-import { DropdownSelectType, ListedElementOptions, FillFormValue, ScreenshotOptions } from '@civitas-cerebrum/element-interactions';
+import { DropdownSelectType, ListedElementMatch, VerifyListedOptions, GetListedDataOptions, FillFormValue, ScreenshotOptions } from '@civitas-cerebrum/element-interactions';
 ```
 
 #### Navigation

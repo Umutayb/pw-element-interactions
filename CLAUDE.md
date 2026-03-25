@@ -264,7 +264,7 @@ await steps.verifyTabCount(2);
 ### 📋 Listed Elements
 
 ```ts
-import { ListedElementOptions } from '@civitas-cerebrum/element-interactions';
+import { ListedElementMatch, VerifyListedOptions, GetListedDataOptions } from '@civitas-cerebrum/element-interactions';
 
 // Click a listed element by text
 await steps.clickListedElement('PageName', 'tableRows', { text: 'John' });

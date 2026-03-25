@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixture/StepFixture';
 import { Steps } from '../src/steps/CommonSteps';
 import { Utils } from '../src/utils/ElementUtilities';
 import { DateUtilities } from '../src/utils/DateUtilities';
@@ -14,7 +14,7 @@ test.describe('Utilities Coverage Tests', () => {
         expect(utils.getTimeout()).toBe(15000);
     });
 
-    test('Utils.waitForState - handles timeout gracefully (async)', async ({ steps }) => {
+    test('Utils.waitForState - handles timeout gracefully (async)', async ({ page }) => {
         const utils = new Utils(1000);
         // Create a locator that will never become visible
         const locator = page.locator('#nonexistent-element-xyz123');
@@ -27,8 +27,8 @@ test.describe('Utilities Coverage Tests', () => {
     });
 
     test('Steps.waitForState - calls utils.waitForState internally', async ({ steps }) => {
-        // This tests that Steps.waitForState uses the utils.waitForState method
-        await steps.waitForState('HomePage', 'title', 'visible');
+        await steps.navigateTo('/');
+        await steps.waitForState('HomePage', 'pageTitle', 'visible');
         expect(true).toBe(true);
     });
 

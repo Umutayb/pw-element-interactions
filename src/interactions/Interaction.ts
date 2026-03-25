@@ -44,9 +44,10 @@ export class Interactions {
 
     /**
      * Checks if an element is visible before attempting to click it.
-     * If the element is hidden or not in the DOM, it safely skips the action and logs a message 
+     * If the element is hidden or not in the DOM, it safely skips the action
      * without failing the test. Great for optional elements like cookie banners or promotional pop-ups.
      * @param locator - The Playwright Locator pointing to the target element.
+     * @returns `true` if the element was visible and clicked, `false` if it was skipped.
      */
     async clickIfPresent(locator: Locator): Promise<boolean> {
         if (await locator.isVisible()) {

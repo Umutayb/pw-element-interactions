@@ -28,6 +28,12 @@ test.describe('TC_077: Raw API — interact.clickWithoutScrolling, clickIfPresen
       expect(result).toBe(true);
     });
 
+    await test.step('clickIfPresent returns false for absent element', async () => {
+      const absent = page.locator('[data-testid="does-not-exist-xyz"]');
+      const result = await interactions.interact.clickIfPresent(absent);
+      expect(result).toBe(false);
+    });
+
     log('TC_077 Raw API interact.clickWithoutScrolling, clickIfPresent — passed');
   });
 });

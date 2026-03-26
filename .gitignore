@@ -11,3 +11,4 @@ api-coverage-report.txt
 .env.local
 /.yalc
 yalc.lock
+test-coverage-report.md

@@ -300,7 +300,7 @@ Show the user the exact JSON entries you want to add:
 
 ### Writing Process
 
-1. **Check project setup.** Read `tests/fixtures/base.ts` and `playwright.config.ts` — create or update only if missing or broken.
+1. **Check project setup.** Read `tests/fixtures/base.ts` and `playwright.config.ts` — create or update only if missing or broken. Also verify that `.gitignore` includes `.claude/` and `CLAUDE.md` to prevent Claude Code configuration from being pushed to the repository — add them if missing.
 2. **Add approved selectors** to `page-repository.json` (if not already done).
 3. **Write the test file** using the Steps API. Every interaction goes through `steps.*` methods — no raw `page.locator()` calls.
 4. **Run the test** with `npx playwright test <test-file>`.
@@ -339,8 +339,9 @@ For each test file, verify:
 1. **Read each test file** written or modified in this session.
 2. **Cross-reference every API call** against the API Reference section below.
 3. **Report findings** to the user — list any issues found with the specific line, what's wrong, and the correct usage.
-4. **If issues are found:** fix them, re-run the tests, and confirm they still pass.
-5. **If no issues are found:** confirm compliance and proceed to commit.
+4. **If issues are found:** investigate *why* the non-compliant code was written — was the API misunderstood? Was a method signature wrong in the scenario? Did a previous stage produce incorrect assumptions? Understanding the root cause prevents the same mistake from recurring in the next scenario. Then fix, re-run the tests, and confirm they still pass.
+5. **If fixes cause a test failure:** follow Rule 6 — inspect the failure screenshot first before attempting any further fix. Do NOT guess from the error message alone.
+6. **If no issues are found:** confirm compliance and proceed to commit.
 
 ### Output Format
 
@@ -426,7 +427,7 @@ Every method takes `pageName` and `elementName` as its first two arguments, matc
 
 **Imports** — add at the top of your test file as needed:
 ```ts
-import { DropdownSelectType, ListedElementMatch, VerifyListedOptions, GetListedDataOptions, FillFormValue, ScreenshotOptions } from '@civitas-cerebrum/element-interactions';
+import { DropdownSelectType, ListedElementMatch, VerifyListedOptions, GetListedDataOptions, FillFormValue, ScreenshotOptions, EmailFilterType, EmailMarkAction, WebElement } from '@civitas-cerebrum/element-interactions';
 ```
 
 #### Navigation
@@ -472,10 +473,10 @@ const val2 = await steps.selectDropdown('PageName', 'elementName', { type: Dropd
 const val3 = await steps.selectDropdown('PageName', 'elementName', { type: DropdownSelectType.INDEX, index: 2 });
 await steps.selectMultiple('PageName', 'multiSelect', ['opt1', 'opt2']);
 
-// Drag and drop
-await steps.dragAndDrop('PageName', 'elementName', { target: otherLocator });
+// Drag and drop — target accepts a Locator or Element from the repository
+await steps.dragAndDrop('PageName', 'elementName', { target: otherLocatorOrElement });
 await steps.dragAndDrop('PageName', 'elementName', { xOffset: 100, yOffset: 0 });
-await steps.dragAndDropListedElement('PageName', 'elementName', 'Item Label', { target: otherLocator });
+await steps.dragAndDropListedElement('PageName', 'elementName', 'Item Label', { target: otherLocatorOrElement });
 ```
 
 #### Data Extraction
@@ -579,27 +580,34 @@ const buf3 = await steps.screenshot('PageName', 'elementName');             // e
 
 ### Accessing the Repository Directly
 
-Use `repo` when you need to filter by visible text, iterate all matches, or pick a random item:
+Use `repo` when you need to filter by visible text, iterate all matches, or pick a random item. Repository methods return `Element` wrappers (not raw Playwright `Locator` objects). The `Element` interface provides common methods like `click()`, `fill()`, `textContent()`, etc. To access the underlying Playwright `Locator` (e.g. for Playwright-specific assertions), cast to `WebElement`:
 
 ```ts
+import { WebElement } from '@civitas-cerebrum/element-interactions';
+
 test('example', async ({ page, repo, steps }) => {
   await steps.navigateTo('/');
   const link = await repo.getByText(page, 'HomePage', 'categories', 'Forms');
-  await link?.click();
+  await link?.click();                              // Element.click() works directly
+
+  // When you need the underlying Locator:
+  const element = await repo.get(page, 'PageName', 'elementName');
+  const locator = (element as WebElement).locator;  // access raw Playwright Locator
 });
 ```
 
 ```ts
-await repo.get(page, 'PageName', 'elementName');
-await repo.getAll(page, 'PageName', 'elementName');
-await repo.getRandom(page, 'PageName', 'elementName');
-await repo.getByText(page, 'PageName', 'elementName', 'Text');
+await repo.get(page, 'PageName', 'elementName');               // single Element
+await repo.getAll(page, 'PageName', 'elementName');             // array of Elements
+await repo.getRandom(page, 'PageName', 'elementName');          // random from matches
+await repo.getByText(page, 'PageName', 'elementName', 'Text'); // exact match, then contains fallback
 await repo.getByAttribute(page, 'PageName', 'elementName', 'data-status', 'active');
 await repo.getByAttribute(page, 'PageName', 'elementName', 'href', '/path', { exact: false });
 await repo.getByIndex(page, 'PageName', 'elementName', 2);
 await repo.getByRole(page, 'PageName', 'elementName', 'button');
 await repo.getVisible(page, 'PageName', 'elementName');
 repo.getSelector('PageName', 'elementName');        // sync, returns raw selector string
+repo.getSelectorRaw('PageName', 'elementName');     // sync, returns { strategy, value }
 repo.setDefaultTimeout(10000);
 ```
 
@@ -624,7 +632,25 @@ Send and receive emails in tests. Supports plain-text, inline HTML, and HTML fil
 
 #### Setup
 
+Pass email credentials using the split config (recommended) or the legacy combined format. You can provide `smtp` only, `imap` only, or both:
+
 ```ts
+// Split config (recommended)
+export const test = baseFixture(base, 'tests/data/page-repository.json', {
+  emailCredentials: {
+    smtp: {
+      email: process.env.SENDER_EMAIL!,
+      password: process.env.SENDER_PASSWORD!,
+      host: process.env.SENDER_SMTP_HOST!,
+    },
+    imap: {
+      email: process.env.RECEIVER_EMAIL!,
+      password: process.env.RECEIVER_PASSWORD!,
+    },
+  }
+});
+
+// Legacy combined format (still supported)
 export const test = baseFixture(base, 'tests/data/page-repository.json', {
   emailCredentials: {
     senderEmail: process.env.SENDER_EMAIL!,
@@ -640,6 +666,7 @@ export const test = baseFixture(base, 'tests/data/page-repository.json', {
 
 ```ts
 await steps.sendEmail({ to: 'user@example.com', subject: 'Test', text: 'Hello' });
+await steps.sendEmail({ to: 'user@example.com', subject: 'Report', html: '<h1>Results</h1>' });
 await steps.sendEmail({ to: 'user@example.com', subject: 'Report', htmlFile: 'emails/report.html' });
 ```
 
@@ -665,6 +692,25 @@ const allEmails = await steps.receiveAllEmails({
   filters: [{ type: EmailFilterType.FROM, value: 'alerts@example.com' }]
 });
 ```
+
+#### Marking Emails
+
+```ts
+import { EmailMarkAction } from '@civitas-cerebrum/element-interactions';
+
+await steps.markEmail(EmailMarkAction.READ, {
+  filters: [{ type: EmailFilterType.SUBJECT, value: 'OTP' }]
+});
+await steps.markEmail(EmailMarkAction.FLAGGED, {
+  filters: [{ type: EmailFilterType.FROM, value: 'noreply@example.com' }]
+});
+await steps.markEmail(EmailMarkAction.ARCHIVED, {
+  filters: [{ type: EmailFilterType.SUBJECT, value: 'Report' }]
+});
+await steps.markEmail(EmailMarkAction.UNREAD); // mark all in folder
+```
+
+Mark actions: `READ`, `UNREAD`, `FLAGGED`, `UNFLAGGED`, `ARCHIVED`.
 
 #### Cleaning the Inbox
 

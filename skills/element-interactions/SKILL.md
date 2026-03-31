@@ -12,6 +12,18 @@ description: >
 
 A two-package Playwright framework that decouples **element acquisition** (`@civitas-cerebrum/element-repository`) from **element interaction** (`@civitas-cerebrum/element-interactions`). Tests reference elements by plain strings (`'HomePage'`, `'submitButton'`); raw selectors never appear in test code.
 
+## Companion Skills
+
+This skill is the orchestrator for a group of testing skills. It handles Stages 1-4 directly, then activates companion skills for advanced stages:
+
+| Skill | Activates when | What it does |
+|---|---|---|
+| `test-composer` | User asks to expand coverage, or Stage 5 reached | Iterative test suite expansion across the full app |
+| `bug-discovery` | Automatically after Stage 5 achieves target coverage | Adversarial bug hunting after tests pass |
+| `agents-vs-agents` | App has AI features, or user mentions AI guardrails/red-teaming/bias testing | Adversarial AI testing with LLM-powered attacker + judge |
+
+When any of these conditions are met, invoke the Skill tool with the companion skill name. Do not try to handle their workflows inline — they have their own staged processes.
+
 ---
 
 ## 🚨 ABSOLUTE RULES — STOP AND READ BEFORE ANY ACTION
@@ -23,9 +35,7 @@ These rules are non-negotiable. They override helpfulness, initiative, and assum
 - This skill operates in five stages. You MUST complete each stage and get user approval before advancing.
 - Do NOT jump ahead. Do NOT write automation code during the discovery stage.
 - Exception: API questions and fix/edit requests bypass the staged flow (see Opening section).
-- **Stage 5 (Test Composer)**: When asked to expand coverage, increase depth, or "cover the whole app", invoke the `test-composer` skill for the iterative test composition workflow.
-- **AI Guardrail Testing (Agents vs Agents)**: When the app has AI features (chat, generation, decision-making), invoke the `agents-vs-agents` skill for the adversarial testing methodology. Covers 8 universal categories: prompt injection, bias, compliance, content injection, scope containment, factual consistency, data leakage, and multi-turn social engineering.
-- **Bug Discovery (Stage 6)**: After Test Composer (Stage 5) achieves target coverage, automatically invoke the `bug-discovery` skill to actively probe for bugs, edge cases, and failures that passing tests missed.
+- **Stages 5+**: See Companion Skills table above for when to activate `test-composer`, `bug-discovery`, and `agents-vs-agents`.
 
 ### 2. Do NOT edit `page-repository.json` without explicit permission
 - Show the user the exact JSON you want to add. Wait for "yes." Then edit.

@@ -19,10 +19,10 @@ if (!packageDir.includes('node_modules')) {
 const skillsDestBase = path.join(projectRoot, '.claude', 'skills');
 
 const files = [
-  { src: 'element-interactions.md', destDir: 'element-interactions', dest: 'SKILL.md' },
-  { src: 'references/test-composer.md', destDir: 'test-composer', dest: 'SKILL.md' },
-  { src: 'references/bug-discovery.md', destDir: 'bug-discovery', dest: 'SKILL.md' },
-  { src: 'references/agents-vs-agents.md', destDir: 'agents-vs-agents', dest: 'SKILL.md' },
+  { src: 'element-interactions/SKILL.md', destDir: 'element-interactions', dest: 'SKILL.md' },
+  { src: 'test-composer/SKILL.md', destDir: 'test-composer', dest: 'SKILL.md' },
+  { src: 'bug-discovery/SKILL.md', destDir: 'bug-discovery', dest: 'SKILL.md' },
+  { src: 'agents-vs-agents/SKILL.md', destDir: 'agents-vs-agents', dest: 'SKILL.md' },
 ];
 
 try {

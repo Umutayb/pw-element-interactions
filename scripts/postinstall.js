@@ -21,6 +21,7 @@ const skillsDestBase = path.join(projectRoot, '.claude', 'skills');
 const files = [
   { src: 'element-interactions.md', destDir: 'element-interactions', dest: 'SKILL.md' },
   { src: 'references/test-composer.md', destDir: 'test-composer', dest: 'SKILL.md' },
+  { src: 'references/bug-discovery.md', destDir: 'bug-discovery', dest: 'SKILL.md' },
 ];
 
 try {

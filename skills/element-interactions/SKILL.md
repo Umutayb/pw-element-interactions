@@ -413,7 +413,7 @@ For each test file, verify:
 7. **No raw Playwright calls** — no `page.locator()`, `page.click()`, `page.fill()`, or other raw Playwright methods where a `steps.*` equivalent exists.
 8. **Fixture usage** — the test destructures only fixtures provided by `baseFixture` (`steps`, `repo`, `interactions`, `contextStore`, `page`) plus any custom fixtures defined in the project's `base.ts`.
 9. **Waiting methods** — correct state strings (`'visible'`, `'hidden'`, `'attached'`, `'detached'`) and correct usage of `waitForResponse` callback pattern.
-10. **Verification methods** — correct option shapes (`{ exactly }`, `{ greaterThan }`, `{ lessThan }` for `verifyCount`; `{ notEmpty: true }` for `verifyText`).
+10. **Verification methods** — correct option shapes (`{ exactly }`, `{ greaterThan }`, `{ lessThan }` for `verifyCount`; `verifyText()` with no args asserts not empty).
 
 ### Process
 
@@ -460,7 +460,12 @@ Read `tests/fixtures/base.ts` first if it exists — do not overwrite without ch
 import { test as base, expect } from '@playwright/test';
 import { baseFixture } from '@civitas-cerebrum/element-interactions';
 
-export const test = baseFixture(base, 'tests/data/page-repository.json');
+export const test = baseFixture(base, 'tests/data/page-repository.json', {
+  timeout: 60000,              // element timeout (default: 30000)
+  // repoTimeout: 15000,       // repo resolution timeout (default: 15000)
+  // blockedOrigins: /regex/,  // auto-abort matching routes
+  // screenshotOnFailure: true, // auto-capture on failure (default: true)
+});
 export { expect };
 ```
 
@@ -581,7 +586,7 @@ const allHrefs = await steps.getAll('PageName', 'links', { extractAttribute: 'hr
 await steps.verifyPresence('PageName', 'elementName');
 await steps.verifyAbsence('PageName', 'elementName');
 await steps.verifyText('PageName', 'elementName', 'Expected text');
-await steps.verifyText('PageName', 'elementName', undefined, { notEmpty: true });
+await steps.verifyText('PageName', 'elementName');  // no args = asserts not empty
 await steps.verifyTextContains('PageName', 'elementName', 'partial');
 await steps.verifyCount('PageName', 'elementName', { exactly: 3 });        // also: greaterThan, lessThan
 await steps.verifyState('PageName', 'elementName', 'enabled');              // 'disabled', 'editable', 'checked', 'focused', 'visible', 'hidden', 'attached', 'inViewport'
@@ -663,51 +668,58 @@ const buf3 = await steps.screenshot('PageName', 'elementName');             // e
 
 ### Accessing the Repository Directly
 
-Use `repo` when you need to filter by visible text, iterate all matches, or pick a random item. Repository methods return `Element` wrappers (not raw Playwright `Locator` objects). The `Element` interface provides common methods like `click()`, `fill()`, `textContent()`, etc. To access the underlying Playwright `Locator` (e.g. for Playwright-specific assertions), cast to `WebElement`:
+Use `repo` when you need to filter by visible text, iterate all matches, or pick a random item. Repository methods use `(elementName, pageName)` order (no driver arg — driver is bound at construction). Methods return `Element` wrappers with `click()`, `fill()`, `textContent()`, etc. To access the underlying Playwright `Locator`, cast to `WebElement`:
 
 ```ts
 import { WebElement } from '@civitas-cerebrum/element-interactions';
 
-test('example', async ({ page, repo, steps }) => {
+test('example', async ({ repo, steps }) => {
   await steps.navigateTo('/');
-  const link = await repo.getByText(page, 'HomePage', 'categories', 'Forms');
+  const link = await repo.getByText('categories', 'HomePage', 'Forms');
   await link?.click();                              // Element.click() works directly
 
+  // Fluent action chain
+  const element = await repo.get('elementName', 'PageName');
+  await element.action(5000).waitForState('visible').click();
+
   // When you need the underlying Locator:
-  const element = await repo.get(page, 'PageName', 'elementName');
   const locator = (element as WebElement).locator;  // access raw Playwright Locator
 });
 ```
 
 ```ts
-await repo.get(page, 'PageName', 'elementName');               // single Element
-await repo.getAll(page, 'PageName', 'elementName');             // array of Elements
-await repo.getRandom(page, 'PageName', 'elementName');          // random from matches
-await repo.getByText(page, 'PageName', 'elementName', 'Text'); // exact match, then contains fallback
-await repo.getByAttribute(page, 'PageName', 'elementName', 'data-status', 'active');
-await repo.getByAttribute(page, 'PageName', 'elementName', 'href', '/path', { exact: false });
-await repo.getByIndex(page, 'PageName', 'elementName', 2);
-await repo.getByRole(page, 'PageName', 'elementName', 'button');
-await repo.getVisible(page, 'PageName', 'elementName');
-repo.getSelector('PageName', 'elementName');        // sync, returns raw selector string
-repo.getSelectorRaw('PageName', 'elementName');     // sync, returns { strategy, value }
-repo.setDefaultTimeout(10000);
+await repo.get('elementName', 'PageName');                         // single Element (first match)
+await repo.get('elementName', 'PageName', { strategy: SelectionStrategy.RANDOM }); // with options
+await repo.getAll('elementName', 'PageName');                      // array of Elements
+await repo.getRandom('elementName', 'PageName');                   // random from matches
+await repo.getByText('elementName', 'PageName', 'Text');           // exact match, then contains
+await repo.getByAttribute('elementName', 'PageName', 'data-status', 'active');
+await repo.getByIndex('elementName', 'PageName', 2);
+await repo.getByRole('elementName', 'PageName', 'button');
+await repo.getVisible('elementName', 'PageName');
+repo.getSelector('elementName', 'PageName');                       // sync, returns selector string
+repo.getSelectorRaw('elementName', 'PageName');                    // sync, { strategy, value }
+repo.driver;                                                       // bound Page/Browser
 ```
 
 ### Raw Interactions API
 
-Bypass the repository for dynamically generated locators:
+Bypass the repository for dynamically generated locators. All methods accept both `Locator` and `Element`:
 
 ```ts
 import { ElementInteractions } from '@civitas-cerebrum/element-interactions';
 
 const interactions = new ElementInteractions(page);
 const locator = page.locator('button.dynamic-class');
-await interactions.interact.clickWithoutScrolling(locator);
+await interactions.interact.click(locator, { withoutScrolling: true });
 await interactions.verify.count(locator, { greaterThan: 2 });
+
+// Also works with Element from repo
+const element = await repo.get('submitButton', 'LoginPage');
+await interactions.interact.click(element);
 ```
 
-All `interact`, `verify`, and `navigate` methods are available on `ElementInteractions`.
+All `interact`, `verify`, `extract`, and `navigate` methods are available on `ElementInteractions`.
 
 ### Email API
 
@@ -715,10 +727,9 @@ Send and receive emails in tests. Supports plain-text, inline HTML, and HTML fil
 
 #### Setup
 
-Pass email credentials using the split config (recommended) or the legacy combined format. You can provide `smtp` only, `imap` only, or both:
+Provide `smtp`, `imap`, or both depending on which features you need:
 
 ```ts
-// Split config (recommended)
 export const test = baseFixture(base, 'tests/data/page-repository.json', {
   emailCredentials: {
     smtp: {
@@ -730,17 +741,6 @@ export const test = baseFixture(base, 'tests/data/page-repository.json', {
       email: process.env.RECEIVER_EMAIL!,
       password: process.env.RECEIVER_PASSWORD!,
     },
-  }
-});
-
-// Legacy combined format (still supported)
-export const test = baseFixture(base, 'tests/data/page-repository.json', {
-  emailCredentials: {
-    senderEmail: process.env.SENDER_EMAIL!,
-    senderPassword: process.env.SENDER_PASSWORD!,
-    senderSmtpHost: process.env.SENDER_SMTP_HOST!,
-    receiverEmail: process.env.RECEIVER_EMAIL!,
-    receiverPassword: process.env.RECEIVER_PASSWORD!,
   }
 });
 ```

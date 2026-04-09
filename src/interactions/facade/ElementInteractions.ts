@@ -3,7 +3,7 @@ import { Interactions } from '../Interaction';
 import { Navigation } from '../Navigation';
 import { Verifications } from '../Verification';
 import { Extractions } from '../Extraction';
-import { EmailClient, EmailCredentials, EmailClientConfig } from '@civitas-cerebrum/email-client';
+import { EmailClient, EmailClientConfig } from '@civitas-cerebrum/email-client';
 import { Utils } from '../../utils/ElementUtilities';
 import { logger } from '../../logger/Logger';
 
@@ -26,7 +26,7 @@ export class ElementInteractions {
      * @param page - The current Playwright Page object.
      * @param options - Optional configuration: emailCredentials and/or timeout.
      */
-    constructor(page: Page, options?: { emailCredentials?: EmailCredentials | EmailClientConfig; timeout?: number }) {
+    constructor(page: Page, options?: { emailCredentials?: EmailClientConfig; timeout?: number }) {
         const { emailCredentials, timeout } = options ?? {};
         this.interact = new Interactions(page, timeout);
         this.verify = new Verifications(page, timeout);

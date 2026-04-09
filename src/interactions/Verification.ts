@@ -1,9 +1,19 @@
 import { Page, expect, Locator } from '@playwright/test';
 import { CountVerifyOptions, TextVerifyOptions } from '../enum/Options';
+import { Element, WebElement } from '@civitas-cerebrum/element-repository';
+
+type Target = Locator | Element;
+
+function resolveLocator(target: Target): Locator {
+    if ('_type' in target) {
+        return (target as unknown as WebElement).locator;
+    }
+    return target as Locator;
+}
 
 /**
  * The `Verifications` class provides a unified wrapper around Playwright's `expect` assertions.
- * It standardizes timeouts and includes advanced custom, robust verifications 
+ * It standardizes timeouts and includes advanced custom, robust verifications
  * (like image decoding) to keep your test assertions clean and reliable.
  */
 export class Verifications {
@@ -26,11 +36,12 @@ export class Verifications {
     /**
      * Asserts the text content of an element.
      * Can verify exact text matches or simply check that the element contains some text.
-     * @param locator - The Playwright Locator pointing to the target element.
+     * @param target - A Playwright Locator or Element pointing to the target element.
      * @param expectedText - The exact text string expected (optional if checking 'notEmpty').
      * @param options - Configuration to alter the verification behavior.
      */
-    async text(locator: Locator, expectedText?: string, options?: TextVerifyOptions): Promise<void> {
+    async text(target: Target, expectedText?: string, options?: TextVerifyOptions): Promise<void> {
+        const locator = resolveLocator(target);
         if (options?.notEmpty) {
             await expect(locator).not.toBeEmpty({ timeout: this.ELEMENT_TIMEOUT });
             return;
@@ -45,40 +56,42 @@ export class Verifications {
 
     /**
      * Asserts that the specified element contains the expected substring.
-     * @param locator - The Playwright Locator pointing to the target element.
+     * @param target - A Playwright Locator or Element pointing to the target element.
      * @param expectedText - The substring expected to be present within the element's text.
      */
-    async textContains(locator: Locator, expectedText: string): Promise<void> {
+    async textContains(target: Target, expectedText: string): Promise<void> {
+        const locator = resolveLocator(target);
         await expect(locator).toContainText(expectedText, { timeout: this.ELEMENT_TIMEOUT });
     }
 
     /**
      * Asserts that the specified element is attached to the DOM and is visible.
-     * @param locator - The Playwright Locator pointing to the target element.
+     * @param target - A Playwright Locator or Element pointing to the target element.
      */
-    async presence(locator: Locator): Promise<void> {
+    async presence(target: Target): Promise<void> {
+        const locator = resolveLocator(target);
         await expect(locator).toBeVisible({ timeout: this.ELEMENT_TIMEOUT });
     }
 
     /**
      * Asserts that the specified element is either hidden or completely detached from the DOM.
-     * Accepts a Locator or a raw selector string to prevent unnecessary repository waits.
-     * @param selectorOrLocator - The Playwright Locator or raw selector string.
+     * Accepts a Target or a raw selector string to prevent unnecessary repository waits.
+     * @param selectorOrTarget - A Playwright Locator, Element, or raw selector string.
      */
-    async absence(selectorOrLocator: Locator | string): Promise<void> {
-        const locator = typeof selectorOrLocator === 'string'
-            ? this.page.locator(selectorOrLocator)
-            : selectorOrLocator;
+    async absence(selectorOrTarget: Target | string): Promise<void> {
+        const locator = typeof selectorOrTarget === 'string'
+            ? this.page.locator(selectorOrTarget)
+            : resolveLocator(selectorOrTarget);
 
         await expect(locator).toBeHidden({ timeout: this.ELEMENT_TIMEOUT });
     }
 
     /**
   * Asserts the state of an element using Playwright's built-in locator assertions.
-  * @param locator - The Playwright Locator pointing to the target element.
+  * @param target - A Playwright Locator or Element pointing to the target element.
   * @param state - The expected state to verify.
   */
-    async state(locator: Locator, state: 'enabled' | 'disabled' | 'editable' | 'checked' | 'focused' | 'visible' | 'hidden' | 'attached' | 'inViewport'): Promise<void>;
+    async state(target: Target, state: 'enabled' | 'disabled' | 'editable' | 'checked' | 'focused' | 'visible' | 'hidden' | 'attached' | 'inViewport'): Promise<void>;
 
     /**
      * Asserts the state of an element using Playwright's built-in locator assertions.
@@ -89,11 +102,11 @@ export class Verifications {
     async state(locator: string, state: 'enabled' | 'disabled' | 'editable' | 'checked' | 'focused' | 'visible' | 'hidden' | 'attached' | 'inViewport', timeout?: number): Promise<void>;
 
     async state(
-        locator: Locator | string,
+        locator: Target | string,
         state: 'enabled' | 'disabled' | 'editable' | 'checked' | 'focused' | 'visible' | 'hidden' | 'attached' | 'inViewport',
         timeout?: number
     ): Promise<void> {
-        const resolvedLocator: Locator = typeof locator === 'string' ? this.page.locator(locator) : locator;
+        const resolvedLocator: Locator = typeof locator === 'string' ? this.page.locator(locator) : resolveLocator(locator);
         const resolvedTimeout = timeout ?? this.ELEMENT_TIMEOUT;
 
         switch (state) {
@@ -121,24 +134,26 @@ export class Verifications {
 
     /**
      * Asserts that an element has a specific HTML attribute with an exact value.
-     * @param locator - The Playwright Locator pointing to the target element.
+     * @param target - A Playwright Locator or Element pointing to the target element.
      * @param attributeName - The name of the HTML attribute to check (e.g., 'href', 'class', 'alt').
      * @param expectedValue - The exact expected value of the attribute.
      */
-    async attribute(locator: Locator, attributeName: string, expectedValue: string): Promise<void> {
+    async attribute(target: Target, attributeName: string, expectedValue: string): Promise<void> {
+        const locator = resolveLocator(target);
         await expect(locator).toHaveAttribute(attributeName, expectedValue, { timeout: this.ELEMENT_TIMEOUT });
     }
 
     /**
      * Performs a rigorous, multi-step verification on one or more images.
-     * It checks for visibility, ensures a valid 'src' attribute exists, confirms the 
-     * 'naturalWidth' is greater than 0, and evaluates the browser's native `decode()` 
+     * It checks for visibility, ensures a valid 'src' attribute exists, confirms the
+     * 'naturalWidth' is greater than 0, and evaluates the browser's native `decode()`
      * promise to guarantee the image is fully rendered and not a broken link.
-     * @param imagesLocator - The Playwright Locator pointing to the image element(s).
+     * @param imagesTarget - A Playwright Locator or Element pointing to the image element(s).
      * @param scroll - Whether to smoothly scroll the image(s) into the viewport before verifying (default: true).
      * @throws Will throw an error if no images are found matching the locator or if any image fails to decode.
      */
-    async images(imagesLocator: Locator, scroll: boolean = true): Promise<void> {
+    async images(imagesTarget: Target, scroll: boolean = true): Promise<void> {
+        const imagesLocator = resolveLocator(imagesTarget);
         const productImages = await imagesLocator.all();
 
         if (productImages.length === 0) {
@@ -173,10 +188,11 @@ export class Verifications {
     /**
      * Asserts that an input, textarea, or select element has the expected value.
      * Unlike `text()` which checks `textContent`, this checks the `value` property.
-     * @param locator - The Playwright Locator pointing to the input element.
+     * @param target - A Playwright Locator or Element pointing to the input element.
      * @param expectedValue - The expected value of the input.
      */
-    async inputValue(locator: Locator, expectedValue: string): Promise<void> {
+    async inputValue(target: Target, expectedValue: string): Promise<void> {
+        const locator = resolveLocator(target);
         await expect(locator).toHaveValue(expectedValue, { timeout: this.ELEMENT_TIMEOUT });
     }
 
@@ -193,17 +209,18 @@ export class Verifications {
 
     /**
     * Asserts the number of elements matching the locator based on the provided conditions.
-    * @param locator - The Playwright Locator pointing to the target elements.
+    * @param target - A Playwright Locator or Element pointing to the target elements.
     * @param options - Configuration specifying 'exact', 'greaterThan', or 'lessThan' logic.
     */
     /**
      * Asserts that the text contents of all elements matching the locator appear in the exact
      * order specified by `expectedTexts`. Each element's trimmed `textContent` is compared
      * against the corresponding entry in the array.
-     * @param locator - The Playwright Locator resolving to the list of elements.
+     * @param target - A Playwright Locator or Element resolving to the list of elements.
      * @param expectedTexts - The expected text values in order.
      */
-    async order(locator: Locator, expectedTexts: string[]): Promise<void> {
+    async order(target: Target, expectedTexts: string[]): Promise<void> {
+        const locator = resolveLocator(target);
         await expect(locator).toHaveText(expectedTexts, { timeout: this.ELEMENT_TIMEOUT });
     }
 
@@ -211,11 +228,12 @@ export class Verifications {
      * Asserts that a computed CSS property of an element matches the expected value.
      * Uses `getComputedStyle` under the hood, so values are in their resolved form
      * (e.g. `'rgb(255, 0, 0)'` instead of `'red'`).
-     * @param locator - The Playwright Locator pointing to the target element.
+     * @param target - A Playwright Locator or Element pointing to the target element.
      * @param property - The CSS property name (e.g. `'color'`, `'font-size'`, `'display'`).
      * @param expectedValue - The expected computed value.
      */
-    async cssProperty(locator: Locator, property: string, expectedValue: string): Promise<void> {
+    async cssProperty(target: Target, property: string, expectedValue: string): Promise<void> {
+        const locator = resolveLocator(target);
         await expect(locator).toHaveCSS(property, expectedValue, { timeout: this.ELEMENT_TIMEOUT });
     }
 
@@ -223,10 +241,11 @@ export class Verifications {
      * Asserts that the text contents of all elements matching the locator are sorted
      * in the specified direction. Each element's trimmed `textContent` is compared
      * using locale-aware string comparison.
-     * @param locator - The Playwright Locator resolving to the list of elements.
-     * @param direction - `'asc'` for ascending (A→Z) or `'desc'` for descending (Z→A).
+     * @param target - A Playwright Locator or Element resolving to the list of elements.
+     * @param direction - `'asc'` for ascending (A-Z) or `'desc'` for descending (Z-A).
      */
-    async listOrder(locator: Locator, direction: 'asc' | 'desc'): Promise<void> {
+    async listOrder(target: Target, direction: 'asc' | 'desc'): Promise<void> {
+        const locator = resolveLocator(target);
         const texts = (await locator.allTextContents()).map(t => t.trim());
 
         if (texts.length < 2) return;
@@ -239,7 +258,8 @@ export class Verifications {
     }
 
 
-    async count(locator: Locator, options: CountVerifyOptions): Promise<void> {
+    async count(target: Target, options: CountVerifyOptions): Promise<void> {
+        const locator = resolveLocator(target);
         if (options.exactly !== undefined && options.exactly < 0) {
             throw new Error(`'exact' count cannot be negative.`);
         }

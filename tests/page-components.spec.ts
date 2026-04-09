@@ -129,8 +129,8 @@ test.describe('TC_011: Checkboxes & Toggles Page', () => {
 
     await test.step('Toggle switches via label click (hidden inputs)', async () => {
       // Toggle inputs are display:none; click the parent <label> instead
-      const toggleOffLabel = page.locator(repo.getSelector('CheckboxesPage', 'toggleOff')).locator('..');
-      const toggleOnLabel = page.locator(repo.getSelector('CheckboxesPage', 'toggleOn')).locator('..');
+      const toggleOffLabel = page.locator(repo.getSelector('toggleOff', 'CheckboxesPage')).locator('..');
+      const toggleOnLabel = page.locator(repo.getSelector('toggleOn', 'CheckboxesPage')).locator('..');
       await toggleOffLabel.click();
       await toggleOnLabel.click();
     });

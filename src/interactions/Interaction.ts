@@ -1,10 +1,13 @@
 import { Page, Locator } from '@playwright/test';
-import { DropdownSelectOptions, DropdownSelectType, DragAndDropOptions, ListedElementMatch } from '../enum/Options';
+import { ClickOptions, DropdownSelectOptions, DropdownSelectType, DragAndDropOptions, ListedElementMatch } from '../enum/Options';
 import { Utils } from '../utils/ElementUtilities';
-import { WebElement } from '@civitas-cerebrum/element-repository';
+import { Element, WebElement } from '@civitas-cerebrum/element-repository';
 
-/** Resolves a Locator or Element to a Playwright Locator. */
-function resolveLocator(target: Locator | import('@civitas-cerebrum/element-repository').Element): Locator {
+/** A Playwright Locator or a platform-agnostic Element from the repository. */
+export type Target = Locator | Element;
+
+/** Resolves a Target to a Playwright Locator. */
+function resolveLocator(target: Target): Locator {
     if ('_type' in target) {
         return (target as unknown as WebElement).locator;
     }
@@ -12,8 +15,8 @@ function resolveLocator(target: Locator | import('@civitas-cerebrum/element-repo
 }
 
 /**
- * The `Interactions` class provides a robust set of methods for interacting 
- * with DOM elements via Playwright Locators. It abstracts away common boilerplate 
+ * The `Interactions` class provides a robust set of methods for interacting
+ * with DOM elements via Playwright Locators. It abstracts away common boilerplate
  * and handles edge cases like overlapping elements or optional UI components.
  */
 export class Interactions {
@@ -25,17 +28,39 @@ export class Interactions {
      * @param page - The current Playwright Page object.
      * @param timeout - Optional override for the default element timeout.
      */
-    constructor(private page: Page, timeout: number = 30000) { 
+    constructor(private page: Page, timeout: number = 30000) {
         this.ELEMENT_TIMEOUT = timeout;
         this.utils = new Utils(this.ELEMENT_TIMEOUT);
     }
 
     /**
-     * Performs a standard Playwright click on the given locator.
+     * Performs a standard Playwright click on the given target.
      * Automatically waits for the element to be attached, visible, stable, and actionable.
-     * @param locator - The Playwright Locator pointing to the target element.
+     * @param target - A Playwright Locator or Element pointing to the target element.
+     * @param options - Optional click modifiers.
      */
-    async click(locator: Locator): Promise<void> {
+    async click(target: Target, options?: ClickOptions): Promise<boolean | void> {
+        const locator = resolveLocator(target);
+
+        if (options?.ifPresent) {
+            if (await locator.isVisible()) {
+                if (options?.withoutScrolling) {
+                    await this.utils.waitForState(locator, 'attached');
+                    await locator.dispatchEvent('click');
+                } else {
+                    await locator.click({ timeout: this.ELEMENT_TIMEOUT });
+                }
+                return true;
+            }
+            return false;
+        }
+
+        if (options?.withoutScrolling) {
+            await this.utils.waitForState(locator, 'attached');
+            await locator.dispatchEvent('click');
+            return;
+        }
+
         await this.utils.waitForState(locator, 'visible');
         await locator.click({ timeout: this.ELEMENT_TIMEOUT });
     }
@@ -44,44 +69,43 @@ export class Interactions {
      * Dispatches a native 'click' event directly to the element.
      * This bypasses Playwright's default scrolling and intersection observer checks.
      * Highly useful for clicking elements that might be artificially obscured by sticky headers or transparent overlays.
-     * @param locator - The Playwright Locator pointing to the target element.
+     * @param target - A Playwright Locator or Element pointing to the target element.
+     * @deprecated Use `click(target, { withoutScrolling: true })` instead.
      */
-    async clickWithoutScrolling(locator: Locator): Promise<void> {
-        await this.utils.waitForState(locator, 'attached');
-        await locator.dispatchEvent('click');
+    async clickWithoutScrolling(target: Target): Promise<void> {
+        await this.click(target, { withoutScrolling: true });
     }
 
     /**
      * Checks if an element is visible before attempting to click it.
      * If the element is hidden or not in the DOM, it safely skips the action
      * without failing the test. Great for optional elements like cookie banners or promotional pop-ups.
-     * @param locator - The Playwright Locator pointing to the target element.
+     * @param target - A Playwright Locator or Element pointing to the target element.
      * @returns `true` if the element was visible and clicked, `false` if it was skipped.
+     * @deprecated Use `click(target, { ifPresent: true })` instead.
      */
-    async clickIfPresent(locator: Locator): Promise<boolean> {
-        if (await locator.isVisible()) {
-            await locator.click({ timeout: this.ELEMENT_TIMEOUT });
-            return true;
-        }
-        return false;
+    async clickIfPresent(target: Target): Promise<boolean> {
+        return await this.click(target, { ifPresent: true }) as boolean;
     }
 
     /**
      * Clears any existing value in the target input field and types the provided text.
-     * @param locator - The Playwright Locator pointing to the input element.
+     * @param target - A Playwright Locator or Element pointing to the input element.
      * @param text - The string to type into the input field.
      */
-    async fill(locator: Locator, text: string): Promise<void> {
+    async fill(target: Target, text: string): Promise<void> {
+        const locator = resolveLocator(target);
         await this.utils.waitForState(locator, 'visible');
         await locator.fill(text, { timeout: this.ELEMENT_TIMEOUT });
     }
 
     /**
      * Uploads a local file to an `<input type="file">` element.
-     * @param locator - The Playwright Locator pointing to the file input element.
+     * @param target - A Playwright Locator or Element pointing to the file input element.
      * @param filePath - The local file system path to the file you want to upload.
      */
-    async uploadFile(locator: Locator, filePath: string): Promise<void> {
+    async uploadFile(target: Target, filePath: string): Promise<void> {
+        const locator = resolveLocator(target);
         await this.utils.waitForState(locator, 'attached');
         await locator.setInputFiles(filePath, { timeout: this.ELEMENT_TIMEOUT });
     }
@@ -89,15 +113,16 @@ export class Interactions {
     /**
      * Unified method to interact with `<select>` dropdown elements based on the specified `DropdownSelectType`.
      * If no options are provided, it safely defaults to randomly selecting an enabled, non-empty option.
-     * @param locator - The Playwright Locator pointing to the `<select>` element.
+     * @param target - A Playwright Locator or Element pointing to the `<select>` element.
      * @param options - Configuration specifying whether to select by 'random', 'index', or 'value'.
      * @returns A promise that resolves to the exact 'value' attribute of the newly selected option.
      * @throws Error if 'value' or 'index' is missing when their respective types are chosen, or if no enabled options exist.
      */
     async selectDropdown(
-        locator: Locator,
+        target: Target,
         options: DropdownSelectOptions = { type: DropdownSelectType.RANDOM }
     ): Promise<string> {
+        const locator = resolveLocator(target);
         await this.utils.waitForState(locator, 'visible');
         const type = options.type ?? DropdownSelectType.RANDOM;
 
@@ -141,36 +166,39 @@ export class Interactions {
 
     /**
      * Hovers over the specified element. Useful for triggering dropdowns or tooltips.
-     * @param locator - The Playwright Locator pointing to the target element.
+     * @param target - A Playwright Locator or Element pointing to the target element.
      */
-    async hover(locator: Locator): Promise<void> {
+    async hover(target: Target): Promise<void> {
+        const locator = resolveLocator(target);
         await this.utils.waitForState(locator, 'visible');
         await locator.hover({ timeout: this.ELEMENT_TIMEOUT });
     }
 
     /**
      * Scrolls the element into view if it is not already visible in the viewport.
-     * @param locator - The Playwright Locator pointing to the target element.
+     * @param target - A Playwright Locator or Element pointing to the target element.
      */
-    async scrollIntoView(locator: Locator): Promise<void> {
+    async scrollIntoView(target: Target): Promise<void> {
+        const locator = resolveLocator(target);
         await this.utils.waitForState(locator, 'attached');
         await locator.scrollIntoViewIfNeeded({ timeout: this.ELEMENT_TIMEOUT });
     }
 
     /**
     * Drags an element either to a specified target element, a target element with an offset, or by a coordinate offset.
-    * @param locator - The Playwright Locator pointing to the element to drag.
+    * @param target - A Playwright Locator or Element pointing to the element to drag.
     * @param options - Configuration specifying a 'targetLocator', offsets, or both.
     */
-    async dragAndDrop(locator: Locator, options: DragAndDropOptions): Promise<void> {
+    async dragAndDrop(target: Target, options: DragAndDropOptions): Promise<void> {
+        const locator = resolveLocator(target);
         await this.utils.waitForState(locator, 'visible');
 
         if (options.target) {
-            const target = resolveLocator(options.target);
-            await this.utils.waitForState(target, 'visible');
+            const dropTarget = resolveLocator(options.target);
+            await this.utils.waitForState(dropTarget, 'visible');
 
             if (options.xOffset !== undefined && options.yOffset !== undefined) {
-                const targetBox = await target.boundingBox();
+                const targetBox = await dropTarget.boundingBox();
                 if (!targetBox) {
                     throw new Error(`[Action] Error -> Unable to get bounding box for target element.`);
                 }
@@ -180,14 +208,14 @@ export class Interactions {
                     y: (targetBox.height / 2) + options.yOffset
                 };
 
-                await locator.dragTo(target, {
+                await locator.dragTo(dropTarget, {
                     targetPosition,
                     timeout: this.ELEMENT_TIMEOUT
                 });
                 return;
             }
 
-            await locator.dragTo(target, { timeout: this.ELEMENT_TIMEOUT });
+            await locator.dragTo(dropTarget, { timeout: this.ELEMENT_TIMEOUT });
             return;
         }
 
@@ -214,16 +242,17 @@ export class Interactions {
     /**
        * Filters a locator list and returns the first element that contains the specified text.
        * If the element is not found, it prints the available text contents of the base locator for debugging.
-       * @param baseLocator The base Playwright Locator.
+       * @param baseTarget The base Playwright Locator or Element.
        * @param desiredText The string of text to search for within the elements.
        * @param strict If true, throws an error if the element is not found. Defaults to false.
        * @returns A promise that resolves to the matched Playwright Locator, or null if not found.
        */
     public async getByText(
-        baseLocator: Locator,
+        baseTarget: Target,
         desiredText: string,
         strict: boolean = false
     ): Promise<ReturnType<Page['locator']> | null> {
+        const baseLocator = resolveLocator(baseTarget);
         // Try case-sensitive match first
         const caseSensitive = baseLocator.filter({ hasText: desiredText }).first();
 
@@ -255,11 +284,12 @@ export class Interactions {
      * Types into the target element character by character with a specified delay.
      * Use this for OTP inputs, search-as-you-type fields, or when `fill()`
      * doesn't trigger necessary keyboard events (like 'keyup' or 'keydown').
-     * @param locator - The Playwright Locator pointing to the input element.
+     * @param target - A Playwright Locator or Element pointing to the input element.
      * @param text - The string of text to type sequentially.
      * @param delay - Time in milliseconds to wait between key presses. Defaults to 100ms.
      */
-    async typeSequentially(locator: Locator, text: string, delay: number = 100): Promise<void> {
+    async typeSequentially(target: Target, text: string, delay: number = 100): Promise<void> {
+        const locator = resolveLocator(target);
         await this.utils.waitForState(locator, 'visible');
         await locator.pressSequentially(text, {
             delay,
@@ -268,47 +298,52 @@ export class Interactions {
     }
 
     /**
-     * Performs a right-click (context menu) on the given locator.
-     * @param locator - The Playwright Locator pointing to the target element.
+     * Performs a right-click (context menu) on the given target.
+     * @param target - A Playwright Locator or Element pointing to the target element.
      */
-    async rightClick(locator: Locator): Promise<void> {
+    async rightClick(target: Target): Promise<void> {
+        const locator = resolveLocator(target);
         await this.utils.waitForState(locator, 'visible');
         await locator.click({ button: 'right', timeout: this.ELEMENT_TIMEOUT });
     }
 
     /**
-     * Performs a double-click on the given locator.
-     * @param locator - The Playwright Locator pointing to the target element.
+     * Performs a double-click on the given target.
+     * @param target - A Playwright Locator or Element pointing to the target element.
      */
-    async doubleClick(locator: Locator): Promise<void> {
+    async doubleClick(target: Target): Promise<void> {
+        const locator = resolveLocator(target);
         await this.utils.waitForState(locator, 'visible');
         await locator.dblclick({ timeout: this.ELEMENT_TIMEOUT });
     }
 
     /**
      * Checks a checkbox or radio button. This is idempotent — if already checked, it does nothing.
-     * @param locator - The Playwright Locator pointing to the checkbox/radio element.
+     * @param target - A Playwright Locator or Element pointing to the checkbox/radio element.
      */
-    async check(locator: Locator): Promise<void> {
+    async check(target: Target): Promise<void> {
+        const locator = resolveLocator(target);
         await this.utils.waitForState(locator, 'visible');
         await locator.check({ timeout: this.ELEMENT_TIMEOUT });
     }
 
     /**
      * Unchecks a checkbox. This is idempotent — if already unchecked, it does nothing.
-     * @param locator - The Playwright Locator pointing to the checkbox element.
+     * @param target - A Playwright Locator or Element pointing to the checkbox element.
      */
-    async uncheck(locator: Locator): Promise<void> {
+    async uncheck(target: Target): Promise<void> {
+        const locator = resolveLocator(target);
         await this.utils.waitForState(locator, 'visible');
         await locator.uncheck({ timeout: this.ELEMENT_TIMEOUT });
     }
 
     /**
      * Sets the value of a range/slider input element.
-     * @param locator - The Playwright Locator pointing to the range input element.
+     * @param target - A Playwright Locator or Element pointing to the range input element.
      * @param value - The numeric value to set.
      */
-    async setSliderValue(locator: Locator, value: number): Promise<void> {
+    async setSliderValue(target: Target, value: number): Promise<void> {
+        const locator = resolveLocator(target);
         await this.utils.waitForState(locator, 'visible');
         await locator.fill(String(value), { timeout: this.ELEMENT_TIMEOUT });
     }
@@ -324,20 +359,22 @@ export class Interactions {
 
     /**
      * Clears the value of an input or textarea element without filling it with new text.
-     * @param locator - The Playwright Locator pointing to the input element.
+     * @param target - A Playwright Locator or Element pointing to the input element.
      */
-    async clearInput(locator: Locator): Promise<void> {
+    async clearInput(target: Target): Promise<void> {
+        const locator = resolveLocator(target);
         await this.utils.waitForState(locator, 'visible');
         await locator.clear({ timeout: this.ELEMENT_TIMEOUT });
     }
 
     /**
      * Selects multiple options from a `<select multiple>` element by their `value` attributes.
-     * @param locator - The Playwright Locator pointing to the multi-select element.
+     * @param target - A Playwright Locator or Element pointing to the multi-select element.
      * @param values - An array of `value` attribute strings to select.
      * @returns An array of the actually selected `value` strings.
      */
-    async selectMultiple(locator: Locator, values: string[]): Promise<string[]> {
+    async selectMultiple(target: Target, values: string[]): Promise<string[]> {
+        const locator = resolveLocator(target);
         await this.utils.waitForState(locator, 'visible');
         return await locator.selectOption(
             values.map(v => ({ value: v })),
@@ -352,17 +389,18 @@ export class Interactions {
      * This is the core utility behind `clickListedElement`, `verifyListedElement`,
      * and `getListedElementData` in the Steps API.
      *
-     * @param baseLocator - A Playwright Locator that resolves to the list of elements (e.g. table rows, list items).
+     * @param baseTarget - A Playwright Locator or Element that resolves to the list of elements (e.g. table rows, list items).
      * @param options - Match criteria and optional child targeting. Must include either `text` or `attribute`.
      * @param repo - Optional ElementRepository instance, required when `options.child` is a page-repo reference.
      * @returns The resolved Playwright Locator for the matched (and optionally child-targeted) element.
      * @throws Error if neither `text` nor `attribute` is specified, or if no matching element is found.
      */
     async getListedElement(
-        baseLocator: Locator,
+        baseTarget: Target,
         options: ListedElementMatch,
-        repo?: { getSelector(pageName: string, elementName: string): string }
+        repo?: { getSelector(elementName: string, pageName: string): string }
     ): Promise<Locator> {
+        const baseLocator = resolveLocator(baseTarget);
         let matched: Locator;
 
         if (options.text) {
@@ -395,7 +433,7 @@ export class Interactions {
         if (!repo) {
             throw new Error('An ElementRepository instance is required when "child" is a page-repository reference.');
         }
-        const childSelector = repo.getSelector(options.child.pageName, options.child.elementName);
+        const childSelector = repo.getSelector(options.child.elementName, options.child.pageName);
         return matched.locator(childSelector);
     }
 }

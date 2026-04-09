@@ -189,14 +189,14 @@ test.describe('TC_054: getListedElement (raw) — child variants and error cases
     });
 
     await test.step('getListedElement with text match', async () => {
-      const baseLocator = page.locator(repo.getSelector('TablePage', 'rows'));
+      const baseLocator = page.locator(repo.getSelector('rows', 'TablePage'));
       const row = await interactions.interact.getListedElement(baseLocator, { text: 'Alice' }, repo);
       const text = await row.textContent();
       expect(text).toContain('Alice');
     });
 
     await test.step('getListedElement with attribute match', async () => {
-      const baseLocator = page.locator(repo.getSelector('TablePage', 'rows'));
+      const baseLocator = page.locator(repo.getSelector('rows', 'TablePage'));
       const row = await interactions.interact.getListedElement(baseLocator, {
         attribute: { name: 'data-testid', value: 'table-row-1' }
       }, repo);
@@ -205,7 +205,7 @@ test.describe('TC_054: getListedElement (raw) — child variants and error cases
     });
 
     await test.step('getListedElement with child as page-repo reference', async () => {
-      const baseLocator = page.locator(repo.getSelector('TablePage', 'rows'));
+      const baseLocator = page.locator(repo.getSelector('rows', 'TablePage'));
       const child = await interactions.interact.getListedElement(baseLocator, {
         text: 'Alice',
         child: { pageName: 'TablePage', elementName: 'rowCheckboxes' }
@@ -214,7 +214,7 @@ test.describe('TC_054: getListedElement (raw) — child variants and error cases
     });
 
     await test.step('getListedElement throws when child is page-repo ref but no repo provided', async () => {
-      const baseLocator = page.locator(repo.getSelector('TablePage', 'rows'));
+      const baseLocator = page.locator(repo.getSelector('rows', 'TablePage'));
       let errorThrown = false;
       try {
         await interactions.interact.getListedElement(baseLocator, {
@@ -229,7 +229,7 @@ test.describe('TC_054: getListedElement (raw) — child variants and error cases
     });
 
     await test.step('getListedElement throws when neither text nor attribute provided', async () => {
-      const baseLocator = page.locator(repo.getSelector('TablePage', 'rows'));
+      const baseLocator = page.locator(repo.getSelector('rows', 'TablePage'));
       let errorThrown = false;
       try {
         await interactions.interact.getListedElement(baseLocator, {}, repo);

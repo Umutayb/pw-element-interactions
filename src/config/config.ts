@@ -1,5 +1,5 @@
 import { config as dotenvConfig } from 'dotenv';
-import { EmailCredentials } from '@civitas-cerebrum/email-client';
+import { EmailClientConfig } from '@civitas-cerebrum/email-client';
 
 // Load .env variables. If process.env variables already exist (like in CI),
 // dotenv will safely ignore them and keep the CI values.
@@ -24,15 +24,19 @@ export function validateEmailEnv(): void {
   }
 }
 
-export function loadEmailConfig(): EmailCredentials {
+export function loadEmailConfig(): EmailClientConfig {
   validateEmailEnv();
 
   return {
-    senderEmail: process.env.SENDER_EMAIL!,
-    senderPassword: process.env.SENDER_PASSWORD!,
-    senderSmtpHost: process.env.SENDER_SMTP_HOST!,
-    receiverEmail: process.env.RECEIVER_EMAIL!,
-    receiverPassword: process.env.RECEIVER_PASSWORD!,
+    smtp: {
+      email: process.env.SENDER_EMAIL!,
+      password: process.env.SENDER_PASSWORD!,
+      host: process.env.SENDER_SMTP_HOST!,
+    },
+    imap: {
+      email: process.env.RECEIVER_EMAIL!,
+      password: process.env.RECEIVER_PASSWORD!,
+    },
   };
 }
 

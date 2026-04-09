@@ -1,10 +1,11 @@
 import { Page, Locator, Response } from '@playwright/test';
-import { ElementRepository, Element, WebElement } from '@civitas-cerebrum/element-repository';
+import { ElementRepository, Element, WebElement, ElementResolutionOptions, SelectionStrategy } from '@civitas-cerebrum/element-repository';
 import { ElementInteractions } from '../interactions/facade/ElementInteractions';
 import { Utils } from '../utils/ElementUtilities';
-import { EmailCredentials, EmailClientConfig, EmailSendOptions, EmailReceiveOptions, ReceivedEmail, EmailMarkOptions, EmailMarkAction, EmailFilter } from '@civitas-cerebrum/email-client';
-import { DropdownSelectOptions, TextVerifyOptions, CountVerifyOptions, DragAndDropOptions, ListedElementOptions, ListedElementMatch, VerifyListedOptions, GetListedDataOptions, FillFormValue, GetAllOptions, ScreenshotOptions } from '../enum/Options';
+import { EmailClientConfig, EmailSendOptions, EmailReceiveOptions, ReceivedEmail, EmailMarkOptions, EmailMarkAction, EmailFilter } from '@civitas-cerebrum/email-client';
+import { StepOptions, DropdownSelectOptions, TextVerifyOptions, CountVerifyOptions, DragAndDropOptions, ListedElementOptions, ListedElementMatch, VerifyListedOptions, GetListedDataOptions, FillFormValue, GetAllOptions, ScreenshotOptions } from '../enum/Options';
 import { logger } from '../logger/Logger';
+import { ElementAction } from './ElementAction';
 
 /**
  * Extracts the underlying Playwright Locator from an Element wrapper.
@@ -31,36 +32,93 @@ const log = {
  * readable, and free of raw locators.
  */
 export class Steps {
+    private page: Page;
     private interact;
     private navigate;
     private extract;
     private verify;
     private utils;
     private email;
+    private timeout?: number;
 
     /**
-     * Initializes the Steps class with the required Playwright page and element repository.
-     * @param page - The current Playwright Page object.
-     * @param repo - An initialized instance of `ElementRepository` containing your locators.
+     * Initializes the Steps class with the element repository.
+     * The Playwright Page is obtained from the repository's driver.
+     * @param repo - An initialized instance of `ElementRepository` containing your locators and the bound driver.
      * @param options - Optional configuration: emailCredentials and/or timeout.
      */
     constructor(
-        private page: Page,
         private repo: ElementRepository,
-        options?: { emailCredentials?: EmailCredentials | EmailClientConfig; timeout?: number }
+        options?: { emailCredentials?: EmailClientConfig; timeout?: number }
     ) {
+        this.page = repo.driver;
         const { emailCredentials, timeout } = options ?? {};
-        const interactions = new ElementInteractions(page, { emailCredentials, timeout });
+        const interactions = new ElementInteractions(this.page, { emailCredentials, timeout });
         this.interact = interactions.interact;
         this.navigate = interactions.navigate;
         this.extract = interactions.extract;
         this.verify = interactions.verify;
+        this.timeout = timeout;
         this.utils = new Utils(timeout);
         this.email = interactions.email;
     }
 
+    /**
+     * Maps StepOptions to ElementResolutionOptions for the repository.
+     */
+    private toResolutionOptions(options?: StepOptions): ElementResolutionOptions | undefined {
+        if (!options?.strategy || options.strategy === 'first') return undefined;
+
+        switch (options.strategy) {
+            case 'random':
+                return { strategy: SelectionStrategy.RANDOM };
+            case 'index':
+                return { strategy: SelectionStrategy.INDEX, index: options.index };
+            case 'text':
+                return { strategy: SelectionStrategy.TEXT, value: options.text ?? options.value };
+            case 'attribute':
+                return { strategy: SelectionStrategy.ATTRIBUTE, attribute: options.attribute, value: options.value };
+            case 'all':
+                return { strategy: SelectionStrategy.ALL };
+            default:
+                return undefined;
+        }
+    }
+
+    /**
+     * Returns resolution options that force the ALL strategy (no .first() narrowing).
+     * Used by collection-based methods like getCount, verifyCount, getAll, verifyOrder.
+     */
+    private toAllResolutionOptions(options?: StepOptions): ElementResolutionOptions {
+        if (options?.strategy && options.strategy !== 'first') {
+            return this.toResolutionOptions(options) ?? { strategy: SelectionStrategy.ALL };
+        }
+        return { strategy: SelectionStrategy.ALL };
+    }
+
+    /**
+     * Returns a fluent builder for performing actions on a repository element.
+     * Chain a strategy selector (optional) and terminate with an action.
+     *
+     * @param elementName - The element name as defined under the given page.
+     * @param pageName - The page name as defined in `page-repository.json`.
+     * @returns An `ElementAction` builder.
+     *
+     * @example
+     * ```ts
+     * await steps.on('mainNavItems', 'HomePage').first().hover();
+     * await steps.on('subcategoryItems', 'HomePage').random().click({ withoutScrolling: true });
+     * await steps.on('productCards', 'CollectionsPage').verifyPresence();
+     * const price = await steps.on('price', 'ProductPage').nth(0).getText();
+     * ```
+     */
+    on(elementName: string, pageName: string): ElementAction {
+        const interactions = new ElementInteractions(this.page, {});
+        return new ElementAction(this.repo, elementName, pageName, interactions, this.timeout);
+    }
+
     // ==========================================
-    // 🧭 NAVIGATION STEPS
+    // NAVIGATION STEPS
     // ==========================================
 
     /**
@@ -137,19 +195,22 @@ export class Steps {
     }
 
     // ==========================================
-    // 🖱️ INTERACTION STEPS
+    // INTERACTION STEPS
     // ==========================================
 
     /**
      * Clicks on an element identified by page and element name from the repository.
-     * The element is scrolled into view before clicking.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
+     * @param options - Optional step options for element resolution and click modifiers.
      */
-    async click(pageName: string, elementName: string): Promise<void> {
+    async click(pageName: string, elementName: string, options?: StepOptions): Promise<boolean | void> {
         log.interact('Clicking on "%s" in "%s"', elementName, pageName);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        await this.interact.click(locator);
+        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        return await this.interact.click(element, {
+            withoutScrolling: options?.withoutScrolling,
+            ifPresent: options?.ifPresent,
+        });
     }
 
     /**
@@ -157,105 +218,113 @@ export class Steps {
      * Useful for elements in fixed or sticky positions (e.g. headers, floating buttons).
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
+     * @param options - Optional step options for element resolution.
      */
-    async clickWithoutScrolling(pageName: string, elementName: string): Promise<void> {
+    async clickWithoutScrolling(pageName: string, elementName: string, options?: StepOptions): Promise<void> {
         log.interact('Clicking (no scroll) on "%s" in "%s"', elementName, pageName);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        await this.interact.clickWithoutScrolling(locator);
+        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        await this.interact.click(element, { withoutScrolling: true });
     }
 
     /**
      * Clicks a random visible element from a group of elements matching the locator.
-     * Useful for lists, grids, or repeated components where any item is acceptable.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
+     * @param options - Optional step options.
      * @throws Error if no visible element is found for the given locator.
      */
-    async clickRandom(pageName: string, elementName: string): Promise<void> {
+    async clickRandom(pageName: string, elementName: string, options?: StepOptions): Promise<void> {
         log.interact('Clicking a random element from "%s" in "%s"', elementName, pageName);
-        const element = await this.repo.getRandom(this.page, pageName, elementName);
+        const element = await this.repo.getRandom(elementName, pageName);
         if (!element) throw new Error(`No visible element found for "${elementName}" in "${pageName}"`);
-        await this.interact.click(toLocator(element));
+        await this.interact.click(element, {
+            withoutScrolling: options?.withoutScrolling,
+        });
     }
 
     /**
      * Clicks on an element only if it is present in the DOM.
-     * Does nothing if the element is not found — no error is thrown.
-     * Useful for dismissing optional modals, banners, or cookie notices.
+     * Does nothing if the element is not found.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
+     * @param options - Optional step options for element resolution.
      */
-    async clickIfPresent(pageName: string, elementName: string): Promise<boolean> {
+    async clickIfPresent(pageName: string, elementName: string, options?: StepOptions): Promise<boolean> {
         log.interact('Clicking on "%s" in "%s" (if present)', elementName, pageName);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        return this.interact.clickIfPresent(locator);
+        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        return await this.interact.click(element, { ifPresent: true }) as boolean;
     }
 
     /**
      * Right-clicks on an element identified by page and element name from the repository.
-     * Triggers the browser's context menu event on the element.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
+     * @param options - Optional step options for element resolution.
      */
-    async rightClick(pageName: string, elementName: string): Promise<void> {
+    async rightClick(pageName: string, elementName: string, options?: StepOptions): Promise<void> {
         log.interact('Right-clicking on "%s" in "%s"', elementName, pageName);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        await this.interact.rightClick(locator);
+        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        await this.interact.rightClick(element);
     }
 
     /**
      * Double-clicks on an element identified by page and element name from the repository.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
+     * @param options - Optional step options for element resolution.
      */
-    async doubleClick(pageName: string, elementName: string): Promise<void> {
+    async doubleClick(pageName: string, elementName: string, options?: StepOptions): Promise<void> {
         log.interact('Double-clicking on "%s" in "%s"', elementName, pageName);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        await this.interact.doubleClick(locator);
+        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        await this.interact.doubleClick(element);
     }
 
     /**
-     * Checks a checkbox or radio button. Idempotent — does nothing if already checked.
+     * Checks a checkbox or radio button. Idempotent.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
+     * @param options - Optional step options for element resolution.
      */
-    async check(pageName: string, elementName: string): Promise<void> {
+    async check(pageName: string, elementName: string, options?: StepOptions): Promise<void> {
         log.interact('Checking "%s" in "%s"', elementName, pageName);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        await this.interact.check(locator);
+        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        await this.interact.check(element);
     }
 
     /**
-     * Unchecks a checkbox. Idempotent — does nothing if already unchecked.
+     * Unchecks a checkbox. Idempotent.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
+     * @param options - Optional step options for element resolution.
      */
-    async uncheck(pageName: string, elementName: string): Promise<void> {
+    async uncheck(pageName: string, elementName: string, options?: StepOptions): Promise<void> {
         log.interact('Unchecking "%s" in "%s"', elementName, pageName);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        await this.interact.uncheck(locator);
+        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        await this.interact.uncheck(element);
     }
 
     /**
-     * Hovers over an element, triggering any hover-based UI effects (tooltips, menus, etc.).
+     * Hovers over an element, triggering any hover-based UI effects.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
+     * @param options - Optional step options for element resolution.
      */
-    async hover(pageName: string, elementName: string): Promise<void> {
+    async hover(pageName: string, elementName: string, options?: StepOptions): Promise<void> {
         log.interact('Hovering over "%s" in "%s"', elementName, pageName);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        await this.interact.hover(locator);
+        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        await this.interact.hover(element);
     }
 
     /**
      * Scrolls the specified element into the visible viewport.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
+     * @param options - Optional step options for element resolution.
      */
-    async scrollIntoView(pageName: string, elementName: string): Promise<void> {
+    async scrollIntoView(pageName: string, elementName: string, options?: StepOptions): Promise<void> {
         log.interact('Scrolling "%s" in "%s" into view', elementName, pageName);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        await this.interact.scrollIntoView(locator);
+        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        await this.interact.scrollIntoView(element);
     }
 
     /**
@@ -263,55 +332,57 @@ export class Steps {
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
      * @param text - The text to fill into the input field.
+     * @param options - Optional step options for element resolution.
      */
-    async fill(pageName: string, elementName: string, text: string): Promise<void> {
+    async fill(pageName: string, elementName: string, text: string, options?: StepOptions): Promise<void> {
         log.interact('Filling "%s" in "%s" with text: "%s"', elementName, pageName, text);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        await this.interact.fill(locator, text);
+        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        await this.interact.fill(element, text);
     }
 
     /**
      * Uploads a file to a file input element.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
-     * @param filePath - The path to the file to upload (e.g. `'tests/fixtures/file.pdf'`).
+     * @param filePath - The path to the file to upload.
+     * @param options - Optional step options for element resolution.
      */
-    async uploadFile(pageName: string, elementName: string, filePath: string): Promise<void> {
+    async uploadFile(pageName: string, elementName: string, filePath: string, options?: StepOptions): Promise<void> {
         log.interact('Uploading file "%s" to "%s" in "%s"', filePath, elementName, pageName);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
+        const locator = toLocator(await this.repo.get(elementName, pageName, this.toResolutionOptions(options)));
         await this.interact.uploadFile(locator, filePath);
     }
 
     /**
      * Selects an option from a `<select>` dropdown element.
-     * By default, a random option is selected. Use the `options` parameter
-     * to select by value, index, or explicitly random.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
-     * @param options - Optional selection strategy (random, by value, or by index).
+     * @param dropdownOptions - Optional selection strategy (random, by value, or by index).
+     * @param options - Optional step options for element resolution.
      * @returns The value of the selected option.
      */
     async selectDropdown(
         pageName: string,
         elementName: string,
-        options?: DropdownSelectOptions
+        dropdownOptions?: DropdownSelectOptions,
+        options?: StepOptions
     ): Promise<string> {
-        log.interact('Selecting dropdown option for "%s" in "%s" using options: %O', elementName, pageName, options ?? 'default (random)');
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        return await this.interact.selectDropdown(locator, options);
+        log.interact('Selecting dropdown option for "%s" in "%s"', elementName, pageName);
+        const locator = toLocator(await this.repo.get(elementName, pageName, this.toResolutionOptions(options)));
+        return await this.interact.selectDropdown(locator, dropdownOptions);
     }
 
     /**
      * Performs a drag-and-drop action on an element.
-     * The target can be specified as another locator or as x/y pixel offsets.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
-     * @param options - Drag target: either `{ target: Locator }` or `{ xOffset, yOffset }`.
+     * @param dragOptions - Drag target: either `{ target: Locator }` or `{ xOffset, yOffset }`.
+     * @param options - Optional step options for element resolution.
      */
-    async dragAndDrop(pageName: string, elementName: string, options: DragAndDropOptions): Promise<void> {
+    async dragAndDrop(pageName: string, elementName: string, dragOptions: DragAndDropOptions, options?: StepOptions): Promise<void> {
         log.interact('Dragging and dropping "%s" in "%s"', elementName, pageName);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        await this.interact.dragAndDrop(locator, options);
+        const locator = toLocator(await this.repo.get(elementName, pageName, this.toResolutionOptions(options)));
+        await this.interact.dragAndDrop(locator, dragOptions);
     }
 
     /**
@@ -320,14 +391,14 @@ export class Steps {
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
      * @param elementText - The visible text of the specific list item to drag.
-     * @param options - Drag target: either `{ target: Locator }` or `{ xOffset, yOffset }`.
+     * @param dragOptions - Drag target: either `{ target: Locator }` or `{ xOffset, yOffset }`.
      * @throws Error if no element with the specified text is found.
      */
-    async dragAndDropListedElement(pageName: string, elementName: string, elementText: string, options: DragAndDropOptions): Promise<void> {
+    async dragAndDropListedElement(pageName: string, elementName: string, elementText: string, dragOptions: DragAndDropOptions): Promise<void> {
         log.interact('Dragging and dropping "%s" in "%s"', elementText, pageName);
-        const element = await this.repo.getByText(this.page, pageName, elementName, elementText);
+        const element = await this.repo.getByText(elementName, pageName, elementText);
         if (!element) throw new Error(`No element with text "${elementText}" found for "${elementName}" in "${pageName}"`);
-        await this.interact.dragAndDrop(toLocator(element), options);
+        await this.interact.dragAndDrop(toLocator(element), dragOptions);
     }
 
     /**
@@ -335,16 +406,16 @@ export class Steps {
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
      * @param value - The numeric value to set on the slider.
+     * @param options - Optional step options for element resolution.
      */
-    async setSliderValue(pageName: string, elementName: string, value: number): Promise<void> {
+    async setSliderValue(pageName: string, elementName: string, value: number, options?: StepOptions): Promise<void> {
         log.interact('Setting slider "%s" in "%s" to value: %d', elementName, pageName, value);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
+        const locator = toLocator(await this.repo.get(elementName, pageName, this.toResolutionOptions(options)));
         await this.interact.setSliderValue(locator, value);
     }
 
     /**
      * Presses a keyboard key at the page level (not bound to a specific element).
-     * Useful for keyboard shortcuts like Escape, Enter, Tab, or combos like 'Control+A'.
      * @param key - The key to press (e.g. `'Escape'`, `'Enter'`, `'Tab'`, `'Control+A'`).
      */
     async pressKey(key: string): Promise<void> {
@@ -352,62 +423,182 @@ export class Steps {
         await this.interact.pressKey(key);
     }
 
+    /**
+     * Types text into an input field one character at a time with a delay between keystrokes.
+     * @param pageName - The page name as defined in `page-repository.json`.
+     * @param elementName - The element name as defined under the given page.
+     * @param text - The text to type character by character.
+     * @param delay - The delay in milliseconds between each keystroke. Defaults to `100`.
+     * @param options - Optional step options for element resolution.
+     */
+    async typeSequentially(
+        pageName: string,
+        elementName: string,
+        text: string,
+        delay: number = 100,
+        options?: StepOptions
+    ): Promise<void> {
+        log.interact('Typing "%s" sequentially into "%s" in "%s" (delay: %dms)', text, elementName, pageName, delay);
+        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        await this.interact.typeSequentially(element, text, delay);
+    }
+
+    /**
+     * Clears the value of an input or textarea element without filling it with new text.
+     * @param pageName - The page name as defined in `page-repository.json`.
+     * @param elementName - The element name as defined under the given page.
+     * @param options - Optional step options for element resolution.
+     */
+    async clearInput(pageName: string, elementName: string, options?: StepOptions): Promise<void> {
+        log.interact('Clearing input "%s" in "%s"', elementName, pageName);
+        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        await this.interact.clearInput(element);
+    }
+
+    /**
+     * Selects multiple options from a `<select multiple>` element by their `value` attributes.
+     * @param pageName - The page name as defined in `page-repository.json`.
+     * @param elementName - The element name as defined under the given page.
+     * @param values - An array of `value` attribute strings to select simultaneously.
+     * @param options - Optional step options for element resolution.
+     * @returns An array of the actually selected `value` strings.
+     */
+    async selectMultiple(pageName: string, elementName: string, values: string[], options?: StepOptions): Promise<string[]> {
+        log.interact('Selecting multiple values on "%s" in "%s": %O', elementName, pageName, values);
+        const locator = toLocator(await this.repo.get(elementName, pageName, this.toResolutionOptions(options)));
+        return await this.interact.selectMultiple(locator, values);
+    }
+
     // ==========================================
-    // 📊 DATA EXTRACTION STEPS
+    // DATA EXTRACTION STEPS
     // ==========================================
 
     /**
      * Retrieves the visible text content of an element.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
+     * @param options - Optional step options for element resolution.
      * @returns The text content of the element, or `null` if unavailable.
      */
-    async getText(pageName: string, elementName: string): Promise<string | null> {
+    async getText(pageName: string, elementName: string, options?: StepOptions): Promise<string | null> {
         log.extract('Getting text from "%s" in "%s"', elementName, pageName);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        return await this.extract.getText(locator);
+        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        return await this.extract.getText(element);
     }
 
     /**
      * Retrieves the value of a specific HTML attribute from an element.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
-     * @param attributeName - The name of the attribute to retrieve (e.g. `'href'`, `'src'`, `'data-id'`).
+     * @param attributeName - The name of the attribute to retrieve.
+     * @param options - Optional step options for element resolution.
      * @returns The attribute value, or `null` if the attribute does not exist.
      */
-    async getAttribute(pageName: string, elementName: string, attributeName: string): Promise<string | null> {
+    async getAttribute(pageName: string, elementName: string, attributeName: string, options?: StepOptions): Promise<string | null> {
         log.extract('Getting attribute "%s" from "%s" in "%s"', attributeName, elementName, pageName);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        return await this.extract.getAttribute(locator, attributeName);
+        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        return await this.extract.getAttribute(element, attributeName);
+    }
+
+    /**
+     * Returns the number of DOM elements matching the locator.
+     * @param pageName - The page name as defined in `page-repository.json`.
+     * @param elementName - The element name as defined under the given page.
+     * @param options - Optional step options for element resolution.
+     * @returns The count of matching elements.
+     */
+    async getCount(pageName: string, elementName: string, options?: StepOptions): Promise<number> {
+        log.extract('Getting count of "%s" in "%s"', elementName, pageName);
+        const element = await this.repo.get(elementName, pageName, this.toAllResolutionOptions(options));
+        return await this.extract.getCount(element);
+    }
+
+    /**
+     * Retrieves the current value of an input, textarea, or select element.
+     * @param pageName - The page name as defined in `page-repository.json`.
+     * @param elementName - The element name as defined under the given page.
+     * @param options - Optional step options for element resolution.
+     * @returns The current value of the input.
+     */
+    async getInputValue(pageName: string, elementName: string, options?: StepOptions): Promise<string> {
+        log.extract('Getting input value of "%s" in "%s"', elementName, pageName);
+        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        return await this.extract.getInputValue(element);
+    }
+
+    /**
+     * Retrieves a computed CSS property value from an element.
+     * @param pageName - The page name as defined in `page-repository.json`.
+     * @param elementName - The element name as defined under the given page.
+     * @param property - The CSS property name.
+     * @param options - Optional step options for element resolution.
+     * @returns The computed value as a string.
+     */
+    async getCssProperty(pageName: string, elementName: string, property: string, options?: StepOptions): Promise<string> {
+        log.extract('Getting CSS "%s" from "%s" in "%s"', property, elementName, pageName);
+        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        return await this.extract.getCssProperty(element, property);
+    }
+
+    /**
+     * Extracts text content or attribute values from all elements matching the locator.
+     * @param pageName - The page name as defined in `page-repository.json`.
+     * @param elementName - The element name as defined under the given page.
+     * @param getAllOptions - Optional extraction configuration.
+     * @param options - Optional step options for element resolution.
+     * @returns An array of extracted strings.
+     */
+    async getAll(pageName: string, elementName: string, getAllOptions?: GetAllOptions, options?: StepOptions): Promise<string[]> {
+        log.extract('Extracting all from "%s" in "%s"', elementName, pageName);
+        let locator = toLocator(await this.repo.get(elementName, pageName, this.toAllResolutionOptions(options)));
+
+        if (getAllOptions?.child) {
+            if (typeof getAllOptions.child === 'string') {
+                locator = locator.locator(getAllOptions.child);
+            } else {
+                const childSelector = this.repo.getSelector(getAllOptions.child.elementName, getAllOptions.child.pageName);
+                locator = locator.locator(childSelector);
+            }
+        }
+
+        if (getAllOptions?.extractAttribute) {
+            const elements = await locator.all();
+            const values = await Promise.all(elements.map(el => el.getAttribute(getAllOptions.extractAttribute!)));
+            return values.filter((v): v is string => v !== null);
+        }
+
+        return await this.extract.getAllTexts(locator);
     }
 
     // ==========================================
-    // ✅ VERIFICATION STEPS
+    // VERIFICATION STEPS
     // ==========================================
 
     /**
      * Asserts that the element is present and visible in the DOM.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
+     * @param options - Optional step options for element resolution.
      */
-    async verifyPresence(pageName: string, elementName: string): Promise<void> {
+    async verifyPresence(pageName: string, elementName: string, options?: StepOptions): Promise<void> {
         log.verify('Verifying presence of "%s" in "%s"', elementName, pageName);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        await this.verify.presence(locator);
+        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        await this.verify.presence(element);
     }
 
     /**
      * Checks whether an element is currently present and visible in the DOM.
-     * Returns a boolean instead of throwing — useful for conditional logic.
+     * Returns a boolean instead of throwing.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
+     * @param options - Optional step options for element resolution.
      * @returns `true` if the element is visible, `false` otherwise.
      */
-    async isPresent(pageName: string, elementName: string): Promise<boolean> {
+    async isPresent(pageName: string, elementName: string, options?: StepOptions): Promise<boolean> {
         log.verify('Checking presence of "%s" in "%s"', elementName, pageName);
         try {
-            const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-            return await locator.isVisible();
+            const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+            return await element.isVisible();
         } catch {
             return false;
         }
@@ -415,54 +606,55 @@ export class Steps {
 
     /**
      * Asserts that the element is not present in the DOM.
-     * Uses the raw selector string rather than a locator to avoid waiting for an element that should not exist.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
+     * @param options - Optional step options (strategy not applicable for absence checks).
      */
-    async verifyAbsence(pageName: string, elementName: string): Promise<void> {
+    async verifyAbsence(pageName: string, elementName: string, options?: StepOptions): Promise<void> {
         log.verify('Verifying absence of "%s" in "%s"', elementName, pageName);
-        const selector = await this.repo.getSelector(pageName, elementName);
+        const selector = this.repo.getSelector(elementName, pageName);
         await this.verify.absence(selector);
     }
 
     /**
      * Asserts that an element's text content matches the expected value.
-     * Can also verify that the text is simply not empty.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
-     * @param expectedText - The exact text to match against. Omit when using `{ notEmpty: true }`.
-     * @param options - Optional verification options (e.g. `{ notEmpty: true }` to only check non-emptiness).
+     * @param expectedText - The exact text to match against.
+     * @param verifyOptions - Optional verification options (e.g. `{ notEmpty: true }`).
+     * @param options - Optional step options for element resolution.
      */
-    async verifyText(pageName: string, elementName: string, expectedText?: string, options?: TextVerifyOptions): Promise<void> {
-        const logDetail = options?.notEmpty ? 'is not empty' : `matches: "${expectedText}"`;
+    async verifyText(pageName: string, elementName: string, expectedText?: string, verifyOptions?: TextVerifyOptions, options?: StepOptions): Promise<void> {
+        const notEmpty = verifyOptions?.notEmpty || expectedText === undefined;
+        const logDetail = notEmpty ? 'is not empty' : `matches: "${expectedText}"`;
         log.verify('Verifying text of "%s" in "%s" %s', elementName, pageName, logDetail);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        await this.verify.text(locator, expectedText, options);
+        const locator = toLocator(await this.repo.get(elementName, pageName, this.toResolutionOptions(options)));
+        await this.verify.text(locator, expectedText, notEmpty ? { notEmpty: true } : verifyOptions);
     }
 
     /**
      * Asserts the number of elements matching the locator satisfies the given condition.
-     * Supports exact count, greaterThan, and lessThan comparisons.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
-     * @param options - Count condition: `{ exact: number }`, `{ greaterThan: number }`, or `{ lessThan: number }`.
+     * @param countOptions - Count condition.
+     * @param options - Optional step options for element resolution.
      */
-    async verifyCount(pageName: string, elementName: string, options: CountVerifyOptions): Promise<void> {
-        log.verify('Verifying count for "%s" in "%s" with options: %O', elementName, pageName, options);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        await this.verify.count(locator, options);
+    async verifyCount(pageName: string, elementName: string, countOptions: CountVerifyOptions, options?: StepOptions): Promise<void> {
+        log.verify('Verifying count for "%s" in "%s" with options: %O', elementName, pageName, countOptions);
+        const locator = toLocator(await this.repo.get(elementName, pageName, this.toAllResolutionOptions(options)));
+        await this.verify.count(locator, countOptions);
     }
 
     /**
-     * Asserts that all image elements matching the locator have loaded successfully
-     * (i.e. their `naturalWidth` is greater than 0).
+     * Asserts that all image elements matching the locator have loaded successfully.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
      * @param scroll - Whether to scroll each image into view before checking. Defaults to `true`.
+     * @param options - Optional step options for element resolution.
      */
-    async verifyImages(pageName: string, elementName: string, scroll: boolean = true): Promise<void> {
+    async verifyImages(pageName: string, elementName: string, scroll: boolean = true, options?: StepOptions): Promise<void> {
         log.verify('Verifying images for "%s" in "%s" (scroll: %s)', elementName, pageName, scroll);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
+        const locator = toLocator(await this.repo.get(elementName, pageName, this.toAllResolutionOptions(options)));
         await this.verify.images(locator, scroll);
     }
 
@@ -471,10 +663,11 @@ export class Steps {
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
      * @param expectedText - The substring expected to be found within the element's text.
+     * @param options - Optional step options for element resolution.
      */
-    async verifyTextContains(pageName: string, elementName: string, expectedText: string): Promise<void> {
+    async verifyTextContains(pageName: string, elementName: string, expectedText: string, options?: StepOptions): Promise<void> {
         log.verify('Verifying "%s" in "%s" contains text: "%s"', elementName, pageName, expectedText);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
+        const locator = toLocator(await this.repo.get(elementName, pageName, this.toResolutionOptions(options)));
         await this.verify.textContains(locator, expectedText);
     }
 
@@ -482,9 +675,8 @@ export class Steps {
      * Asserts that an element is in the specified state.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
-     * @param state - The expected state: `'enabled'`, `'disabled'`, `'editable'`, `'checked'`,
-     *   `'focused'`, `'visible'`, `'hidden'`, `'attached'`, or `'inViewport'`.
-     * @param timeout - Optional timeout in milliseconds, overrides the default ELEMENT_TIMEOUT.
+     * @param state - The expected state.
+     * @param timeout - Optional timeout in milliseconds.
      */
     async verifyState(
         pageName: string,
@@ -493,7 +685,7 @@ export class Steps {
         timeout?: number
     ): Promise<void> {
         log.verify('Verifying "%s" in "%s" is %s', elementName, pageName, state);
-        const locatorString = await this.repo.getSelector(pageName, elementName);
+        const locatorString = this.repo.getSelector(elementName, pageName);
         await this.verify.state(locatorString, state, timeout);
     }
 
@@ -501,19 +693,19 @@ export class Steps {
      * Asserts that an element has a specific HTML attribute with the expected value.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
-     * @param attributeName - The name of the HTML attribute to check (e.g. `'class'`, `'href'`, `'data-status'`).
+     * @param attributeName - The name of the HTML attribute to check.
      * @param expectedValue - The expected value of the attribute.
+     * @param options - Optional step options for element resolution.
      */
-    async verifyAttribute(pageName: string, elementName: string, attributeName: string, expectedValue: string): Promise<void> {
+    async verifyAttribute(pageName: string, elementName: string, attributeName: string, expectedValue: string, options?: StepOptions): Promise<void> {
         log.verify('Verifying "%s" in "%s" has attribute "%s" = "%s"', elementName, pageName, attributeName, expectedValue);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
+        const locator = toLocator(await this.repo.get(elementName, pageName, this.toResolutionOptions(options)));
         await this.verify.attribute(locator, attributeName, expectedValue);
     }
 
     /**
      * Asserts that the current page URL contains the specified substring.
-     * Useful for verifying navigation outcomes without matching the full URL.
-     * @param text - The substring expected to be found in the current URL (e.g. `'/dashboard'`).
+     * @param text - The substring expected to be found in the current URL.
      */
     async verifyUrlContains(text: string): Promise<void> {
         log.verify('Verifying current URL contains: "%s"', text);
@@ -522,14 +714,14 @@ export class Steps {
 
     /**
      * Asserts that an input, textarea, or select element has the expected value.
-     * Unlike `verifyText` which checks `textContent`, this checks the `value` property.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
      * @param expectedValue - The expected value of the input.
+     * @param options - Optional step options for element resolution.
      */
-    async verifyInputValue(pageName: string, elementName: string, expectedValue: string): Promise<void> {
+    async verifyInputValue(pageName: string, elementName: string, expectedValue: string, options?: StepOptions): Promise<void> {
         log.verify('Verifying input value of "%s" in "%s" matches: "%s"', elementName, pageName, expectedValue);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
+        const locator = toLocator(await this.repo.get(elementName, pageName, this.toResolutionOptions(options)));
         await this.verify.inputValue(locator, expectedValue);
     }
 
@@ -542,52 +734,74 @@ export class Steps {
         await this.verify.tabCount(expectedCount);
     }
 
+    /**
+     * Asserts that the text contents of all elements matching the locator appear
+     * in the exact order specified.
+     * @param pageName - The page name as defined in `page-repository.json`.
+     * @param elementName - The element name as defined under the given page.
+     * @param expectedTexts - The expected text values in their expected order.
+     * @param options - Optional step options for element resolution.
+     */
+    async verifyOrder(pageName: string, elementName: string, expectedTexts: string[], options?: StepOptions): Promise<void> {
+        log.verify('Verifying order of "%s" in "%s": %O', elementName, pageName, expectedTexts);
+        const locator = toLocator(await this.repo.get(elementName, pageName, this.toAllResolutionOptions(options)));
+        await this.verify.order(locator, expectedTexts);
+    }
+
+    /**
+     * Asserts that a computed CSS property of an element matches the expected value.
+     * @param pageName - The page name as defined in `page-repository.json`.
+     * @param elementName - The element name as defined under the given page.
+     * @param property - The CSS property name.
+     * @param expectedValue - The expected computed value.
+     * @param options - Optional step options for element resolution.
+     */
+    async verifyCssProperty(pageName: string, elementName: string, property: string, expectedValue: string, options?: StepOptions): Promise<void> {
+        log.verify('Verifying CSS "%s" of "%s" in "%s" = "%s"', property, elementName, pageName, expectedValue);
+        const locator = toLocator(await this.repo.get(elementName, pageName, this.toResolutionOptions(options)));
+        await this.verify.cssProperty(locator, property, expectedValue);
+    }
+
+    /**
+     * Asserts that the text contents of all elements matching the locator are sorted
+     * in the specified direction.
+     * @param pageName - The page name as defined in `page-repository.json`.
+     * @param elementName - The element name as defined under the given page.
+     * @param direction - `'asc'` for ascending or `'desc'` for descending.
+     * @param options - Optional step options for element resolution.
+     */
+    async verifyListOrder(pageName: string, elementName: string, direction: 'asc' | 'desc', options?: StepOptions): Promise<void> {
+        log.verify('Verifying "%s" in "%s" is sorted %s', elementName, pageName, direction);
+        const locator = toLocator(await this.repo.get(elementName, pageName, this.toAllResolutionOptions(options)));
+        await this.verify.listOrder(locator, direction);
+    }
+
     // ==========================================
-    // 📋 LISTED ELEMENT STEPS
+    // LISTED ELEMENT STEPS
     // ==========================================
 
     /**
-     * Clicks a specific element within a list (e.g. a table row, card, or list item)
-     * identified by its visible text or an HTML attribute. Optionally drills into a
-     * child element before clicking.
-     *
-     * The base locator is resolved from the repository using `pageName` and `elementName`,
-     * then filtered using the criteria in `options` to find the exact match.
-     *
+     * Clicks a specific element within a list identified by its visible text or an HTML attribute.
      * @param pageName - The page name as defined in `page-repository.json`.
-     * @param elementName - The element name as defined under the given page (should resolve to a list of elements).
-     * @param options - Match criteria: provide `text` to match by visible text, or `attribute` to match by an HTML
-     *   attribute name-value pair. Optionally include `child` (a CSS selector string or a `{ pageName, elementName }`
-     *   page-repository reference) to target a sub-element within the matched item.
-     * @throws Error if neither `text` nor `attribute` is provided, or if no matching element is found.
+     * @param elementName - The element name as defined under the given page.
+     * @param options - Match criteria.
      */
     async clickListedElement(pageName: string, elementName: string, options: ListedElementMatch): Promise<void> {
         log.interact('Clicking listed element in "%s" > "%s" with options: %O', pageName, elementName, options);
-        const baseLocator = toLocator(await this.repo.get(this.page, pageName, elementName));
+        const baseLocator = toLocator(await this.repo.get(elementName, pageName, { strategy: SelectionStrategy.ALL }));
         const target = await this.interact.getListedElement(baseLocator, options, this.repo);
         await this.interact.click(target);
     }
 
     /**
-     * Verifies a specific element within a list by checking its text content or an HTML attribute.
-     * The element is first located by matching visible text or an attribute from the list,
-     * then the assertion is performed on the resolved (and optionally child-targeted) element.
-     *
-     * Verification behavior is determined by the `options` fields:
-     * - `expectedText` — asserts that the resolved element's text content matches this value.
-     * - `expected` — asserts that the resolved element has the specified attribute name-value pair.
-     * - If neither is provided, the method asserts that the matched element is visible.
-     *
+     * Verifies a specific element within a list.
      * @param pageName - The page name as defined in `page-repository.json`.
-     * @param elementName - The element name as defined under the given page (should resolve to a list of elements).
-     * @param options - Match and assertion criteria. Must include `text` or `attribute` for identification.
-     *   Optionally include `child` to drill into a sub-element, and `expectedText` or `expected` for the assertion.
-     * @throws Error if neither `text` nor `attribute` is provided, if the element is not found,
-     *   or if the assertion fails.
+     * @param elementName - The element name as defined under the given page.
+     * @param options - Match and assertion criteria.
      */
     async verifyListedElement(pageName: string, elementName: string, options: VerifyListedOptions): Promise<void> {
         log.verify('Verifying listed element in "%s" > "%s" with options: %O', pageName, elementName, options);
-        const baseLocator = toLocator(await this.repo.get(this.page, pageName, elementName));
+        const baseLocator = toLocator(await this.repo.get(elementName, pageName, { strategy: SelectionStrategy.ALL }));
         const target = await this.interact.getListedElement(baseLocator, options, this.repo);
 
         if (options.expectedText !== undefined) {
@@ -604,23 +818,15 @@ export class Steps {
     }
 
     /**
-     * Extracts data from a specific element within a list — either its text content
-     * or the value of a specified HTML attribute.
-     *
-     * The element is first located by matching visible text or an attribute from the list,
-     * then data is extracted from the resolved (and optionally child-targeted) element.
-     *
+     * Extracts data from a specific element within a list.
      * @param pageName - The page name as defined in `page-repository.json`.
-     * @param elementName - The element name as defined under the given page (should resolve to a list of elements).
-     * @param options - Match and extraction criteria. Must include `text` or `attribute` for identification.
-     *   Optionally include `child` to drill into a sub-element. If `extractAttribute` is set, that attribute's
-     *   value is returned; otherwise the element's text content is returned.
-     * @returns The extracted text content or attribute value, or `null` if unavailable.
-     * @throws Error if neither `text` nor `attribute` is provided, or if the element is not found.
+     * @param elementName - The element name as defined under the given page.
+     * @param options - Match and extraction criteria.
+     * @returns The extracted text content or attribute value, or `null`.
      */
     async getListedElementData(pageName: string, elementName: string, options: GetListedDataOptions): Promise<string | null> {
         log.extract('Extracting data from listed element in "%s" > "%s" with options: %O', pageName, elementName, options);
-        const baseLocator = toLocator(await this.repo.get(this.page, pageName, elementName));
+        const baseLocator = toLocator(await this.repo.get(elementName, pageName, { strategy: SelectionStrategy.ALL }));
         const target = await this.interact.getListedElement(baseLocator, options, this.repo);
 
         if (options.extractAttribute) {
@@ -631,68 +837,69 @@ export class Steps {
     }
 
     // ==========================================
-    // ⏳ WAIT STEPS
+    // WAIT STEPS
     // ==========================================
 
     /**
      * Waits for an element to reach the specified state before proceeding.
-     * Useful for synchronizing tests with dynamic page content.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
-     * @param state - The desired state to wait for: `'visible'` (default), `'attached'`, `'hidden'`, or `'detached'`.
+     * @param state - The desired state to wait for.
+     * @param options - Optional step options for element resolution.
      */
     async waitForState(
         pageName: string,
         elementName: string,
-        state: 'visible' | 'attached' | 'hidden' | 'detached' = 'visible'
+        state: 'visible' | 'attached' | 'hidden' | 'detached' = 'visible',
+        options?: StepOptions
     ): Promise<void> {
         log.wait('Waiting for "%s" in "%s" to be "%s"', elementName, pageName, state);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
+        const locator = toLocator(await this.repo.get(elementName, pageName, this.toResolutionOptions(options)));
         await this.utils.waitForState(locator, state);
     }
 
     /**
-     * Types text into an input field one character at a time with a delay between keystrokes.
-     * Useful for inputs with debounced search, autocomplete, or real-time validation
-     * that require realistic keystroke timing.
+     * Waits for an element to reach a specific state, then clicks it.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementName - The element name as defined under the given page.
-     * @param text - The text to type character by character.
-     * @param delay - The delay in milliseconds between each keystroke. Defaults to `100`.
+     * @param state - The state to wait for before clicking. Defaults to `'visible'`.
+     * @param options - Optional step options for element resolution.
      */
-    async typeSequentially(
+    async waitAndClick(
         pageName: string,
         elementName: string,
-        text: string,
-        delay: number = 100
+        state: 'visible' | 'attached' | 'hidden' | 'detached' = 'visible',
+        options?: StepOptions
     ): Promise<void> {
-        log.interact('Typing "%s" sequentially into "%s" in "%s" (delay: %dms)', text, elementName, pageName, delay);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        await this.interact.typeSequentially(locator, text, delay);
+        log.interact('Waiting for "%s" in "%s" to be "%s", then clicking', elementName, pageName, state);
+        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const locator = toLocator(element);
+        await this.utils.waitForState(locator, state);
+        await this.interact.click(element);
+    }
+
+    /**
+     * Clicks the element at a specific zero-based index from all elements matching the locator.
+     * @param pageName - The page name as defined in `page-repository.json`.
+     * @param elementName - The element name as defined under the given page.
+     * @param index - The zero-based index of the element to click.
+     * @throws Error if no element exists at the specified index.
+     */
+    async clickNth(pageName: string, elementName: string, index: number): Promise<void> {
+        log.interact('Clicking element at index %d of "%s" in "%s"', index, elementName, pageName);
+        const element = await this.repo.getByIndex(elementName, pageName, index);
+        if (!element) throw new Error(`No element at index ${index} for "${elementName}" in "${pageName}"`);
+        await this.interact.click(element);
     }
 
     // ==========================================
-    // 🧩 COMPOSITE / WORKFLOW STEPS
+    // COMPOSITE / WORKFLOW STEPS
     // ==========================================
 
     /**
      * Fills multiple form fields on the same page in a single call.
-     * Each key in the `fields` map is an `elementName` from the repository.
-     * String values are filled into text inputs; `DropdownSelectOptions` values
-     * trigger a dropdown selection.
-     *
      * @param pageName - The page name as defined in `page-repository.json`.
-     * @param fields - A map of `elementName` → value. Use a string for text inputs
-     *   or a `DropdownSelectOptions` object for `<select>` elements.
-     *
-     * @example
-     * ```ts
-     * await steps.fillForm('FormsPage', {
-     *   nameInput: 'John Doe',
-     *   emailInput: 'john@example.com',
-     *   genderDropdown: { type: DropdownSelectType.VALUE, value: 'male' }
-     * });
-     * ```
+     * @param fields - A map of `elementName` to value.
      */
     async fillForm(pageName: string, fields: Record<string, FillFormValue>): Promise<void> {
         log.interact('Filling form on "%s" with %d fields', pageName, Object.keys(fields).length);
@@ -707,7 +914,6 @@ export class Steps {
 
     /**
      * Waits until there are no in-flight network requests for at least 500ms.
-     * Useful after actions that trigger background API calls, lazy loading, or analytics.
      */
     async waitForNetworkIdle(): Promise<void> {
         log.wait('Waiting for network idle');
@@ -716,9 +922,8 @@ export class Steps {
 
     /**
      * Executes an action and waits for a matching network response to complete.
-     * The response is captured concurrently with the action to avoid race conditions.
      * @param urlPattern - A string substring or RegExp to match against the response URL.
-     * @param action - An async function that triggers the network request (e.g. a form submit or click).
+     * @param action - An async function that triggers the network request.
      * @returns The captured Playwright Response object.
      */
     async waitForResponse(urlPattern: string | RegExp, action: () => Promise<void>): Promise<Response> {
@@ -728,14 +933,11 @@ export class Steps {
 
     /**
      * Retries an action until a verification passes, or until the maximum number of
-     * attempts is reached. Useful for interactions with elements that may take multiple
-     * attempts to succeed (e.g. flaky modals, race conditions with animations).
-     *
-     * @param action - An async function performing the interaction (e.g. a click).
+     * attempts is reached.
+     * @param action - An async function performing the interaction.
      * @param verification - An async function performing the assertion. Must throw on failure.
      * @param maxRetries - Maximum number of retry attempts. Defaults to `3`.
      * @param delayMs - Milliseconds to wait between retry attempts. Defaults to `1000`.
-     * @throws The last verification error if all retries are exhausted.
      */
     async retryUntil(
         action: () => Promise<void>,
@@ -762,223 +964,21 @@ export class Steps {
         throw lastError;
     }
 
-    /**
-     * Clears the value of an input or textarea element without filling it with new text.
-     * @param pageName - The page name as defined in `page-repository.json`.
-     * @param elementName - The element name as defined under the given page.
-     */
-    async clearInput(pageName: string, elementName: string): Promise<void> {
-        log.interact('Clearing input "%s" in "%s"', elementName, pageName);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        await this.interact.clearInput(locator);
-    }
-
-    /**
-     * Selects multiple options from a `<select multiple>` element by their `value` attributes.
-     * @param pageName - The page name as defined in `page-repository.json`.
-     * @param elementName - The element name as defined under the given page.
-     * @param values - An array of `value` attribute strings to select simultaneously.
-     * @returns An array of the actually selected `value` strings.
-     */
-    async selectMultiple(pageName: string, elementName: string, values: string[]): Promise<string[]> {
-        log.interact('Selecting multiple values on "%s" in "%s": %O', elementName, pageName, values);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        return await this.interact.selectMultiple(locator, values);
-    }
-
-    /**
-     * Waits for an element to reach a specific state, then clicks it.
-     * Useful when an element exists in the DOM but is not yet interactive
-     * (e.g. waiting for `'attached'` before clicking a lazily rendered button).
-     * @param pageName - The page name as defined in `page-repository.json`.
-     * @param elementName - The element name as defined under the given page.
-     * @param state - The state to wait for before clicking. Defaults to `'visible'`.
-     */
-    async waitAndClick(
-        pageName: string,
-        elementName: string,
-        state: 'visible' | 'attached' | 'hidden' | 'detached' = 'visible'
-    ): Promise<void> {
-        log.interact('Waiting for "%s" in "%s" to be "%s", then clicking', elementName, pageName, state);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        await this.utils.waitForState(locator, state);
-        await this.interact.click(locator);
-    }
-
-    /**
-     * Clicks the element at a specific zero-based index from all elements matching the locator.
-     * Use this when elements cannot be distinguished by text or attributes and index is
-     * the only reliable identifier.
-     * @param pageName - The page name as defined in `page-repository.json`.
-     * @param elementName - The element name as defined under the given page.
-     * @param index - The zero-based index of the element to click.
-     * @throws Error if no element exists at the specified index.
-     */
-    async clickNth(pageName: string, elementName: string, index: number): Promise<void> {
-        log.interact('Clicking element at index %d of "%s" in "%s"', index, elementName, pageName);
-        const element = await this.repo.getByIndex(this.page, pageName, elementName, index);
-        if (!element) throw new Error(`No element at index ${index} for "${elementName}" in "${pageName}"`);
-        await this.interact.click(toLocator(element));
-    }
-
     // ==========================================
-    // 📊 ADDITIONAL DATA EXTRACTION STEPS
-    // ==========================================
-
-    /**
-     * Extracts text content or attribute values from all elements matching the locator.
-     * Optionally drills into a child element within each match before extracting.
-     *
-     * @param pageName - The page name as defined in `page-repository.json`.
-     * @param elementName - The element name as defined under the given page.
-     * @param options - Optional extraction configuration. Use `child` to drill into a sub-element,
-     *   and `extractAttribute` to extract an attribute instead of text content.
-     * @returns An array of extracted strings. Null attribute values are filtered out.
-     *
-     * @example
-     * ```ts
-     * // Get all name-column texts from table rows
-     * const names = await steps.getAll('TablePage', 'rows', { child: 'td:nth-child(2)' });
-     *
-     * // Get all href attributes from links
-     * const hrefs = await steps.getAll('LinksPage', 'links', { extractAttribute: 'href' });
-     * ```
-     */
-    async getAll(pageName: string, elementName: string, options?: GetAllOptions): Promise<string[]> {
-        log.extract('Extracting all from "%s" in "%s" with options: %O', elementName, pageName, options ?? 'text');
-        let locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-
-        if (options?.child) {
-            if (typeof options.child === 'string') {
-                locator = locator.locator(options.child);
-            } else {
-                const childSelector = this.repo.getSelector(options.child.pageName, options.child.elementName);
-                locator = locator.locator(childSelector);
-            }
-        }
-
-        if (options?.extractAttribute) {
-            const elements = await locator.all();
-            const values = await Promise.all(elements.map(el => el.getAttribute(options.extractAttribute!)));
-            return values.filter((v): v is string => v !== null);
-        }
-
-        return await this.extract.getAllTexts(locator);
-    }
-
-    /**
-     * Returns the number of DOM elements matching the locator.
-     * Unlike `verifyCount` which asserts, this returns the count for use in test logic.
-     * @param pageName - The page name as defined in `page-repository.json`.
-     * @param elementName - The element name as defined under the given page.
-     * @returns The count of matching elements.
-     */
-    async getCount(pageName: string, elementName: string): Promise<number> {
-        log.extract('Getting count of "%s" in "%s"', elementName, pageName);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        return await this.extract.getCount(locator);
-    }
-
-    /**
-     * Retrieves the current value of an input, textarea, or select element.
-     * Unlike `getText` which reads `textContent`, this reads the `value` property.
-     * @param pageName - The page name as defined in `page-repository.json`.
-     * @param elementName - The element name as defined under the given page.
-     * @returns The current value of the input.
-     */
-    async getInputValue(pageName: string, elementName: string): Promise<string> {
-        log.extract('Getting input value of "%s" in "%s"', elementName, pageName);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        return await this.extract.getInputValue(locator);
-    }
-
-    /**
-     * Retrieves a computed CSS property value from an element.
-     * @param pageName - The page name as defined in `page-repository.json`.
-     * @param elementName - The element name as defined under the given page.
-     * @param property - The CSS property name (e.g. `'color'`, `'font-size'`, `'display'`).
-     * @returns The computed value as a string (e.g. `'rgb(255, 0, 0)'`, `'16px'`, `'block'`).
-     */
-    async getCssProperty(pageName: string, elementName: string, property: string): Promise<string> {
-        log.extract('Getting CSS "%s" from "%s" in "%s"', property, elementName, pageName);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        return await this.extract.getCssProperty(locator, property);
-    }
-
-    // ==========================================
-    // ✅ ADDITIONAL VERIFICATION STEPS
-    // ==========================================
-
-    /**
-     * Asserts that the text contents of all elements matching the locator appear
-     * in the exact order specified. Each element's text is compared against the
-     * corresponding entry in the array.
-     * @param pageName - The page name as defined in `page-repository.json`.
-     * @param elementName - The element name as defined under the given page.
-     * @param expectedTexts - The expected text values in their expected order.
-     */
-    async verifyOrder(pageName: string, elementName: string, expectedTexts: string[]): Promise<void> {
-        log.verify('Verifying order of "%s" in "%s": %O', elementName, pageName, expectedTexts);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        await this.verify.order(locator, expectedTexts);
-    }
-
-    /**
-     * Asserts that a computed CSS property of an element matches the expected value.
-     * Values are in their computed form (e.g. `'rgb(255, 0, 0)'` not `'red'`).
-     * @param pageName - The page name as defined in `page-repository.json`.
-     * @param elementName - The element name as defined under the given page.
-     * @param property - The CSS property name (e.g. `'color'`, `'font-size'`, `'display'`).
-     * @param expectedValue - The expected computed value.
-     */
-    async verifyCssProperty(pageName: string, elementName: string, property: string, expectedValue: string): Promise<void> {
-        log.verify('Verifying CSS "%s" of "%s" in "%s" = "%s"', property, elementName, pageName, expectedValue);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        await this.verify.cssProperty(locator, property, expectedValue);
-    }
-
-
-    /**
-     * Asserts that the text contents of all elements matching the locator are sorted
-     * in the specified direction using locale-aware string comparison.
-     * @param pageName - The page name as defined in `page-repository.json`.
-     * @param elementName - The element name as defined under the given page.
-     * @param direction - `'asc'` for ascending (A→Z) or `'desc'` for descending (Z→A).
-     */
-    async verifyListOrder(pageName: string, elementName: string, direction: 'asc' | 'desc'): Promise<void> {
-        log.verify('Verifying "%s" in "%s" is sorted %s', elementName, pageName, direction);
-        const locator = toLocator(await this.repo.get(this.page, pageName, elementName));
-        await this.verify.listOrder(locator, direction);
-    }
-
-    // ==========================================
-    // 📸 SCREENSHOT
+    // SCREENSHOT
     // ==========================================
 
     /**
      * Captures a screenshot of the full page or a specific element.
-     *
-     * @param pageNameOrOptions - Either a page name string (for element screenshots)
-     *   or `ScreenshotOptions` (for page screenshots), or omitted entirely for a default page screenshot.
+     * @param pageNameOrOptions - Either a page name string or `ScreenshotOptions`.
      * @param elementName - The element name (required when first arg is a page name).
      * @param options - Optional screenshot configuration.
      * @returns The screenshot image as a Buffer.
-     *
-     * @example
-     * ```ts
-     * // Full page screenshot
-     * await steps.screenshot();
-     * await steps.screenshot({ fullPage: true, path: 'full-page.png' });
-     *
-     * // Element screenshot
-     * await steps.screenshot('PageName', 'elementName');
-     * await steps.screenshot('PageName', 'elementName', { path: 'element.png' });
-     * ```
      */
     async screenshot(pageNameOrOptions?: string | ScreenshotOptions, elementName?: string, options?: ScreenshotOptions): Promise<Buffer> {
         if (typeof pageNameOrOptions === 'string' && elementName) {
             log.extract('Taking screenshot of "%s" in "%s"', elementName, pageNameOrOptions);
-            const locator = toLocator(await this.repo.get(this.page, pageNameOrOptions, elementName));
+            const locator = toLocator(await this.repo.get(elementName, pageNameOrOptions));
             return await this.extract.screenshot(locator, options);
         }
 
@@ -988,12 +988,12 @@ export class Steps {
     }
 
     // ==========================================
-    // 📧 EMAIL STEPS
+    // EMAIL STEPS
     // ==========================================
 
     /**
      * Sends an email using the configured SMTP credentials.
-     * @param options - The email configuration (to, subject, text, html, or htmlFile).
+     * @param options - The email configuration.
      */
     async sendEmail(options: EmailSendOptions): Promise<void> {
         if (!this.email) {
@@ -1007,7 +1007,7 @@ export class Steps {
     /**
      * Polls the inbox and returns the latest email matching the provided filters.
      * @param options - The receive options, including mandatory filters.
-     * @returns The matched email, including its downloaded file path and content.
+     * @returns The matched email.
      */
     async receiveEmail(options: EmailReceiveOptions): Promise<ReceivedEmail> {
         if (!this.email) {
@@ -1033,8 +1033,7 @@ export class Steps {
     }
 
     /**
-     * Deletes emails from the inbox. If filters are provided, only matching emails are deleted.
-     * Otherwise, the entire inbox is cleared.
+     * Deletes emails from the inbox.
      * @param options - Optional receive options containing filters to target specific emails.
      */
     async cleanEmails(options?: EmailReceiveOptions): Promise<number> {
@@ -1052,31 +1051,10 @@ export class Steps {
     }
 
     /**
-     * Marks emails in the mailbox with a specific action (READ, UNREAD, FLAGGED, UNFLAGGED, or ARCHIVED).
-     * @param action - The marking action to apply (e.g., EmailMarkAction.READ, EmailMarkAction.FLAGGED, etc.).
+     * Marks emails in the mailbox with a specific action.
+     * @param action - The marking action to apply.
      * @param options - Optional options to target specific emails with filters.
      * @returns The number of emails successfully marked.
-     *
-     * @example
-     * ```ts
-     * // Mark all OTP emails as read
-     * await steps.markEmail('markEmailsAsRead', EmailMarkAction.READ, {
-     *   filters: [{ type: EmailFilterType.SUBJECT, value: 'OTP' }]
-     * });
-     *
-     * // Mark all emails as unread
-     * await steps.markEmail('markEmailsAsUnread', EmailMarkAction.UNREAD);
-     *
-     * // Mark specific emails as flagged
-     * await steps.markEmail('flagImportantEmails', EmailMarkAction.FLAGGED, {
-     *   filters: [{ type: EmailFilterType.FROM, value: 'noreply@example.com' }]
-     * });
-     *
-     * // Archive emails matching a filter
-     * await steps.markEmail('archiveEmails', EmailMarkAction.ARCHIVED, {
-     *   filters: [{ type: EmailFilterType.SUBJECT, value: 'Report' }]
-     * });
-     * ```
      */
     async markEmail(
         action: EmailMarkAction | string[],

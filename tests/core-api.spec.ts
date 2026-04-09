@@ -88,7 +88,8 @@ test.describe('E2E Facade Implementation Suite', () => {
     });
 
     await test.step('Drag Item A to the Second List', async () => {
-      const dropZone = await repo.getByText(page, 'SortablePage', 'dropZones', 'Second List');
+      await steps.waitForState('SortablePage', 'dropZones');
+      const dropZone = await repo.getByText('dropZones', 'SortablePage', 'Second List');
 
       await steps.dragAndDropListedElement('SortablePage', 'sortableItems', 'Item A', { target: dropZone! });
 
@@ -100,7 +101,7 @@ test.describe('E2E Facade Implementation Suite', () => {
 
   test('TC_003: Negative Assertions - Expecting Verifications to Fail', async ({ page, repo }) => {
 
-    const steps = new Steps(page, repo, { timeout: 1000 }); // Shorten timeout for negative assertions
+    const steps = new Steps(repo, { timeout: 1000 }); // Shorten timeout for negative assertions
 
     await test.step('Navigate to the website', async () => {
       await steps.navigateTo('/');
@@ -132,7 +133,7 @@ test.describe('E2E Facade Implementation Suite', () => {
   });
 
   test('TC_004: Wait For State - Warning behavior on incorrect state', async ({ page, repo }) => {
-    const steps = new Steps(page, repo, { timeout: 500 });
+    const steps = new Steps(repo, { timeout: 500 });
 
     await test.step('Navigate to the website', async () => {
       await steps.navigateTo('/');
@@ -170,7 +171,7 @@ test.describe('E2E Facade Implementation Suite', () => {
   });
 
   test('TC_006: Verify Count - greaterThan and lessThan', async ({ page, repo }) => {
-    const steps = new Steps(page, repo, { timeout: 3000 });
+    const steps = new Steps(repo, { timeout: 3000 });
 
     await test.step('Navigate to the website', async () => {
       await steps.navigateTo('/');

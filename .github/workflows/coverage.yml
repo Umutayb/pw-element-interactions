@@ -45,7 +45,12 @@ jobs:
               plain: { flag: 'github-plain', header: 'Plain report' }
             }[process.env.REPORT_FORMAT];
 
-            cp.execSync(`npx test-coverage --format=${config.flag}`);
+            let coverageFailed = false;
+            try {
+              cp.execSync(`npx test-coverage --format=${config.flag}`, { stdio: 'inherit' });
+            } catch {
+              coverageFailed = true;
+            }
             const body = fs.readFileSync('test-coverage-report.md', 'utf-8');
 
             const { data: comments } = await github.rest.issues.listComments({
@@ -69,4 +74,8 @@ jobs:
               await github.rest.issues.updateComment({ ...commentPayload, comment_id: existing.id });
             } else {
               await github.rest.issues.createComment({ ...commentPayload, issue_number: context.issue.number });
+            }
+
+            if (coverageFailed) {
+              core.setFailed('API coverage is below the required threshold. See the PR comment for details.');
             }

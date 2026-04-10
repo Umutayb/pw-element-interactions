@@ -5,6 +5,7 @@ export * from './enum/Options';
 export { Navigation } from './interactions/Navigation';
 export { Verifications } from './interactions/Verification';
 export { Interactions } from './interactions/Interaction';
+export type { Target } from './interactions/Interaction';
 export { Extractions } from './interactions/Extraction';
 
 // Utilities
@@ -15,11 +16,12 @@ export { Utils } from './utils/ElementUtilities';
 export { ElementInteractions } from './interactions/facade/ElementInteractions';
 
 // Re-exports from @civitas-cerebrum/element-repository
-export type { Element } from '@civitas-cerebrum/element-repository';
-export { ElementType, WebElement, PlatformElement, isWeb, isPlatform } from '@civitas-cerebrum/element-repository';
+export type { Element, ElementResolutionOptions, ElementActionOptions } from '@civitas-cerebrum/element-repository';
+export { ElementType, WebElement, PlatformElement, ElementChain, ElementAssertionError, isWeb, isPlatform, SelectionStrategy } from '@civitas-cerebrum/element-repository';
 
 // Test Steps Facade
 export { Steps } from './steps/CommonSteps';
+export { ElementAction } from './steps/ElementAction';
 
 // Test Fixture
 export { baseFixture, BaseFixtureOptions } from './fixture/BaseFixture';
@@ -27,7 +29,6 @@ export { baseFixture, BaseFixtureOptions } from './fixture/BaseFixture';
 // Re-exports from @civitas-cerebrum/email-client
 export { EmailClient } from '@civitas-cerebrum/email-client';
 export type {
-    EmailCredentials,
     EmailClientConfig,
     SmtpCredentials,
     ImapCredentials,

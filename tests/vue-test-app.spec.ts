@@ -1,16 +1,9 @@
-import { ElementRepository } from '@civitas-cerebrum/element-repository';
 import { test, expect } from './fixture/StepFixture';
 import { createLogger } from '../src/logger/Logger';
 
 const log = createLogger('tests');
 
 test.describe('Vue Test App v2 - Homepage Tests', () => {
-
-  let repo: ElementRepository;
-
-  test.beforeAll(() => {
-    repo = new ElementRepository('tests/data/page-repository.json');
-  });
 
   test('TC_001: Homepage loads correctly', async ({ page, steps }) => {
     await test.step('Navigate to the homepage', async () => {
@@ -39,12 +32,6 @@ test.describe('Vue Test App v2 - Homepage Tests', () => {
 });
 
 test.describe('Vue Test App v2 - Forms Tests', () => {
-
-  let repo: ElementRepository;
-
-  test.beforeAll(() => {
-    repo = new ElementRepository('tests/data/page-repository.json');
-  });
 
   test('TC_003: Forms page loads correctly', async ({ page, steps }) => {
     await test.step('Navigate to Forms page via homepage', async () => {

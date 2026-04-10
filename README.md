@@ -140,7 +140,7 @@ Each selector object supports `css`, `xpath`, `id`, or `text` as the locator str
 
 ## 💻 Usage: The `Steps` API (Recommended)
 
-Initialize `Steps` by passing the current Playwright `page` and your `ElementRepository` instance.
+Initialize `Steps` by passing your `ElementRepository` instance (which already holds the driver/page):
 
 ```ts
 import { test } from '@playwright/test';
@@ -148,25 +148,58 @@ import { ElementRepository } from '@civitas-cerebrum/element-repository';
 import { Steps, DropdownSelectType } from '@civitas-cerebrum/element-interactions';
 
 test('Add random product and verify image gallery', async ({ page }) => {
-  const repo = new ElementRepository('tests/data/locators.json');
-  const steps = new Steps(page, repo);
+  const repo = new ElementRepository(page, 'tests/data/locators.json');
+  const steps = new Steps(repo);
 
   await steps.navigateTo('/');
   await steps.click('HomePage', 'category-accessories');
 
-  await steps.clickRandom('AccessoriesPage', 'product-cards');
+  // Use StepOptions to control element selection and interaction modifiers
+  await steps.click('AccessoriesPage', 'product-cards', { strategy: 'random' });
   await steps.verifyUrlContains('/product/');
 
   const selectedSize = await steps.selectDropdown('ProductDetailsPage', 'size-selector', {
     type: DropdownSelectType.RANDOM,
   });
-  console.log(`Selected size: ${selectedSize}`);
 
   await steps.verifyCount('ProductDetailsPage', 'gallery-images', { greaterThan: 0 });
-  await steps.verifyText('ProductDetailsPage', 'product-title', undefined, { notEmpty: true });
+  await steps.verifyText('ProductDetailsPage', 'product-title');  // no args = asserts not empty
   await steps.verifyImages('ProductDetailsPage', 'gallery-images');
-  await steps.waitForState('CheckoutPage', 'confirmation-modal', 'visible');
 });
+```
+
+### Fluent API: `steps.on()`
+
+For a chainable alternative, use `steps.on(elementName, pageName)`:
+
+```ts
+test('Fluent checkout flow', async ({ steps }) => {
+  await steps.on('category-accessories', 'HomePage').click();
+  await steps.on('product-cards', 'AccessoriesPage').random().click();
+  await steps.on('product-title', 'ProductDetailsPage').verifyPresence();
+  
+  const price = await steps.on('price', 'ProductDetailsPage').getText();
+  await steps.on('add-to-cart', 'ProductDetailsPage').click({ withoutScrolling: true });
+  await steps.on('cart-count', 'Header').verifyText('1');
+});
+```
+
+### StepOptions
+
+All Steps methods accept an optional last parameter for element selection and interaction modifiers:
+
+```ts
+// Select by strategy
+await steps.click('Page', 'element', { strategy: 'random' });
+await steps.click('Page', 'element', { strategy: 'index', index: 2 });
+await steps.click('Page', 'element', { strategy: 'text', text: 'Submit' });
+
+// Interaction modifiers
+await steps.click('Page', 'element', { withoutScrolling: true });  // bypass actionability checks
+await steps.click('Page', 'element', { ifPresent: true });         // skip if not visible
+
+// Combine both
+await steps.click('Page', 'element', { strategy: 'random', withoutScrolling: true });
 ```
 
 ---
@@ -211,7 +244,14 @@ export default defineConfig({
 import { test as base, expect } from '@playwright/test';
 import { baseFixture } from '@civitas-cerebrum/element-interactions';
 
-export const test = baseFixture(base, 'tests/data/page-repository.json');
+export const test = baseFixture(base, 'tests/data/page-repository.json', {
+  timeout: 60000,                   // element timeout for Steps/Interactions (default: 30000)
+  repoTimeout: 15000,               // element resolution timeout for repo (default: 15000)
+  blockedOrigins: /(analytics\.com|tracking\.io)/,  // auto-abort matching routes
+  screenshotOnFailure: true,        // auto-capture on test failure (default: true)
+  // screenshotOnFailure: { fullPage: false },  // viewport-only screenshots
+  // screenshotOnFailure: false,                 // disable screenshots
+});
 export { expect };
 ```
 
@@ -245,37 +285,42 @@ Repository methods return `Element` wrappers (not raw Playwright `Locator` objec
 ```ts
 import { WebElement } from '@civitas-cerebrum/element-interactions';
 
-test('Navigate to Forms category', async ({ page, repo, steps }) => {
+test('Navigate to Forms category', async ({ repo, steps }) => {
   await steps.navigateTo('/');
 
-  const formsLink = await repo.getByText(page, 'HomePage', 'categories', 'Forms');
+  const formsLink = await repo.getByText('categories', 'HomePage', 'Forms');
   await formsLink?.click();
 
   await steps.verifyAbsence('HomePage', 'categories');
 });
 
-test('Use underlying Locator for advanced assertions', async ({ page, repo }) => {
-  const element = await repo.get(page, 'PageName', 'elementName');
+test('Use underlying Locator for advanced assertions', async ({ repo }) => {
+  const element = await repo.get('elementName', 'PageName');
   const locator = (element as WebElement).locator;
   await expect(locator).toHaveCSS('color', 'rgb(255, 0, 0)');
 });
+
+test('Use fluent action chain', async ({ repo }) => {
+  const element = await repo.get('submitButton', 'LoginPage');
+  await element.action(5000).waitForState('visible').click();
+});
 ```
 
-**Full Repository API:**
+**Full Repository API** (note: `(elementName, pageName)` order, no driver arg):
 
 ```ts
-await repo.get(page, 'PageName', 'elementName');               // single Element
-await repo.getAll(page, 'PageName', 'elementName');             // array of Elements
-await repo.getRandom(page, 'PageName', 'elementName');          // random from matches
-await repo.getByText(page, 'PageName', 'elementName', 'Text'); // filter by visible text (exact, then contains)
-await repo.getByAttribute(page, 'PageName', 'elementName', 'data-status', 'active'); // filter by attribute
-await repo.getByAttribute(page, 'PageName', 'elementName', 'href', '/path', { exact: false }); // partial match
-await repo.getByIndex(page, 'PageName', 'elementName', 2);     // zero-based index
-await repo.getByRole(page, 'PageName', 'elementName', 'button'); // explicit HTML role attribute
-await repo.getVisible(page, 'PageName', 'elementName');         // first visible match
-repo.getSelector('PageName', 'elementName');                     // sync, returns raw selector string
-repo.getSelectorRaw('PageName', 'elementName');                  // sync, returns { strategy, value }
-repo.setDefaultTimeout(10000);                                   // change default wait timeout
+await repo.get('elementName', 'PageName');                         // single Element (first match)
+await repo.get('elementName', 'PageName', { strategy: SelectionStrategy.RANDOM }); // with options
+await repo.getAll('elementName', 'PageName');                      // array of Elements
+await repo.getRandom('elementName', 'PageName');                   // random from matches
+await repo.getByText('elementName', 'PageName', 'Text');           // filter by visible text
+await repo.getByAttribute('elementName', 'PageName', 'data-status', 'active'); // filter by attribute
+await repo.getByIndex('elementName', 'PageName', 2);               // zero-based index
+await repo.getByRole('elementName', 'PageName', 'button');          // filter by role
+await repo.getVisible('elementName', 'PageName');                   // first visible match
+repo.getSelector('elementName', 'PageName');                        // sync, selector string
+repo.getSelectorRaw('elementName', 'PageName');                     // sync, { strategy, value }
+repo.driver;                                                        // the bound Page/Browser
 ```
 
 ### 5. Extend with your own fixtures
@@ -328,10 +373,10 @@ Every method below automatically fetches the Playwright `Locator` using your `pa
 
 ### 🖱️ Interaction
 
-* **`click(pageName, elementName)`** — Clicks an element. Automatically waits for the element to be attached, visible, stable, and actionable.
-* **`clickWithoutScrolling(pageName, elementName)`** — Dispatches a native `click` event directly, bypassing Playwright's scrolling and intersection observer checks. Useful for elements obscured by sticky headers or overlays.
-* **`clickIfPresent(pageName, elementName)`** — Clicks an element only if it is visible; skips silently otherwise. Returns `boolean` (`true` if clicked). Ideal for optional elements like cookie banners.
-* **`clickRandom(pageName, elementName)`** — Clicks a random element from all matches. Useful for lists or grids.
+* **`click(pageName, elementName, options?: StepOptions)`** — Clicks an element. Supports `{ strategy, withoutScrolling, ifPresent }`.
+* **`clickWithoutScrolling(pageName, elementName)`** — Dispatches a native `click` event, bypassing actionability checks. Useful for flyout/dropdown items.
+* **`clickIfPresent(pageName, elementName)`** — Clicks only if visible; skips silently. Returns `boolean`.
+* **`clickRandom(pageName, elementName, options?: StepOptions)`** — Clicks a random element from all matches. Supports `{ withoutScrolling }`.
 * **`rightClick(pageName, elementName)`** — Right-clicks an element to trigger a context menu.
 * **`doubleClick(pageName, elementName)`** — Double-clicks an element.
 * **`check(pageName, elementName)`** — Checks a checkbox or radio button. No-op if already checked.
@@ -356,7 +401,7 @@ Every method below automatically fetches the Playwright `Locator` using your `pa
 
 * **`verifyPresence(pageName, elementName)`** — Asserts that an element is attached to the DOM and visible.
 * **`verifyAbsence(pageName, elementName)`** — Asserts that an element is hidden or detached from the DOM.
-* **`verifyText(pageName, elementName, expectedText?, options?: TextVerifyOptions)`** — Asserts element text. Provide `expectedText` for an exact match, or `{ notEmpty: true }` to assert the text is not blank.
+* **`verifyText(pageName, elementName, expectedText?)`** — Asserts element text. Provide `expectedText` for an exact match, or call with no args to assert not empty.
 * **`verifyCount(pageName, elementName, options: CountVerifyOptions)`** — Asserts element count. Accepts `{ exactly: number }`, `{ greaterThan: number }`, or `{ lessThan: number }`.
 * **`verifyImages(pageName, elementName, scroll?: boolean)`** — Verifies image rendering: checks visibility, valid `src`, `naturalWidth > 0`, and the browser's native `decode()` promise. Scrolls into view by default.
 * **`verifyTextContains(pageName, elementName, expectedText: string)`** — Asserts that an element's text contains the expected substring.
@@ -446,19 +491,25 @@ const href = await steps.getListedElementData('UsersPage', 'tableRows', {
 
 ## 🧱 Advanced: Raw Interactions API
 
-To bypass the repository or work with dynamically generated locators, use `ElementInteractions` directly:
+To bypass the repository or work with dynamically generated locators, use `ElementInteractions` directly. All methods accept both Playwright `Locator` and `Element` types:
 
 ```ts
 import { ElementInteractions } from '@civitas-cerebrum/element-interactions';
 
 const interactions = new ElementInteractions(page);
 
+// Works with Playwright Locators
 const customLocator = page.locator('button.dynamic-class');
-await interactions.interact.clickWithoutScrolling(customLocator);
+await interactions.interact.click(customLocator, { withoutScrolling: true });
 await interactions.verify.count(customLocator, { greaterThan: 2 });
+
+// Also works with Element from the repository
+const element = await repo.get('submitButton', 'LoginPage');
+await interactions.interact.click(element);
+await interactions.verify.presence(element);
 ```
 
-All core `interact`, `verify`, and `navigate` methods are available on `ElementInteractions`.
+All `interact`, `verify`, `extract`, and `navigate` methods are available on `ElementInteractions`.
 
 ---
 
@@ -468,14 +519,13 @@ Send and receive emails in your tests. Supports plain text, inline HTML, and HTM
 
 ### Setup
 
-Pass email credentials to `baseFixture` via the options parameter. You can use the split config (recommended) or the legacy combined format:
+Pass email credentials to `baseFixture` via the options parameter. Configure `smtp`, `imap`, or both depending on which features you need:
 
 ```ts
 // tests/fixtures/base.ts
 import { test as base, expect } from '@playwright/test';
 import { baseFixture } from '@civitas-cerebrum/element-interactions';
 
-// Split config (recommended) — configure smtp, imap, or both
 export const test = baseFixture(base, 'tests/data/page-repository.json', {
   emailCredentials: {
     smtp: {
@@ -493,23 +543,6 @@ export { expect };
 ```
 
 Only need to send? Provide `smtp` only. Only need to receive? Provide `imap` only. The client will throw a clear error if you call a method that requires the missing credential.
-
-<details>
-<summary>Legacy combined format (still supported)</summary>
-
-```ts
-export const test = baseFixture(base, 'tests/data/page-repository.json', {
-  emailCredentials: {
-    senderEmail: process.env.SENDER_EMAIL!,
-    senderPassword: process.env.SENDER_PASSWORD!,
-    senderSmtpHost: process.env.SENDER_SMTP_HOST!,
-    receiverEmail: process.env.RECEIVER_EMAIL!,
-    receiverPassword: process.env.RECEIVER_PASSWORD!,
-  }
-});
-```
-
-</details>
 
 ### Sending Emails
 

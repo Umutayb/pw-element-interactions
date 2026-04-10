@@ -126,7 +126,7 @@ test.describe('TC_043: Steps - Tab Management', () => {
 
 test.describe('TC_044: Repo - getRandom & setDefaultTimeout', () => {
 
-  test('getRandom picks a random element, setDefaultTimeout sets timeout', async ({ page, repo, steps }) => {
+  test('getRandom picks a random element, setDefaultTimeout sets timeout', async ({ repo, steps }) => {
 
     await test.step('Navigate to home page', async () => {
       await steps.navigateTo('/');
@@ -138,7 +138,7 @@ test.describe('TC_044: Repo - getRandom & setDefaultTimeout', () => {
     });
 
     await test.step('getRandom returns one of the category cards', async () => {
-      const randomCard = await repo.getRandom(page, 'HomePage', 'categories');
+      const randomCard = await repo.getRandom('categories', 'HomePage');
       expect(randomCard).toBeTruthy();
       const text = await randomCard!.textContent();
       expect(text).toBeTruthy();

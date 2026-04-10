@@ -57,7 +57,7 @@ test.describe('TC_028: Droppable Page', () => {
     });
 
     await test.step('Drag red item to red zone — correct drop', async () => {
-      const redZone = await repo.get(page, 'DroppablePage', 'redZone');
+      const redZone = await repo.get('redZone', 'DroppablePage');
       await steps.dragAndDrop('DroppablePage', 'redItem1', { target: redZone });
       await steps.verifyTextContains('DroppablePage', 'redZoneCount', '1');
     });
@@ -119,7 +119,7 @@ test.describe('TC_030: Kanban Page', () => {
     });
 
     await test.step('Add a new card to Todo column', async () => {
-      const allCards = await repo.getAll(page, 'KanbanPage', 'cards');
+      const allCards = await repo.getAll('cards', 'KanbanPage');
       const countBefore = allCards!.length;
       await steps.click('KanbanPage', 'addTodoButton');
       await steps.verifyCount('KanbanPage', 'cards', { greaterThan: countBefore });

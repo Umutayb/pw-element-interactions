@@ -1,5 +1,5 @@
 import { Locator } from '@playwright/test';
-import { Element, WebElement } from '@civitas-cerebrum/element-repository';
+import { Element } from '@civitas-cerebrum/element-repository';
 
 /**
  * Defines the strategy for selecting an option from a dropdown element.
@@ -132,4 +132,34 @@ export interface ScreenshotOptions {
     fullPage?: boolean;
     /** File path to save the screenshot to. If omitted, returns the image buffer without saving. */
     path?: string;
+}
+
+/**
+ * Modifiers for click actions.
+ */
+export interface ClickOptions {
+    /** Dispatch a native 'click' event bypassing Playwright actionability checks. */
+    withoutScrolling?: boolean;
+    /** Skip silently if element is not visible instead of throwing. */
+    ifPresent?: boolean;
+}
+
+/**
+ * Combined options for Steps API methods — element resolution + interaction modifiers.
+ */
+export interface StepOptions {
+    /** Element selection strategy. Defaults to 'first'. */
+    strategy?: 'first' | 'random' | 'index' | 'text' | 'attribute' | 'all';
+    /** Zero-based index (required when strategy is 'index'). */
+    index?: number;
+    /** Text to match (required when strategy is 'text'). */
+    text?: string;
+    /** Attribute name to match (required when strategy is 'attribute'). */
+    attribute?: string;
+    /** Attribute value to match (used with strategy 'text' or 'attribute'). */
+    value?: string;
+    /** Dispatch native click event bypassing Playwright actionability checks. */
+    withoutScrolling?: boolean;
+    /** Skip silently if element is not visible. */
+    ifPresent?: boolean;
 }

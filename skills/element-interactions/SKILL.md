@@ -632,8 +632,6 @@ const href = await steps.getListedElementData('tableRows', 'PageName', {
 await steps.waitForState('elementName', 'PageName');                        // default: 'visible'
 await steps.waitForState('elementName', 'PageName', 'hidden');              // also: 'attached', 'detached'
 await steps.waitAndClick('elementName', 'PageName');                        // waits for visible, then clicks
-await steps.scrollUntilFound('elementName', 'PageName');             // scrolls until found, default 75s timeout
-await steps.scrollUntilFound('elementName', 'PageName', 30000);      // custom timeout
 await steps.waitForNetworkIdle();
 await steps.waitForResponse('/api/data', async () => {
   await steps.click('submitButton', 'PageName');
@@ -664,6 +662,45 @@ await steps.retryUntil(
 const buf = await steps.screenshot();                                       // page screenshot
 const buf2 = await steps.screenshot({ fullPage: true, path: 'out.png' });   // full page with save
 const buf3 = await steps.screenshot('elementName', 'PageName');             // element screenshot
+```
+
+### Fluent API — `steps.on()`
+
+For a chainable alternative to the standard Steps methods, use `steps.on(elementName, pageName)`. It returns an `ElementAction` builder with strategy selectors and terminal actions.
+
+```ts
+// Strategy selectors (chainable)
+await steps.on('productCards', 'CollectionsPage').first().click();
+await steps.on('productCards', 'CollectionsPage').random().click({ withoutScrolling: true });
+await steps.on('productCards', 'CollectionsPage').nth(2).click();
+await steps.on('categories', 'HomePage').byText('Buttons').click();
+await steps.on('items', 'ListPage').byAttribute('data-status', 'active').click();
+
+// Terminal interactions
+await steps.on('submitButton', 'LoginPage').click();
+await steps.on('submitButton', 'LoginPage').click({ withoutScrolling: true });
+await steps.on('menuItem', 'Nav').hover();
+await steps.on('emailInput', 'LoginPage').fill('user@test.com');
+await steps.on('checkbox', 'SettingsPage').check();
+await steps.on('slider', 'SettingsPage').setSliderValue(75);
+await steps.on('fileInput', 'UploadPage').uploadFile('path/to/file.pdf');
+
+// Terminal verifications
+await steps.on('title', 'ProductPage').verifyPresence();
+await steps.on('title', 'ProductPage').verifyText('Expected Title');
+await steps.on('title', 'ProductPage').verifyText();                  // no args = not empty
+await steps.on('title', 'ProductPage').verifyTextContains('partial');
+await steps.on('items', 'ListPage').verifyCount({ greaterThan: 3 });
+await steps.on('disabledBtn', 'Page').verifyState('disabled');
+const visible = await steps.on('banner', 'Page').isPresent();
+
+// Terminal extractions
+const text = await steps.on('price', 'ProductPage').getText();
+const href = await steps.on('link', 'NavPage').getAttribute('href');
+const count = await steps.on('items', 'ListPage').getCount();
+
+// Waiting
+await steps.on('modal', 'Page').waitForState('visible');
 ```
 
 ### Accessing the Repository Directly

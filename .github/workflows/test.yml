@@ -26,6 +26,9 @@ jobs:
       - name: 🧩 Install dependencies
         run: npm ci
 
+      - name: 🔒 Vulnerability audit
+        run: npm audit --audit-level=high
+
       - name: 🛠️ Build package
         run: npm run build
 

@@ -50,31 +50,37 @@ These rules are non-negotiable. They override helpfulness, initiative, and assum
 - Show the user the exact JSON you want to add. Wait for "yes." Then edit.
 - No silent additions. No "I'll just add this one locator."
 
-### 3. Do NOT invent selectors — inspect the live site or use user-provided entries
+### 3. ALWAYS read `references/api-reference.md` before writing or modifying code
+- Before writing test code, modifying selectors, fixing tests, reviewing compliance, or answering API questions — read the API reference first.
+- Do not write `steps.*` calls, selector JSON, or fixture code from memory. Ever.
+- This applies to every stage, every fix, every edit. No exceptions.
+
+### 4. Do NOT invent selectors — inspect the live site or use user-provided entries
+
 - You do not know what selectors exist on the page. Do not guess.
 - Use the Playwright MCP to navigate to the page and inspect the real DOM.
 - If the Playwright MCP is not available, tell the user:
   > "I don't have the Playwright MCP to inspect the site. You can either enable it in your Claude Code MCP settings, or provide me with the `page-repository.json` entries directly and I'll use those."
 - Without the MCP, the user must supply all selectors. Do NOT guess or infer selectors from the scenario description alone.
 
-### 4. Do NOT invent type definitions
+### 5. Do NOT invent type definitions
 - If a type is missing, tell the user. Do not create `.d.ts` stubs or workarounds.
 
-### 5. Prefer element repository entries over inline selectors
+### 6. Prefer element repository entries over inline selectors
 - When possible, add selectors to `page-repository.json` and reference them by name.
 - Use `{ child: { pageName: 'PageName', elementName: 'elementName' } }` over `{ child: 'td:nth-child(2)' }`.
 - This is a preference, not a hard ban — inline selectors are acceptable when a repo entry would be overkill.
 
-### 6. When a test fails: invoke the failure-diagnosis protocol
+### 7. When a test fails: invoke the failure-diagnosis protocol
 - The base fixture captures a `failure-screenshot` on every failure.
 - Follow the full diagnostic pipeline: collect evidence (screenshot + DOM + error context), group failures by root cause, classify (test issue vs app bug vs ambiguous), check edge cases, then fix or report.
 - Do NOT guess what went wrong from the error message alone. The screenshot tells you what actually happened.
 - If the screenshot shows a selector problem, re-inspect the live DOM before changing locators.
 - A fix is not confirmed until the test passes **3-5 consecutive runs** without failure.
 
-### 7. Before modifying `playwright.config.ts`, read the existing file first
+### 8. Before modifying `playwright.config.ts`, read the existing file first
 
-### 8. Do NOT work around application bugs — report them
+### 9. Do NOT work around application bugs — report them
 - When a test fails, **classify the problem** before acting:
   - **Test issue (fix it yourself):** wrong selector, test logic error, timing/race condition, missing page-repository entry, incorrect API usage, flaky network — the test is wrong, not the app.
   - **Application bug (report and stop):** the app itself behaves incorrectly — a button doesn't work, a page crashes, data is wrong, a flow is broken, a feature doesn't do what it should, a UI element is missing or misplaced, an API returns an error. The test is correct but the app is broken.
@@ -95,7 +101,7 @@ These rules are non-negotiable. They override helpfulness, initiative, and assum
   - Do NOT silently move on to the next scenario as if the failure didn't happen
 - **The test's job is to describe correct behavior. If the app doesn't match, that's a bug to report, not a test to fix.**
 
-### 9. Save application context on every page visit or component discovery
+### 10. Save application context on every page visit or component discovery
 This is a **critical action** that must happen automatically during Stages 1, 2, and 5 (Test Composer).
 
 Every time you navigate to a new page or discover a new component (via Playwright MCP snapshot, DOM inspection, or test execution), you MUST save what you learned to a context file at `tests/e2e/docs/app-context.md`. This file is the team's living knowledge base of the application under test.

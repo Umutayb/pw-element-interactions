@@ -558,6 +558,73 @@ All selectors live in `tests/data/page-repository.json`.
 
 Supports `css`, `xpath`, `id`, or `text` strategies. Names: PascalCase pages (`CheckoutPage`), camelCase elements (`submitButton`).
 
+#### Role + Accessible Name
+
+Use `role` with `name` to locate elements by their ARIA role and accessible name, resolving via `page.getByRole()`:
+
+```json
+{
+  "elementName": "loginButton",
+  "selector": { "role": "button", "name": "Log in" }
+}
+```
+
+Regex name patterns for multi-language or variant matching:
+
+```json
+{
+  "elementName": "authButton",
+  "selector": { "role": "button", "name": { "regex": "Log in|Iniciar sesión|Anmelden", "flags": "i" } }
+}
+```
+
+Works with any role: `button`, `textbox`, `switch`, `radio`, `link`, `dialog`, `combobox`, `slider`, `tab`, `img`.
+Cross-platform: resolves via UiSelector on Android and predicate strings on iOS.
+
+#### Regex Text Selectors
+
+Match elements by regex text content instead of exact strings:
+
+```json
+{
+  "elementName": "payRestrictionAlert",
+  "selector": { "text": { "regex": "Just Eat Pay.*cannot.*be used", "flags": "i" } }
+}
+```
+
+Usage is identical to any other element — `steps.click()`, `steps.verifyPresence()`, etc.
+Cross-platform: resolves via `textMatches()` on Android and `MATCHES` predicate on iOS.
+
+#### Iframe-Scoped Pages
+
+Add a `frame` property to scope all elements on a page inside an iframe:
+
+```json
+{
+  "name": "AdyenCardIframe",
+  "frame": { "css": "iframe[title*='card number' i]" },
+  "elements": [
+    { "elementName": "cardInput", "selector": { "css": "[data-testid='card-input']" } }
+  ]
+}
+```
+
+Usage is unchanged — `await steps.fill('cardInput', 'AdyenCardIframe', '4111...')`.
+
+Frame disambiguation when multiple frames match:
+
+```json
+{ "frame": { "css": "iframe[title*='security code' i]" }, "frameIndex": "last" }
+```
+
+`frameIndex` accepts `"first"`, `"last"`, or a zero-based number.
+
+Nested frames:
+
+```json
+{ "frame": [{ "css": "iframe[title*='PayPal' i]" }, { "css": "iframe.zoid-component" }] }
+```
+
 ### Steps API
 
 Every method takes `elementName` and `pageName` as its first two arguments, matching keys in your JSON file.
@@ -587,6 +654,7 @@ const count = steps.getTabCount();
 
 ```ts
 await steps.click('elementName', 'PageName');
+await steps.click('elementName', 'PageName', { force: true });   // dispatch native click (bypasses overlays)
 await steps.clickWithoutScrolling('elementName', 'PageName');
 const clicked = await steps.clickIfPresent('elementName', 'PageName'); // returns boolean
 await steps.clickRandom('elementName', 'PageName');
@@ -650,6 +718,19 @@ await steps.verifyOrder('listItems', 'PageName', ['First', 'Second', 'Third']);
 await steps.verifyListOrder('listItems', 'PageName', 'asc');               // or 'desc'
 await steps.verifyCssProperty('elementName', 'PageName', 'color', 'rgb(255, 0, 0)');
 ```
+
+#### Visibility Probe
+
+```ts
+// Non-throwing visibility check — returns boolean, never throws
+const visible = await steps.isVisible('elementName', 'PageName');                    // default 2000ms timeout
+const still = await steps.isVisible('modal', 'PageName', { timeout: 500 });         // custom timeout
+const hasOffer = await steps.isVisible('banner', 'PageName', {                      // with text filter
+  containsText: '50% off',
+});
+```
+
+**Note:** `click()` automatically retries with a native DOM event when Playwright reports pointer interception — no `{ force: true }` needed in most cases.
 
 #### Listed Elements
 
@@ -727,8 +808,14 @@ await steps.on('productCards', 'CollectionsPage').nth(2).click();
 await steps.on('categories', 'HomePage').byText('Buttons').click();
 await steps.on('items', 'ListPage').byAttribute('data-status', 'active').click();
 
+// Conditional visibility — silently skips if element is not visible
+await steps.on('cookieBanner', 'Page').ifVisible().click();
+await steps.on('promoPopup', 'Page').ifVisible(500).click();       // custom timeout (ms)
+await steps.on('optionalField', 'Page').ifVisible().fill('text');
+
 // Terminal interactions
 await steps.on('submitButton', 'LoginPage').click();
+await steps.on('submitButton', 'LoginPage').click({ force: true });        // native DOM click
 await steps.on('submitButton', 'LoginPage').click({ withoutScrolling: true });
 await steps.on('menuItem', 'Nav').hover();
 await steps.on('emailInput', 'LoginPage').fill('user@test.com');
@@ -743,7 +830,10 @@ await steps.on('title', 'ProductPage').verifyText();                  // no args
 await steps.on('title', 'ProductPage').verifyTextContains('partial');
 await steps.on('items', 'ListPage').verifyCount({ greaterThan: 3 });
 await steps.on('disabledBtn', 'Page').verifyState('disabled');
-const visible = await steps.on('banner', 'Page').isPresent();
+const present = await steps.on('banner', 'Page').isPresent();
+const visible = await steps.on('banner', 'Page').isVisible();                 // 2000ms timeout
+const vis2 = await steps.on('banner', 'Page').isVisible({ timeout: 500 });   // custom timeout
+const vis3 = await steps.on('banner', 'Page').isVisible({ containsText: 'Special' });
 
 // Terminal extractions
 const text = await steps.on('price', 'ProductPage').getText();

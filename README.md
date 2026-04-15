@@ -105,6 +105,13 @@ Once loaded, Claude Code will:
 * **Smart dropdowns** — Select by value, index, or randomly, with automatic skipping of disabled and empty options.
 * **Flexible assertions** — Verify exact text, non-empty text, URL substrings, or dynamic element counts (greater than, less than, exact).
 * **Smart interactions** — Drag to other elements, type sequentially, wait for specific element state, verify images and more!
+* **Force click with auto-retry** — Clicks automatically retry with a native DOM event when pointer interception is detected. No configuration needed.
+* **Non-throwing visibility probes** — `isVisible()` returns a boolean with configurable timeout and text filtering, never throws.
+* **Conditional chaining** — `steps.on('banner', 'Page').ifVisible().click()` silently skips when the element isn't visible.
+* **Role + accessible name selectors** — `{ "role": "button", "name": "Log in" }` resolves via `page.getByRole()` with regex support.
+* **Regex text selectors** — `{ "text": { "regex": "pattern", "flags": "i" } }` for matching dynamic content.
+* **Iframe-scoped pages** — Elements inside iframes are resolved transparently via `frame` property on page definitions.
+* **Cross-platform** — Enhanced selectors resolve natively on Android (UiSelector) and iOS (predicate strings).
 
 ---
 
@@ -131,6 +138,27 @@ All selectors live in a page repository JSON file — the single source of truth
 ```
 
 Each selector object supports `css`, `xpath`, `id`, or `text` as the locator strategy.
+
+**Enhanced selectors** — the following advanced selector types are also supported:
+
+```json
+{ "role": "button", "name": "Log in" }
+{ "role": "button", "name": { "regex": "Log in|Sign in", "flags": "i" } }
+{ "text": { "regex": "Total.*\\$\\d+", "flags": "i" } }
+```
+
+**Iframe-scoped pages** — add a `frame` property to scope elements inside an iframe:
+
+```json
+{
+  "name": "PaymentIframe",
+  "frame": { "css": "iframe[title*='card number' i]" },
+  "elements": [{ "elementName": "cardInput", "selector": { "css": "#card" } }]
+}
+```
+
+Supports `frameIndex` (`"first"`, `"last"`, or zero-based number) and nested frames (array of frame selectors).
+Cross-platform: role and regex selectors resolve via UiSelector on Android and predicate strings on iOS.
 
 **Naming conventions:**
 - `name` — PascalCase page identifier, e.g. `CheckoutPage`, `ProductDetailsPage`
@@ -181,6 +209,12 @@ test('Fluent checkout flow', async ({ steps }) => {
   const price = await steps.on('price', 'ProductDetailsPage').getText();
   await steps.on('add-to-cart', 'ProductDetailsPage').click({ withoutScrolling: true });
   await steps.on('cart-count', 'Header').verifyText('1');
+
+  // Conditional — skip if not visible
+  await steps.on('promoBanner', 'ProductDetailsPage').ifVisible().click();
+  
+  // Visibility probe — returns boolean, never throws
+  const hasDiscount = await steps.on('discountBadge', 'ProductDetailsPage').isVisible();
 });
 ```
 
@@ -197,6 +231,7 @@ await steps.click('Page', 'element', { strategy: 'text', text: 'Submit' });
 // Interaction modifiers
 await steps.click('Page', 'element', { withoutScrolling: true });  // bypass actionability checks
 await steps.click('Page', 'element', { ifPresent: true });         // skip if not visible
+await steps.click('Page', 'element', { force: true });             // native DOM click (bypasses overlays)
 
 // Combine both
 await steps.click('Page', 'element', { strategy: 'random', withoutScrolling: true });
@@ -373,7 +408,7 @@ Every method below automatically fetches the Playwright `Locator` using your `pa
 
 ### 🖱️ Interaction
 
-* **`click(pageName, elementName, options?: StepOptions)`** — Clicks an element. Supports `{ strategy, withoutScrolling, ifPresent }`.
+* **`click(pageName, elementName, options?: StepOptions)`** — Clicks an element. Supports `{ strategy, withoutScrolling, ifPresent, force }`. Auto-retries with native DOM event on pointer interception.
 * **`clickWithoutScrolling(pageName, elementName)`** — Dispatches a native `click` event, bypassing actionability checks. Useful for flyout/dropdown items.
 * **`clickIfPresent(pageName, elementName)`** — Clicks only if visible; skips silently. Returns `boolean`.
 * **`clickRandom(pageName, elementName, options?: StepOptions)`** — Clicks a random element from all matches. Supports `{ withoutScrolling }`.
@@ -410,6 +445,11 @@ Every method below automatically fetches the Playwright `Locator` using your `pa
 * **`verifyUrlContains(text: string)`** — Asserts that the current URL contains the expected substring.
 * **`verifyInputValue(pageName, elementName, expectedValue: string)`** — Asserts that an input, textarea, or select element has the expected value.
 * **`verifyTabCount(expectedCount: number)`** — Asserts the number of currently open tabs/pages in the browser context.
+
+### 🔍 Visibility Probe
+
+* **`isVisible(pageName, elementName, options?)`** — Non-throwing visibility check. Returns `true` if the element is visible within the timeout, `false` otherwise. Options: `{ timeout?: number (default 2000), containsText?: string }`.
+* **`isPresent(pageName, elementName)`** — Returns `true` if the element is currently visible, `false` otherwise. Uses the default element timeout.
 
 ### 📋 Listed Elements
 

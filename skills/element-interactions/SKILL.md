@@ -684,6 +684,8 @@ await steps.dragAndDrop('elementName', 'PageName', { xOffset: 100, yOffset: 0 })
 await steps.dragAndDropListedElement('elementName', 'PageName', 'Item Label', { target: otherLocatorOrElement });
 ```
 
+**Note:** `click()` automatically retries with a native DOM event when Playwright reports pointer interception — no `{ force: true }` needed in most cases.
+
 #### Data Extraction
 
 ```ts
@@ -722,15 +724,16 @@ await steps.verifyCssProperty('elementName', 'PageName', 'color', 'rgb(255, 0, 0
 #### Visibility Probe
 
 ```ts
-// Non-throwing visibility check — returns boolean, never throws
+// Non-throwing boolean check — never throws, returns true/false
+const present = await steps.isPresent('elementName', 'PageName');                   // uses default element timeout
+
+// Non-throwing visibility check with short timeout — returns boolean, never throws
 const visible = await steps.isVisible('elementName', 'PageName');                    // default 2000ms timeout
 const still = await steps.isVisible('modal', 'PageName', { timeout: 500 });         // custom timeout
 const hasOffer = await steps.isVisible('banner', 'PageName', {                      // with text filter
   containsText: '50% off',
 });
 ```
-
-**Note:** `click()` automatically retries with a native DOM event when Playwright reports pointer interception — no `{ force: true }` needed in most cases.
 
 #### Listed Elements
 

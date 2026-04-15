@@ -1,7 +1,7 @@
 import { Locator } from '@playwright/test';
 import { ElementRepository, Element, WebElement, ElementResolutionOptions, SelectionStrategy } from '@civitas-cerebrum/element-repository';
 import { ElementInteractions } from '../interactions/facade/ElementInteractions';
-import { DropdownSelectOptions, TextVerifyOptions, CountVerifyOptions, DragAndDropOptions, ScreenshotOptions } from '../enum/Options';
+import { DropdownSelectOptions, TextVerifyOptions, CountVerifyOptions, DragAndDropOptions, ScreenshotOptions, IsVisibleOptions } from '../enum/Options';
 
 function toLocator(element: Element): Locator {
     return (element as WebElement).locator;
@@ -20,6 +20,8 @@ function toLocator(element: Element): Locator {
 export class ElementAction {
     private resolutionOptions: ElementResolutionOptions = {};
     private timeout: number;
+    private conditionalVisible: boolean = false;
+    private visibilityTimeout: number = 2000;
 
     constructor(
         private repo: ElementRepository,
@@ -63,7 +65,41 @@ export class ElementAction {
         return this;
     }
 
+    /**
+     * Makes all subsequent actions conditional on visibility.
+     * If the element is not visible within the timeout, actions silently skip
+     * instead of throwing. Returns `this` for chaining.
+     *
+     * @param timeout - Max wait in ms to check visibility. Defaults to `2000`.
+     *
+     * @example
+     * ```ts
+     * await steps.on('cookieBanner', 'Page').ifVisible().click();
+     * await steps.on('promoPopup', 'Page').ifVisible(500).click();
+     * ```
+     */
+    ifVisible(timeout?: number): this {
+        this.conditionalVisible = true;
+        if (timeout !== undefined) this.visibilityTimeout = timeout;
+        return this;
+    }
+
     // -- Internal helpers --
+
+    /**
+     * Checks the ifVisible condition. Returns `true` if the action should proceed,
+     * `false` if it should be skipped.
+     */
+    private async shouldProceed(): Promise<boolean> {
+        if (!this.conditionalVisible) return true;
+        try {
+            const locator = await this.resolveLocator();
+            await locator.waitFor({ state: 'visible', timeout: this.visibilityTimeout });
+            return true;
+        } catch {
+            return false;
+        }
+    }
 
     private async resolve(): Promise<Element> {
         return this.repo.get(this.elementName, this.pageName, this.resolutionOptions);
@@ -75,36 +111,48 @@ export class ElementAction {
 
     // -- Terminal actions: interactions --
 
-    /** Click the resolved element. */
-    async click(options?: { withoutScrolling?: boolean }): Promise<void> {
-        const element = await this.resolve();
-        await element.action(this.timeout).click(options);
+    /** Click the resolved element. Skips silently if `ifVisible()` was set and element is hidden. */
+    async click(options?: { withoutScrolling?: boolean; force?: boolean }): Promise<void> {
+        if (!await this.shouldProceed()) return;
+        const locator = toLocator(await this.resolve());
+        await this.interactions.interact.click(locator, {
+            withoutScrolling: options?.withoutScrolling,
+            force: options?.force,
+        });
     }
 
     /** Click the resolved element if present. Returns `true` if clicked, `false` if skipped. */
-    async clickIfPresent(options?: { withoutScrolling?: boolean }): Promise<boolean> {
+    async clickIfPresent(options?: { withoutScrolling?: boolean; force?: boolean }): Promise<boolean> {
         const element = await this.resolve();
         if (await element.isVisible()) {
-            await element.action(this.timeout).click(options);
+            const locator = toLocator(element);
+            await this.interactions.interact.click(locator, {
+                withoutScrolling: options?.withoutScrolling,
+                ifPresent: true,
+                force: options?.force,
+            });
             return true;
         }
         return false;
     }
 
-    /** Hover over the resolved element. */
+    /** Hover over the resolved element. Skips silently if `ifVisible()` was set and element is hidden. */
     async hover(): Promise<void> {
+        if (!await this.shouldProceed()) return;
         const element = await this.resolve();
         await element.action(this.timeout).hover();
     }
 
-    /** Clear and fill the resolved element with text. */
+    /** Clear and fill the resolved element with text. Skips silently if `ifVisible()` was set and element is hidden. */
     async fill(text: string): Promise<void> {
+        if (!await this.shouldProceed()) return;
         const element = await this.resolve();
         await element.action(this.timeout).fill(text);
     }
 
-    /** Scroll the resolved element into view. */
+    /** Scroll the resolved element into view. Skips silently if `ifVisible()` was set and element is hidden. */
     async scrollIntoView(): Promise<void> {
+        if (!await this.shouldProceed()) return;
         const element = await this.resolve();
         await element.action(this.timeout).scrollIntoView();
     }
@@ -115,14 +163,16 @@ export class ElementAction {
         return await this.interactions.interact.selectDropdown(locator, options);
     }
 
-    /** Check a checkbox or radio button. */
+    /** Check a checkbox or radio button. Skips silently if `ifVisible()` was set and element is hidden. */
     async check(): Promise<void> {
+        if (!await this.shouldProceed()) return;
         const element = await this.resolve();
         await element.action(this.timeout).check();
     }
 
-    /** Uncheck a checkbox. */
+    /** Uncheck a checkbox. Skips silently if `ifVisible()` was set and element is hidden. */
     async uncheck(): Promise<void> {
+        if (!await this.shouldProceed()) return;
         const element = await this.resolve();
         await element.action(this.timeout).uncheck();
     }
@@ -213,6 +263,25 @@ export class ElementAction {
         try {
             const element = await this.resolve();
             return await element.action(this.timeout).isPresent();
+        } catch {
+            return false;
+        }
+    }
+
+    /**
+     * Non-throwing visibility probe with optional text filtering and custom timeout.
+     * Returns `true` if the element is visible (and matches text if specified), `false` otherwise.
+     */
+    async isVisible(options?: IsVisibleOptions): Promise<boolean> {
+        const timeout = options?.timeout ?? 2000;
+        try {
+            const locator = await this.resolveLocator();
+            await locator.waitFor({ state: 'visible', timeout });
+            if (options?.containsText) {
+                const text = await locator.textContent({ timeout }).catch(() => null);
+                return text !== null && text.includes(options.containsText);
+            }
+            return true;
         } catch {
             return false;
         }

@@ -50,31 +50,37 @@ These rules are non-negotiable. They override helpfulness, initiative, and assum
 - Show the user the exact JSON you want to add. Wait for "yes." Then edit.
 - No silent additions. No "I'll just add this one locator."
 
-### 3. Do NOT invent selectors — inspect the live site or use user-provided entries
+### 3. ALWAYS read `references/api-reference.md` before writing or modifying code
+- Before writing test code, modifying selectors, fixing tests, reviewing compliance, or answering API questions — read the API reference first.
+- Do not write `steps.*` calls, selector JSON, or fixture code from memory. Ever.
+- This applies to every stage, every fix, every edit. No exceptions.
+
+### 4. Do NOT invent selectors — inspect the live site or use user-provided entries
+
 - You do not know what selectors exist on the page. Do not guess.
 - Use the Playwright MCP to navigate to the page and inspect the real DOM.
 - If the Playwright MCP is not available, tell the user:
   > "I don't have the Playwright MCP to inspect the site. You can either enable it in your Claude Code MCP settings, or provide me with the `page-repository.json` entries directly and I'll use those."
 - Without the MCP, the user must supply all selectors. Do NOT guess or infer selectors from the scenario description alone.
 
-### 4. Do NOT invent type definitions
+### 5. Do NOT invent type definitions
 - If a type is missing, tell the user. Do not create `.d.ts` stubs or workarounds.
 
-### 5. Prefer element repository entries over inline selectors
+### 6. Prefer element repository entries over inline selectors
 - When possible, add selectors to `page-repository.json` and reference them by name.
 - Use `{ child: { pageName: 'PageName', elementName: 'elementName' } }` over `{ child: 'td:nth-child(2)' }`.
 - This is a preference, not a hard ban — inline selectors are acceptable when a repo entry would be overkill.
 
-### 6. When a test fails: invoke the failure-diagnosis protocol
+### 7. When a test fails: invoke the failure-diagnosis protocol
 - The base fixture captures a `failure-screenshot` on every failure.
 - Follow the full diagnostic pipeline: collect evidence (screenshot + DOM + error context), group failures by root cause, classify (test issue vs app bug vs ambiguous), check edge cases, then fix or report.
 - Do NOT guess what went wrong from the error message alone. The screenshot tells you what actually happened.
 - If the screenshot shows a selector problem, re-inspect the live DOM before changing locators.
 - A fix is not confirmed until the test passes **3-5 consecutive runs** without failure.
 
-### 7. Before modifying `playwright.config.ts`, read the existing file first
+### 8. Before modifying `playwright.config.ts`, read the existing file first
 
-### 8. Do NOT work around application bugs — report them
+### 9. Do NOT work around application bugs — report them
 - When a test fails, **classify the problem** before acting:
   - **Test issue (fix it yourself):** wrong selector, test logic error, timing/race condition, missing page-repository entry, incorrect API usage, flaky network — the test is wrong, not the app.
   - **Application bug (report and stop):** the app itself behaves incorrectly — a button doesn't work, a page crashes, data is wrong, a flow is broken, a feature doesn't do what it should, a UI element is missing or misplaced, an API returns an error. The test is correct but the app is broken.
@@ -95,7 +101,7 @@ These rules are non-negotiable. They override helpfulness, initiative, and assum
   - Do NOT silently move on to the next scenario as if the failure didn't happen
 - **The test's job is to describe correct behavior. If the app doesn't match, that's a bug to report, not a test to fix.**
 
-### 9. Save application context on every page visit or component discovery
+### 10. Save application context on every page visit or component discovery
 This is a **critical action** that must happen automatically during Stages 1, 2, and 5 (Test Composer).
 
 Every time you navigate to a new page or discover a new component (via Playwright MCP snapshot, DOM inspection, or test execution), you MUST save what you learned to a context file at `tests/e2e/docs/app-context.md`. This file is the team's living knowledge base of the application under test.
@@ -162,7 +168,6 @@ You MUST create a task for each of these items and complete them in order (Stage
 12. **Onboarding completion gate** — When the user signals they have no more individual scenarios, you MUST explicitly offer Stage 5 before ending the session. See the "Onboarding Completion Gate" section below. Do NOT silently stop.
 13. **Stage 5: Test Composer** (on user approval at gate) — invoke the `test-composer` skill for the iterative test composition workflow
 14. **Stage 6: Bug Discovery** (auto after Stage 5) — invoke the `bug-discovery` skill to actively probe for bugs
-15. **Stage 7: Work Summary** (auto after Stage 6, or on request) — invoke the `work-summary-deck` skill to generate a branded HTML presentation deck summarizing all QA work, then export as PDF. This is the final deliverable of the Full Suite flow.
 
 ### Process Flow
 
@@ -269,16 +274,7 @@ digraph element_interactions {
     "Offer Stage 5\n(Coverage Expansion)" [shape=box, style=bold];
     "Offer Stage 5\n(Coverage Expansion)" -> "Invoke test-composer skill" [label="user accepts"];
     "Offer Stage 5\n(Coverage Expansion)" -> "Done" [label="user declines"];
-    "Invoke test-composer skill" -> "Invoke bug-discovery skill" [label="coverage complete"];
-    "Invoke bug-discovery skill" -> "Invoke work-summary-deck skill" [label="bugs reported"];
-    "Invoke work-summary-deck skill" -> "Export PDF and deliver" [label="deck generated"];
-    "Export PDF and deliver" -> "Done";
-
-    // Full Suite fast-path
-    "Full Suite request?" [shape=diamond];
-    "Intent clear?" -> "Full Suite request?" [label="yes"];
-    "Full Suite request?" -> "STAGE 1: Scenario Discovery" [label="yes — run full cycle:\nStages 1-4 → 5 → 6 → Report PDF"];
-    "Full Suite request?" -> "API question?" [label="no"];
+    "Invoke test-composer skill" -> "Done";
 }
 ```
 
@@ -292,14 +288,12 @@ Only show the greeting menu if the user's message is vague or just says somethin
 
 > "How can I help you today? I can:
 > - **Automate a scenario** — describe what you want to test, or give me a link to the app
-> - **Build a full E2E suite** — give me a URL and I'll build complete coverage with bug discovery and a report
 > - **Scale an existing project** — add more scenarios to an existing test suite
 > - **Fix or edit a test** — debug a failing test or modify an existing one
 > - **Answer an API question** — help with Steps API syntax, fixtures, or configuration"
 
 ### Routing
 
-- **User asks for a full E2E suite** (e.g., "automate tests for [site]", "build an E2E suite for [url]", "test [website]") — This is the **Full Suite** flow. Run the complete cycle autonomously: Stage 1-4 for an initial scenario → Stage 5 (Test Composer) for full coverage expansion → Stage 6 (Bug Discovery) for adversarial probing → generate a `work-summary-deck` report PDF at the end. Ask one clarifying question (the URL/app to test), then proceed through all stages, requesting user approval only at the hard gates (scenario approval, selector approval). At the end, invoke the `work-summary-deck` skill to generate a branded HTML deck and export it as PDF.
 - **User already described a scenario** — Skip the greeting. Go directly to Stage 1 (fast path if scenario is complete, full discovery if vague).
 - **API question** — Answer directly from the API Reference section below. No stages needed.
 - **Fix or edit a test** — Skip to Stage 3 (Fix/Edit Mode).
@@ -408,14 +402,15 @@ Show the user the exact JSON entries you want to add:
 
 1. **Check project setup.** Read `tests/fixtures/base.ts` and `playwright.config.ts` — create or update only if missing or broken. Also verify that `.gitignore` includes `.claude/` and `CLAUDE.md` to prevent Claude Code configuration from being pushed to the repository — add them if missing.
 2. **Add approved selectors** to `page-repository.json` (if not already done).
-3. **Write the test file** using the Steps API. Every interaction goes through `steps.*` methods — no raw `page.locator()` calls.
-4. **Run the test** with `npx playwright test <test-file>`.
-5. **If the test fails:** invoke the `failure-diagnosis` protocol — collect evidence (screenshot, DOM, error context), group failures by root cause, classify (test issue vs app bug vs ambiguous), check edge cases, then fix test issues autonomously with stability validation (3-5 passing runs) or report app bugs with full evidence. If the fix requires new selectors, use Playwright MCP to inspect the DOM, propose the new entry, and get approval before editing.
-6. **If the test passes:** commit immediately.
+3. **Read `references/api-reference.md`** — load the full API reference before writing any test code. Do not write from memory.
+4. **Write the test file** using the Steps API. Every interaction goes through `steps.*` methods — no raw `page.locator()` calls.
+5. **Run the test** with `npx playwright test <test-file>`.
+6. **If the test fails:** invoke the `failure-diagnosis` protocol — collect evidence (screenshot, DOM, error context), group failures by root cause, classify (test issue vs app bug vs ambiguous), check edge cases, then fix test issues autonomously with stability validation (3-5 passing runs) or report app bugs with full evidence. If the fix requires new selectors, use Playwright MCP to inspect the DOM, propose the new entry, and get approval before editing.
+7. **If the test passes:** commit immediately.
 
 ### Skip-to-Stage-3 (Fix/Edit Mode)
 
-When the user asks to fix or edit an existing test, skip Stages 1 and 2. Read the existing test, understand the issue, and proceed directly to fixing and running. If fixing requires new selectors, use the mini-inspection flow described above — do NOT silently add selectors.
+When the user asks to fix or edit an existing test, skip Stages 1 and 2. Read `references/api-reference.md`, then read the existing test, understand the issue, and proceed directly to fixing and running. If fixing requires new selectors, use the mini-inspection flow described above — do NOT silently add selectors.
 
 ---
 
@@ -442,12 +437,13 @@ For each test file, verify:
 
 ### Process
 
-1. **Read each test file** written or modified in this session.
-2. **Cross-reference every API call** against the API Reference section below.
-3. **Report findings** to the user — list any issues found with the specific line, what's wrong, and the correct usage.
-4. **If issues are found:** investigate *why* the non-compliant code was written — was the API misunderstood? Was a method signature wrong in the scenario? Did a previous stage produce incorrect assumptions? Understanding the root cause prevents the same mistake from recurring in the next scenario. Then fix, re-run the tests, and confirm they still pass.
-5. **If fixes cause a test failure:** follow Rule 6 — inspect the failure screenshot first before attempting any further fix. Do NOT guess from the error message alone.
-6. **If no issues are found:** confirm compliance and proceed to commit.
+1. **Read `references/api-reference.md`** — load the full API reference. Do not review from memory.
+2. **Read each test file** written or modified in this session.
+3. **Cross-reference every API call** against the API Reference.
+4. **Report findings** to the user — list any issues found with the specific line, what's wrong, and the correct usage.
+5. **If issues are found:** investigate *why* the non-compliant code was written — was the API misunderstood? Was a method signature wrong in the scenario? Did a previous stage produce incorrect assumptions? Understanding the root cause prevents the same mistake from recurring in the next scenario. Then fix, re-run the tests, and confirm they still pass.
+6. **If fixes cause a test failure:** follow Rule 6 — inspect the failure screenshot first before attempting any further fix. Do NOT guess from the error message alone.
+7. **If no issues are found:** confirm compliance and proceed to commit.
 
 ### Output Format
 
@@ -512,503 +508,30 @@ Do NOT silently end the session after Stage 4. The onboarding cycle was an entry
 
 ## API Reference
 
-The following sections document the full API available for writing tests in Stage 3.
-
-### Setup — Fixtures
-
-Read `tests/fixtures/base.ts` first if it exists — do not overwrite without checking.
-
-```ts
-// tests/fixtures/base.ts
-import { test as base, expect } from '@playwright/test';
-import { baseFixture } from '@civitas-cerebrum/element-interactions';
-
-export const test = baseFixture(base, 'tests/data/page-repository.json', {
-  timeout: 60000,              // element timeout (default: 30000)
-  // repoTimeout: 15000,       // repo resolution timeout (default: 15000)
-  // blockedOrigins: /regex/,  // auto-abort matching routes
-  // screenshotOnFailure: true, // auto-capture on failure (default: true)
-});
-export { expect };
-```
-
-| Fixture | Type | Description |
-|---|---|---|
-| `steps` | `Steps` | The full Steps API |
-| `repo` | `ElementRepository` | Direct repository access for advanced locator queries |
-| `interactions` | `ElementInteractions` | Raw interactions API for custom locators |
-| `contextStore` | `ContextStore` | Shared in-memory key-value store for passing data between steps within a test |
-
-`baseFixture` attaches a full-page `failure-screenshot` to the HTML report on every failed test automatically.
-
-**Extending with custom fixtures** — `baseFixture` returns a standard Playwright `test` object, so use `.extend<T>()` as usual.
-
-### Test Data & Environment
-
-Tests should be environment-portable — able to run against staging, CI, or local environments without manual data setup.
-
-**Environment configuration pattern:**
-```ts
-// tests/fixtures/base.ts — add environment config before baseFixture
-const ENV = {
-  baseURL: process.env.BASE_URL || 'https://staging.example.com',
-  testUser: {
-    email: process.env.TEST_EMAIL || 'test@example.com',
-    password: process.env.TEST_PASSWORD || '',
-  },
-};
-```
-
-**Test data principles:**
-- Each test should create its own preconditions and not depend on other tests' state
-- Use `test.describe.configure({ mode: 'parallel' })` as the default
-- Use `test.describe.serial()` only for intentional journey tests where step order matters
-- Store credentials in `.env` files (gitignored), never in test code
-- Tests that need specific data state should use `test.skip()` when that data isn't found, not fail
-- For apps with APIs, use `test.beforeEach` with `request` fixture for programmatic setup/teardown:
-
-```ts
-test.beforeEach(async ({ request }) => {
-  await request.post('/api/test/seed', { data: { scenario: 'checkout' } });
-});
-test.afterEach(async ({ request }) => {
-  await request.post('/api/test/cleanup');
-});
-```
-
-### CI/CD Integration
-
-When the project is ready for continuous integration, generate a workflow file for the detected CI platform. Check for `.github/`, `.gitlab-ci.yml`, `Jenkinsfile`, or `azure-pipelines.yml`.
-
-**GitHub Actions (most common):**
-```yaml
-# .github/workflows/e2e.yml
-name: E2E Tests
-on: [push, pull_request]
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - run: npx playwright test --grep-invert @bug-discovery
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: playwright-report
-          path: playwright-report/
-```
-
-**For large suites (50+ tests), add sharding:**
-```yaml
-strategy:
-  matrix:
-    shard: [1/4, 2/4, 3/4, 4/4]
-steps:
-  - run: npx playwright test --shard=${{ matrix.shard }}
-```
-
-**Flaky test management:**
-- Configure `retries: 2` for CI, `retries: 0` for local development
-- A test that fails 1 in 10 runs needs root cause analysis, not retries
-- Use `test.fixme()` for known flaky tests with a linked issue
-- Never use `test.skip()` without a reason comment
-
-CI integration is offered at the Onboarding Completion Gate or after test-composer finishes. Ask: "Would you like me to generate a CI workflow for running these tests automatically?"
-
-### Locator Format
-
-All selectors live in `tests/data/page-repository.json`.
-
-```json
-{
-  "pages": [
-    {
-      "name": "HomePage",
-      "elements": [
-        {
-          "elementName": "submitButton",
-          "selector": {
-            "css": "button[data-test='submit']",
-            "xpath": "//button[@data-test='submit']",
-            "id": "submit-btn",
-            "text": "Submit"
-          }
-        }
-      ]
-    }
-  ]
-}
-```
-
-Supports `css`, `xpath`, `id`, or `text` strategies. Names: PascalCase pages (`CheckoutPage`), camelCase elements (`submitButton`).
-
-### Steps API
-
-Every method takes `elementName` and `pageName` as its first two arguments, matching keys in your JSON file.
-
-**Imports** — add at the top of your test file as needed:
-```ts
-import { DropdownSelectType, ListedElementMatch, VerifyListedOptions, GetListedDataOptions, FillFormValue, ScreenshotOptions, EmailFilterType, EmailMarkAction, WebElement } from '@civitas-cerebrum/element-interactions';
-```
-
-#### Navigation
-
-```ts
-await steps.navigateTo('/path');
-await steps.refresh();
-await steps.backOrForward('back'); // or 'forward'
-await steps.setViewport(1280, 720);
-
-// Tab management
-const newPage = await steps.switchToNewTab(async () => {
-  await steps.click('newTabLink', 'PageName');
-});
-await steps.closeTab(newPage);
-const count = steps.getTabCount();
-```
-
-#### Interaction
-
-```ts
-await steps.click('elementName', 'PageName');
-await steps.clickWithoutScrolling('elementName', 'PageName');
-const clicked = await steps.clickIfPresent('elementName', 'PageName'); // returns boolean
-await steps.clickRandom('elementName', 'PageName');
-await steps.clickNth('elementName', 'PageName', 2);           // zero-based index
-await steps.rightClick('elementName', 'PageName');
-await steps.doubleClick('elementName', 'PageName');
-await steps.check('elementName', 'PageName');
-await steps.uncheck('elementName', 'PageName');
-await steps.hover('elementName', 'PageName');
-await steps.scrollIntoView('elementName', 'PageName');
-await steps.fill('elementName', 'PageName', 'text');
-await steps.clearInput('elementName', 'PageName');
-await steps.typeSequentially('elementName', 'PageName', 'text', 50); // optional delay ms
-await steps.uploadFile('elementName', 'PageName', 'path/to/file.pdf');
-await steps.setSliderValue('elementName', 'PageName', 75);
-await steps.pressKey('Enter');                                 // 'Escape', 'Tab', 'Control+A', etc.
-
-// Dropdowns
-const val = await steps.selectDropdown('elementName', 'PageName');                                              // random (default)
-const val2 = await steps.selectDropdown('elementName', 'PageName', { type: DropdownSelectType.VALUE, value: 'xl' });
-const val3 = await steps.selectDropdown('elementName', 'PageName', { type: DropdownSelectType.INDEX, index: 2 });
-await steps.selectMultiple('multiSelect', 'PageName', ['opt1', 'opt2']);
-
-// Drag and drop — target accepts a Locator or Element from the repository
-await steps.dragAndDrop('elementName', 'PageName', { target: otherLocatorOrElement });
-await steps.dragAndDrop('elementName', 'PageName', { xOffset: 100, yOffset: 0 });
-await steps.dragAndDropListedElement('elementName', 'PageName', 'Item Label', { target: otherLocatorOrElement });
-```
-
-#### Data Extraction
-
-```ts
-const text = await steps.getText('elementName', 'PageName');
-const href = await steps.getAttribute('elementName', 'PageName', 'href');
-const count = await steps.getCount('elementName', 'PageName');
-const inputVal = await steps.getInputValue('elementName', 'PageName');
-const color = await steps.getCssProperty('elementName', 'PageName', 'color');
-
-// Bulk extraction
-const allTexts = await steps.getAll('listItems', 'PageName');
-const allChildTexts = await steps.getAll('tableRows', 'PageName', { child: { pageName: 'TablePage', elementName: 'nameCell' } });
-const allHrefs = await steps.getAll('links', 'PageName', { extractAttribute: 'href' });
-```
-
-#### Verification
-
-```ts
-await steps.verifyPresence('elementName', 'PageName');
-await steps.verifyAbsence('elementName', 'PageName');
-await steps.verifyText('elementName', 'PageName', 'Expected text');
-await steps.verifyText('elementName', 'PageName');  // no args = asserts not empty
-await steps.verifyTextContains('elementName', 'PageName', 'partial');
-await steps.verifyCount('elementName', 'PageName', { exactly: 3 });        // also: greaterThan, lessThan
-await steps.verifyState('elementName', 'PageName', 'enabled');              // 'disabled', 'editable', 'checked', 'focused', 'visible', 'hidden', 'attached', 'inViewport'
-await steps.verifyAttribute('elementName', 'PageName', 'href', '/path');
-await steps.verifyInputValue('elementName', 'PageName', 'expected');
-await steps.verifyImages('elementName', 'PageName');
-await steps.verifyUrlContains('/dashboard');
-await steps.verifyTabCount(2);
-await steps.verifyOrder('listItems', 'PageName', ['First', 'Second', 'Third']);
-await steps.verifyListOrder('listItems', 'PageName', 'asc');               // or 'desc'
-await steps.verifyCssProperty('elementName', 'PageName', 'color', 'rgb(255, 0, 0)');
-```
-
-#### Listed Elements
-
-```ts
-// Click by text or attribute match
-await steps.clickListedElement('tableRows', 'PageName', { text: 'John' });
-await steps.clickListedElement('tableRows', 'PageName', {
-  attribute: { name: 'data-id', value: '5' },
-  child: { pageName: 'TablePage', elementName: 'editButton' }
-});
-
-// Verify text/attribute of a listed element
-await steps.verifyListedElement('entries', 'PageName', {
-  text: 'Name',
-  child: { pageName: 'TablePage', elementName: 'valueCell' },
-  expectedText: 'John Doe'
-});
-
-// Extract data from a listed element
-const text = await steps.getListedElementData('entries', 'PageName', { text: 'Name' });
-const href = await steps.getListedElementData('tableRows', 'PageName', {
-  text: 'John',
-  child: { pageName: 'TablePage', elementName: 'profileLink' },
-  extractAttribute: 'href'
-});
-```
-
-#### Waiting
-
-```ts
-await steps.waitForState('elementName', 'PageName');                        // default: 'visible'
-await steps.waitForState('elementName', 'PageName', 'hidden');              // also: 'attached', 'detached'
-await steps.waitAndClick('elementName', 'PageName');                        // waits for visible, then clicks
-await steps.waitForNetworkIdle();
-await steps.waitForResponse('/api/data', async () => {
-  await steps.click('submitButton', 'PageName');
-});
-```
-
-#### Composite / Workflow
-
-```ts
-// Fill multiple fields in one call
-await steps.fillForm('FormsPage', {
-  nameInput: 'John Doe',
-  emailInput: 'john@example.com',
-  countrySelect: { type: DropdownSelectType.VALUE, value: 'us' }
-});
-
-// Retry an action until a verification passes
-await steps.retryUntil(
-  async () => { await steps.click('refreshButton', 'PageName'); },
-  async () => { await steps.verifyText('status', 'PageName', 'Ready'); },
-  3, 1000  // maxRetries, delayMs
-);
-```
-
-#### Screenshot
-
-```ts
-const buf = await steps.screenshot();                                       // page screenshot
-const buf2 = await steps.screenshot({ fullPage: true, path: 'out.png' });   // full page with save
-const buf3 = await steps.screenshot('elementName', 'PageName');             // element screenshot
-```
-
-### Fluent API — `steps.on()`
-
-For a chainable alternative to the standard Steps methods, use `steps.on(elementName, pageName)`. It returns an `ElementAction` builder with strategy selectors and terminal actions.
-
-```ts
-// Strategy selectors (chainable)
-await steps.on('productCards', 'CollectionsPage').first().click();
-await steps.on('productCards', 'CollectionsPage').random().click({ withoutScrolling: true });
-await steps.on('productCards', 'CollectionsPage').nth(2).click();
-await steps.on('categories', 'HomePage').byText('Buttons').click();
-await steps.on('items', 'ListPage').byAttribute('data-status', 'active').click();
-
-// Terminal interactions
-await steps.on('submitButton', 'LoginPage').click();
-await steps.on('submitButton', 'LoginPage').click({ withoutScrolling: true });
-await steps.on('menuItem', 'Nav').hover();
-await steps.on('emailInput', 'LoginPage').fill('user@test.com');
-await steps.on('checkbox', 'SettingsPage').check();
-await steps.on('slider', 'SettingsPage').setSliderValue(75);
-await steps.on('fileInput', 'UploadPage').uploadFile('path/to/file.pdf');
-
-// Terminal verifications
-await steps.on('title', 'ProductPage').verifyPresence();
-await steps.on('title', 'ProductPage').verifyText('Expected Title');
-await steps.on('title', 'ProductPage').verifyText();                  // no args = not empty
-await steps.on('title', 'ProductPage').verifyTextContains('partial');
-await steps.on('items', 'ListPage').verifyCount({ greaterThan: 3 });
-await steps.on('disabledBtn', 'Page').verifyState('disabled');
-const visible = await steps.on('banner', 'Page').isPresent();
-
-// Terminal extractions
-const text = await steps.on('price', 'ProductPage').getText();
-const href = await steps.on('link', 'NavPage').getAttribute('href');
-const count = await steps.on('items', 'ListPage').getCount();
-
-// Waiting
-await steps.on('modal', 'Page').waitForState('visible');
-```
-
-#### Chaining Examples
-
-Combine strategy selectors with actions for concise, readable test flows:
-
-```ts
-// Navigate a hover menu — select random item, bypass actionability checks
-await steps.on('mainNavItems', 'HomePage').first().hover();
-await steps.on('subcategoryItems', 'HomePage').random().click({ withoutScrolling: true });
-
-// Fill a form field then verify it took
-await steps.on('emailInput', 'LoginPage').fill('user@test.com');
-await steps.on('emailInput', 'LoginPage').verifyInputValue('user@test.com');
-
-// Find a specific item by text, click it, verify navigation
-await steps.on('categories', 'HomePage').byText('Accessories').click();
-await steps.verifyUrlContains('/accessories');
-await steps.on('productCards', 'CollectionsPage').verifyCount({ greaterThan: 0 });
-
-// Verify multiple properties — use element.action() chain for sequencing
-const submitBtn = await repo.get('submitButton', 'CheckoutPage');
-await submitBtn.action()
-  .verifyPresence()
-  .verifyText('Place Order')
-  .verifyEnabled();
-
-// Extract data from a specific element in a list
-const thirdPrice = await steps.on('price', 'CollectionsPage').nth(2).getText();
-const isVisible = await steps.on('saleBadge', 'ProductPage').isPresent();
-```
-
-### Accessing the Repository Directly
-
-Use `repo` when you need to filter by visible text, iterate all matches, or pick a random item. Repository methods use `(elementName, pageName)` order (no driver arg — driver is bound at construction). Methods return `Element` wrappers with `click()`, `fill()`, `textContent()`, etc. To access the underlying Playwright `Locator`, cast to `WebElement`:
-
-```ts
-import { WebElement } from '@civitas-cerebrum/element-interactions';
-
-test('example', async ({ repo, steps }) => {
-  await steps.navigateTo('/');
-  const link = await repo.getByText('categories', 'HomePage', 'Forms');
-  await link?.click();                              // Element.click() works directly
-
-  // Fluent action chain
-  const element = await repo.get('elementName', 'PageName');
-  await element.action(5000).waitForState('visible').click();
-
-  // When you need the underlying Locator:
-  const locator = (element as WebElement).locator;  // access raw Playwright Locator
-});
-```
-
-```ts
-await repo.get('elementName', 'PageName');                         // single Element (first match)
-await repo.get('elementName', 'PageName', { strategy: SelectionStrategy.RANDOM }); // with options
-await repo.getAll('elementName', 'PageName');                      // array of Elements
-await repo.getRandom('elementName', 'PageName');                   // random from matches
-await repo.getByText('elementName', 'PageName', 'Text');           // exact match, then contains
-await repo.getByAttribute('elementName', 'PageName', 'data-status', 'active');
-await repo.getByIndex('elementName', 'PageName', 2);
-await repo.getByRole('elementName', 'PageName', 'button');
-await repo.getVisible('elementName', 'PageName');
-repo.getSelector('elementName', 'PageName');                       // sync, returns selector string
-repo.getSelectorRaw('elementName', 'PageName');                    // sync, { strategy, value }
-repo.driver;                                                       // bound Page/Browser
-```
-
-### Raw Interactions API
-
-Bypass the repository for dynamically generated locators. All methods accept both `Locator` and `Element`:
-
-```ts
-import { ElementInteractions } from '@civitas-cerebrum/element-interactions';
-
-const interactions = new ElementInteractions(page);
-const locator = page.locator('button.dynamic-class');
-await interactions.interact.click(locator, { withoutScrolling: true });
-await interactions.verify.count(locator, { greaterThan: 2 });
-
-// Also works with Element from repo
-const element = await repo.get('submitButton', 'LoginPage');
-await interactions.interact.click(element);
-```
-
-All `interact`, `verify`, `extract`, and `navigate` methods are available on `ElementInteractions`.
-
-### Email API
-
-Send and receive emails in tests. Supports plain-text, inline HTML, and HTML file templates.
-
-#### Setup
-
-Provide `smtp`, `imap`, or both depending on which features you need:
-
-```ts
-export const test = baseFixture(base, 'tests/data/page-repository.json', {
-  emailCredentials: {
-    smtp: {
-      email: process.env.SENDER_EMAIL!,
-      password: process.env.SENDER_PASSWORD!,
-      host: process.env.SENDER_SMTP_HOST!,
-    },
-    imap: {
-      email: process.env.RECEIVER_EMAIL!,
-      password: process.env.RECEIVER_PASSWORD!,
-    },
-  }
-});
-```
-
-#### Sending
-
-```ts
-await steps.sendEmail({ to: 'user@example.com', subject: 'Test', text: 'Hello' });
-await steps.sendEmail({ to: 'user@example.com', subject: 'Report', html: '<h1>Results</h1>' });
-await steps.sendEmail({ to: 'user@example.com', subject: 'Report', htmlFile: 'emails/report.html' });
-```
-
-#### Receiving
-
-```ts
-import { EmailFilterType } from '@civitas-cerebrum/element-interactions';
-
-const email = await steps.receiveEmail({
-  filters: [{ type: EmailFilterType.SUBJECT, value: 'Your OTP' }]
-});
-await steps.navigateTo('file://' + email.filePath);
-
-const email2 = await steps.receiveEmail({
-  filters: [
-    { type: EmailFilterType.SUBJECT, value: 'Verification' },
-    { type: EmailFilterType.FROM, value: 'noreply@example.com' },
-    { type: EmailFilterType.CONTENT, value: 'verification code' },
-  ]
-});
-
-const allEmails = await steps.receiveAllEmails({
-  filters: [{ type: EmailFilterType.FROM, value: 'alerts@example.com' }]
-});
-```
-
-#### Marking Emails
-
-```ts
-import { EmailMarkAction } from '@civitas-cerebrum/element-interactions';
-
-await steps.markEmail(EmailMarkAction.READ, {
-  filters: [{ type: EmailFilterType.SUBJECT, value: 'OTP' }]
-});
-await steps.markEmail(EmailMarkAction.FLAGGED, {
-  filters: [{ type: EmailFilterType.FROM, value: 'noreply@example.com' }]
-});
-await steps.markEmail(EmailMarkAction.ARCHIVED, {
-  filters: [{ type: EmailFilterType.SUBJECT, value: 'Report' }]
-});
-await steps.markEmail(EmailMarkAction.UNREAD); // mark all in folder
-```
-
-Mark actions: `READ`, `UNREAD`, `FLAGGED`, `UNFLAGGED`, `ARCHIVED`.
-
-#### Cleaning the Inbox
-
-```ts
-await steps.cleanEmails({
-  filters: [{ type: EmailFilterType.FROM, value: 'noreply@example.com' }]
-});
-await steps.cleanEmails(); // delete all
-```
-
-Filter types: `SUBJECT`, `FROM`, `TO`, `CONTENT` (body text/HTML), `SINCE` (Date).
+<CRITICAL>
+**You MUST read `references/api-reference.md` before writing ANY test code, selector JSON, or answering API questions. This is not optional.**
+
+Every method signature, argument order, option shape, and selector format MUST come from this file — not from memory, not from training data, not from pattern matching. The API has specific conventions (e.g., `elementName` before `pageName`, `force` dispatches a native event, `isVisible` defaults to 2000ms) that are easy to get wrong from memory. A single wrong argument order silently produces a broken test.
+
+**When to read it:**
+- Stage 3 step 3: before writing any test code
+- Stage 4 step 1: before reviewing any test code
+- Fix/Edit mode: before modifying any test
+- API questions: before answering
+
+If you catch yourself writing `steps.*` calls without having read this file in the current session, STOP and read it first.
+</CRITICAL>
+
+The API reference is in a separate file to keep this skill lean. Read it when:
+- Writing or reviewing test code (Stage 3)
+- Performing API compliance review (Stage 4)
+- Answering API questions
+- Looking up selector formats (css, xpath, role+name, regex text, iframe)
+
+Quick summary of what's available:
+- **Setup:** `baseFixture()` with fixtures: `steps`, `repo`, `interactions`, `contextStore`
+- **Locators:** `css`, `xpath`, `id`, `text`, `role`+`name` (with regex), regex `text`, iframe-scoped pages
+- **Steps API:** navigation, interaction (with `force` click + auto-retry), extraction, verification, `isVisible()` / `isPresent()` probes, listed elements, waiting, composite workflows, screenshots
+- **Fluent API:** `steps.on().first().click()`, `ifVisible().click()`, strategy selectors
+- **Repository:** `repo.get()`, `getByText()`, `getByAttribute()`, `getByRole()`, `getVisible()`, etc.
+- **Email API:** send, receive, mark, clean via SMTP/IMAP

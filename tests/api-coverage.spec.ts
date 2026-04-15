@@ -17,15 +17,33 @@ interface MethodInfo {
   covered: boolean;
 }
 
+/**
+ * Internal/private methods that appear on prototypes due to TypeScript compilation
+ * but are not part of the public API surface. Excluded from coverage tracking.
+ */
+const INTERNAL_METHODS = new Set([
+  // Steps — private resolution helpers
+  'toResolutionOptions', 'toAllResolutionOptions',
+  // Steps — internal visibility check
+  'shouldProceed',
+  // ElementRepository — private internals
+  'findPage', 'resolveElement', 'getFormattersForPlatform',
+  // Interactions — private click helpers
+  'clickWithInterceptionRetry', 'dispatchClick',
+  // ElementAction — private helpers
+  'resolve', 'resolveLocator',
+]);
+
 // Extract public methods from a class prototype
 function getPublicClassMethods(cls: any): string[] {
   const methods: string[] = [];
   const proto = cls.prototype;
   if (!proto) return methods;
-  
+
   for (const name of Object.getOwnPropertyNames(proto)) {
-    // Ignore constructors, private methods (starting with _), and non-functions
+    // Ignore constructors, private/internal methods, and non-functions
     if (name === 'constructor' || name.startsWith('_')) continue;
+    if (INTERNAL_METHODS.has(name)) continue;
     if (typeof proto[name] === 'function') {
       methods.push(name);
     }

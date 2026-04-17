@@ -373,6 +373,17 @@ export class ElementAction {
         return await this.interactions.extract.screenshot(locator, options);
     }
 
+    /** Assert the element's text equals (or differs from) the expected value. Pass `{ not: true }` to assert inequality. */
+    async expectValue(expected: string | null, options?: { not?: boolean }): Promise<void> {
+        const element = await this.resolve();
+        const actual = await element.action(this.timeout).getText();
+        if (options?.not) {
+            this.interactions.verify.expectNotEqual(actual, expected);
+        } else {
+            this.interactions.verify.expectEqual(actual, expected);
+        }
+    }
+
     // -- Terminal actions: waiting --
 
     /** Wait for the element to reach the specified state. */

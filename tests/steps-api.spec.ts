@@ -252,27 +252,27 @@ test.describe('TC_047: Steps - isPresent boolean visibility check', () => {
   });
 });
 
-test.describe('TC_087: Steps - expectEqual and expectNotEqual', () => {
+test.describe('TC_087: Steps - expectValue', () => {
 
-  test('expectEqual passes for matching values, expectNotEqual passes for differing values', async ({ steps }) => {
+  test('expectValue passes for equal values and for differing values with { not: true }', async ({ steps }) => {
 
-    await test.step('expectEqual passes when values are identical', () => {
-      steps.expectEqual('$5.99', '$5.99');
+    await test.step('expectValue passes when values are identical', () => {
+      steps.expectValue('$5.99', '$5.99');
     });
 
-    await test.step('expectEqual passes when both values are null', () => {
-      steps.expectEqual(null, null);
+    await test.step('expectValue passes when both values are null', () => {
+      steps.expectValue(null, null);
     });
 
-    await test.step('expectNotEqual passes when values differ', () => {
-      steps.expectNotEqual('$5.99', '$9.99');
+    await test.step('expectValue with { not: true } passes when values differ', () => {
+      steps.expectValue('$5.99', '$9.99', { not: true });
     });
 
-    await test.step('expectNotEqual passes when actual is null and expected is a string', () => {
-      steps.expectNotEqual(null, 'some value');
+    await test.step('expectValue with { not: true } passes when actual is null and expected is a string', () => {
+      steps.expectValue(null, 'some value', { not: true });
     });
 
-    log('TC_087 expectEqual and expectNotEqual — passed');
+    log('TC_087 expectValue — passed');
   });
 });
 

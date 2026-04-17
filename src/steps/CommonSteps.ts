@@ -765,48 +765,21 @@ export class Steps {
         await this.verify.tabCount(expectedCount);
     }
 
-    /**                                                     
-       * Asserts that two extracted values are strictly equal.                                
-       * Use after getText() or getInputValue() to compare two captured values.               
-       * @param actual - The actual value captured from the page.
-       * @param expected - The expected value.                                                
-       */                                                         
-      expectEqual(actual: string | null, expected: string): void {                            
-          log.verify('Expecting values to be equal: "%s" === "%s"', actual, expected);
-          this.verify.expectEqual(actual, expected);                                          
-      }                                   
-                                                                                              
-      /**                                                                                     
-       * Asserts that two extracted values are not equal.                                     
-       * Use after getText() or getInputValue() to compare two captured values.               
-       * @param actual - The actual value captured from the page.    
-       * @param notExpected - The value that actual must differ from.
-       */                                                                                     
-      expectNotEqual(actual: string | null, notExpected: string): void {               
-          log.verify('Expecting values to differ: "%s" !== "%s"', actual, notExpected);       
-          this.verify.expectNotEqual(actual, notExpected);
-      }
-
     /**
-     * Asserts that two extracted values are strictly equal.
+     * Asserts that two extracted values are equal or not equal.
      * Use after getText() or getInputValue() to compare two captured values.
      * @param actual - The actual value captured from the page.
-     * @param expected - The expected value.
+     * @param expected - The value to compare against.
+     * @param options - Optional. Pass `{ not: true }` to assert the values differ instead.
      */
-    expectEqual(actual: string | null, expected: string | null): void {
-        log.verify('Expecting values to be equal: "%s" === "%s"', actual, expected);
-        this.verify.expectEqual(actual, expected);
-    }
-
-    /**
-     * Asserts that two extracted values are not equal.
-     * Use after getText() or getInputValue() to compare two captured values.
-     * @param actual - The actual value captured from the page.
-     * @param notExpected - The value that actual must differ from.
-     */
-    expectNotEqual(actual: string | null, notExpected: string | null): void {
-        log.verify('Expecting values to differ: "%s" !== "%s"', actual, notExpected);
-        this.verify.expectNotEqual(actual, notExpected);
+    expectValue(actual: string | null, expected: string | null, options?: { not?: boolean }): void {
+        if (options?.not) {
+            log.verify('Expecting values to differ: "%s" !== "%s"', actual, expected);
+            this.verify.expectNotEqual(actual, expected);
+        } else {
+            log.verify('Expecting values to be equal: "%s" === "%s"', actual, expected);
+            this.verify.expectEqual(actual, expected);
+        }
     }
 
     /**

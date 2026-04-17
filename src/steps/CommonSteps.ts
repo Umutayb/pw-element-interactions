@@ -98,6 +98,29 @@ export class Steps {
     }
 
     /**
+     * Returns a fluent `ElementAction` with the caller's `StepOptions` strategy
+     * applied via the fluent strategy selectors. Lets the legacy positional
+     * `verify*` methods delegate into the matcher tree without losing the
+     * `{ strategy: 'random' | 'index' | 'text' | 'attribute' }` escape hatch.
+     */
+    private actionWithStrategy(elementName: string, pageName: string, options?: StepOptions): ElementAction {
+        const action = this.on(elementName, pageName);
+        if (!options?.strategy || options.strategy === 'first') return action;
+        switch (options.strategy) {
+            case 'random':
+                return action.random();
+            case 'index':
+                return action.nth(options.index ?? 0);
+            case 'text':
+                return action.byText(options.text ?? options.value ?? '');
+            case 'attribute':
+                return action.byAttribute(options.attribute ?? '', options.value ?? '');
+            default:
+                return action;
+        }
+    }
+
+    /**
      * Returns a fluent builder for performing actions on a repository element.
      * Chain a strategy selector (optional) and terminate with an action.
      *
@@ -200,8 +223,8 @@ export class Steps {
     // ==========================================
 
     /**
-     * Clicks on an element identified by page and element name from the repository.     * @param elementName - The element name as defined under the given page.
-
+     * Clicks on an element identified by page and element name from the repository.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param options - Optional step options for element resolution and click modifiers.
      */
@@ -216,21 +239,8 @@ export class Steps {
     }
 
     /**
-     * Clicks on an element without scrolling it into view first.
-     * Useful for elements in fixed or sticky positions (e.g. headers, floating buttons).     * @param elementName - The element name as defined under the given page.
-
-     * @param pageName - The page name as defined in `page-repository.json`.
-     * @param options - Optional step options for element resolution.
-     */
-    async clickWithoutScrolling(elementName: string, pageName: string, options?: StepOptions): Promise<void> {
-        log.interact('Clicking (no scroll) on "%s" in "%s"', elementName, pageName);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
-        await this.interact.click(element, { withoutScrolling: true });
-    }
-
-    /**
-     * Clicks a random visible element from a group of elements matching the locator.     * @param elementName - The element name as defined under the given page.
-
+     * Clicks a random visible element from a group of elements matching the locator.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param options - Optional step options.
      * @throws Error if no visible element is found for the given locator.
@@ -246,8 +256,9 @@ export class Steps {
 
     /**
      * Clicks on an element only if it is present in the DOM.
-     * Does nothing if the element is not found.     * @param elementName - The element name as defined under the given page.
-
+     * Does nothing and returns false if the element is not found.
+     *
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param options - Optional step options for element resolution.
      */
@@ -258,8 +269,8 @@ export class Steps {
     }
 
     /**
-     * Right-clicks on an element identified by page and element name from the repository.     * @param elementName - The element name as defined under the given page.
-
+     * Right-clicks on an element identified by page and element name from the repository.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param options - Optional step options for element resolution.
      */
@@ -270,8 +281,8 @@ export class Steps {
     }
 
     /**
-     * Double-clicks on an element identified by page and element name from the repository.     * @param elementName - The element name as defined under the given page.
-
+     * Double-clicks on an element identified by page and element name from the repository.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param options - Optional step options for element resolution.
      */
@@ -282,8 +293,8 @@ export class Steps {
     }
 
     /**
-     * Checks a checkbox or radio button. Idempotent.     * @param elementName - The element name as defined under the given page.
-
+     * Checks a checkbox or radio button. Idempotent.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param options - Optional step options for element resolution.
      */
@@ -294,8 +305,8 @@ export class Steps {
     }
 
     /**
-     * Unchecks a checkbox. Idempotent.     * @param elementName - The element name as defined under the given page.
-
+     * Unchecks a checkbox. Idempotent.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param options - Optional step options for element resolution.
      */
@@ -306,8 +317,8 @@ export class Steps {
     }
 
     /**
-     * Hovers over an element, triggering any hover-based UI effects.     * @param elementName - The element name as defined under the given page.
-
+     * Hovers over an element, triggering any hover-based UI effects.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param options - Optional step options for element resolution.
      */
@@ -318,8 +329,8 @@ export class Steps {
     }
 
     /**
-     * Scrolls the specified element into the visible viewport.     * @param elementName - The element name as defined under the given page.
-
+     * Scrolls the specified element into the visible viewport.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param options - Optional step options for element resolution.
      */
@@ -330,8 +341,8 @@ export class Steps {
     }
 
     /**
-     * Clears the input field and fills it with the specified text.     * @param elementName - The element name as defined under the given page.
-
+     * Clears the input field and fills it with the specified text.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param text - The text to fill into the input field.
      * @param options - Optional step options for element resolution.
@@ -343,8 +354,8 @@ export class Steps {
     }
 
     /**
-     * Uploads a file to a file input element.     * @param elementName - The element name as defined under the given page.
-
+     * Uploads a file to a file input element.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param filePath - The path to the file to upload.
      * @param options - Optional step options for element resolution.
@@ -356,8 +367,8 @@ export class Steps {
     }
 
     /**
-     * Selects an option from a `<select>` dropdown element.     * @param elementName - The element name as defined under the given page.
-
+     * Selects an option from a `<select>` dropdown element.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param dropdownOptions - Optional selection strategy (random, by value, or by index).
      * @param options - Optional step options for element resolution.
@@ -375,8 +386,8 @@ export class Steps {
     }
 
     /**
-     * Performs a drag-and-drop action on an element.     * @param elementName - The element name as defined under the given page.
-
+     * Performs a drag-and-drop action on an element.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param dragOptions - Drag target: either `{ target: Locator }` or `{ xOffset, yOffset }`.
      * @param options - Optional step options for element resolution.
@@ -389,8 +400,8 @@ export class Steps {
 
     /**
      * Performs a drag-and-drop action on a specific element within a list,
-     * identified by its visible text content.     * @param elementName - The element name as defined under the given page.
-
+     * identified by its visible text content.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param elementText - The visible text of the specific list item to drag.
      * @param dragOptions - Drag target: either `{ target: Locator }` or `{ xOffset, yOffset }`.
@@ -404,8 +415,8 @@ export class Steps {
     }
 
     /**
-     * Sets the value of a range/slider input element.     * @param elementName - The element name as defined under the given page.
-
+     * Sets the value of a range/slider input element.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param value - The numeric value to set on the slider.
      * @param options - Optional step options for element resolution.
@@ -426,8 +437,8 @@ export class Steps {
     }
 
     /**
-     * Types text into an input field one character at a time with a delay between keystrokes.     * @param elementName - The element name as defined under the given page.
-
+     * Types text into an input field one character at a time with a delay between keystrokes.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param text - The text to type character by character.
      * @param delay - The delay in milliseconds between each keystroke. Defaults to `100`.
@@ -446,8 +457,8 @@ export class Steps {
     }
 
     /**
-     * Clears the value of an input or textarea element without filling it with new text.     * @param elementName - The element name as defined under the given page.
-
+     * Clears the value of an input or textarea element without filling it with new text.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param options - Optional step options for element resolution.
      */
@@ -458,8 +469,8 @@ export class Steps {
     }
 
     /**
-     * Selects multiple options from a `<select multiple>` element by their `value` attributes.     * @param elementName - The element name as defined under the given page.
-
+     * Selects multiple options from a `<select multiple>` element by their `value` attributes.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param values - An array of `value` attribute strings to select simultaneously.
      * @param options - Optional step options for element resolution.
@@ -476,8 +487,8 @@ export class Steps {
     // ==========================================
 
     /**
-     * Retrieves the visible text content of an element.     * @param elementName - The element name as defined under the given page.
-
+     * Retrieves the visible text content of an element.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param options - Optional step options for element resolution.
      * @returns The text content of the element, or `null` if unavailable.
@@ -489,8 +500,8 @@ export class Steps {
     }
 
     /**
-     * Retrieves the value of a specific HTML attribute from an element.     * @param elementName - The element name as defined under the given page.
-
+     * Retrieves the value of a specific HTML attribute from an element.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param attributeName - The name of the attribute to retrieve.
      * @param options - Optional step options for element resolution.
@@ -503,8 +514,8 @@ export class Steps {
     }
 
     /**
-     * Returns the number of DOM elements matching the locator.     * @param elementName - The element name as defined under the given page.
-
+     * Returns the number of DOM elements matching the locator.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param options - Optional step options for element resolution.
      * @returns The count of matching elements.
@@ -516,8 +527,8 @@ export class Steps {
     }
 
     /**
-     * Retrieves the current value of an input, textarea, or select element.     * @param elementName - The element name as defined under the given page.
-
+     * Retrieves the current value of an input, textarea, or select element.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param options - Optional step options for element resolution.
      * @returns The current value of the input.
@@ -529,8 +540,8 @@ export class Steps {
     }
 
     /**
-     * Retrieves a computed CSS property value from an element.     * @param elementName - The element name as defined under the given page.
-
+     * Retrieves a computed CSS property value from an element.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param property - The CSS property name.
      * @param options - Optional step options for element resolution.
@@ -543,8 +554,8 @@ export class Steps {
     }
 
     /**
-     * Extracts text content or attribute values from all elements matching the locator.     * @param elementName - The element name as defined under the given page.
-
+     * Extracts text content or attribute values from all elements matching the locator.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param getAllOptions - Optional extraction configuration.
      * @param options - Optional step options for element resolution.
@@ -577,21 +588,20 @@ export class Steps {
     // ==========================================
 
     /**
-     * Asserts that the element is present and visible in the DOM.     * @param elementName - The element name as defined under the given page.
-
+     * Asserts that the element is present and visible in the DOM.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param options - Optional step options for element resolution.
      */
     async verifyPresence(elementName: string, pageName: string, options?: StepOptions): Promise<void> {
         log.verify('Verifying presence of "%s" in "%s"', elementName, pageName);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
-        await this.verify.presence(element);
+        await this.actionWithStrategy(elementName, pageName, options).visible.toBeTrue();
     }
 
     /**
      * Checks whether an element is currently present and visible in the DOM.
-     * Returns a boolean instead of throwing.     * @param elementName - The element name as defined under the given page.
-
+     * Returns a boolean instead of throwing.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param options - Optional step options for element resolution.
      * @returns `true` if the element is visible, `false` otherwise.
@@ -640,20 +650,26 @@ export class Steps {
     }
 
     /**
-     * Asserts that the element is not present in the DOM.     * @param elementName - The element name as defined under the given page.
-
+     * Asserts that the element is not present in the DOM.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param options - Optional step options (strategy not applicable for absence checks).
      */
     async verifyAbsence(elementName: string, pageName: string, options?: StepOptions): Promise<void> {
         log.verify('Verifying absence of "%s" in "%s"', elementName, pageName);
+        // Stays non-delegated: uses Playwright's `expect(locator).toBeHidden()`
+        // which is optimized for the absent case (returns quickly, no 15s repo
+        // resolution wait). The matcher tree's visible.toBeFalse() would work
+        // but pays the full repo-timeout to "fail to find" the element before
+        // even starting the polling loop.
+        void options;
         const selector = this.repo.getSelector(elementName, pageName);
         await this.verify.absence(selector);
     }
 
     /**
-     * Asserts that an element's text content matches the expected value.     * @param elementName - The element name as defined under the given page.
-
+     * Asserts that an element's text content matches the expected value.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param expectedText - The exact text to match against.
      * @param verifyOptions - Optional verification options (e.g. `{ notEmpty: true }`).
@@ -663,26 +679,30 @@ export class Steps {
         const notEmpty = verifyOptions?.notEmpty || expectedText === undefined;
         const logDetail = notEmpty ? 'is not empty' : `matches: "${expectedText}"`;
         log.verify('Verifying text of "%s" in "%s" %s', elementName, pageName, logDetail);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
-        await this.verify.text(element, expectedText, notEmpty ? { notEmpty: true } : verifyOptions);
+        const action = this.actionWithStrategy(elementName, pageName, options);
+        if (notEmpty) await action.text.not.toBe('');
+        else await action.text.toBe(expectedText!);
     }
 
     /**
-     * Asserts the number of elements matching the locator satisfies the given condition.     * @param elementName - The element name as defined under the given page.
-
+     * Asserts the number of elements matching the locator satisfies the given condition.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param countOptions - Count condition.
      * @param options - Optional step options for element resolution.
      */
     async verifyCount(elementName: string, pageName: string, countOptions: CountVerifyOptions, options?: StepOptions): Promise<void> {
         log.verify('Verifying count for "%s" in "%s" with options: %O', elementName, pageName, countOptions);
-        const element = await this.repo.get(elementName, pageName, this.toAllResolutionOptions(options));
-        await this.verify.count(element, countOptions);
+        const action = this.actionWithStrategy(elementName, pageName, options);
+        if (countOptions.exactly !== undefined) await action.count.toBe(countOptions.exactly);
+        else if (countOptions.greaterThan !== undefined) await action.count.toBeGreaterThan(countOptions.greaterThan);
+        else if (countOptions.lessThan !== undefined) await action.count.toBeLessThan(countOptions.lessThan);
+        else throw new Error("verifyCount requires 'exactly', 'greaterThan', or 'lessThan' in CountVerifyOptions.");
     }
 
     /**
-     * Asserts that all image elements matching the locator have loaded successfully.     * @param elementName - The element name as defined under the given page.
-
+     * Asserts that all image elements matching the locator have loaded successfully.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param scroll - Whether to scroll each image into view before checking. Defaults to `true`.
      * @param options - Optional step options for element resolution.
@@ -694,21 +714,20 @@ export class Steps {
     }
 
     /**
-     * Asserts that an element's text content contains the specified substring.     * @param elementName - The element name as defined under the given page.
-
+     * Asserts that an element's text content contains the specified substring.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param expectedText - The substring expected to be found within the element's text.
      * @param options - Optional step options for element resolution.
      */
     async verifyTextContains(elementName: string, pageName: string, expectedText: string, options?: StepOptions): Promise<void> {
         log.verify('Verifying "%s" in "%s" contains text: "%s"', elementName, pageName, expectedText);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
-        await this.verify.textContains(element, expectedText);
+        await this.actionWithStrategy(elementName, pageName, options).text.toContain(expectedText);
     }
 
     /**
-     * Asserts that an element is in the specified state.     * @param elementName - The element name as defined under the given page.
-
+     * Asserts that an element is in the specified state.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param state - The expected state.
      * @param timeout - Optional timeout in milliseconds.
@@ -725,8 +744,8 @@ export class Steps {
     }
 
     /**
-     * Asserts that an element has a specific HTML attribute with the expected value.     * @param elementName - The element name as defined under the given page.
-
+     * Asserts that an element has a specific HTML attribute with the expected value.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param attributeName - The name of the HTML attribute to check.
      * @param expectedValue - The expected value of the attribute.
@@ -734,8 +753,7 @@ export class Steps {
      */
     async verifyAttribute(elementName: string, pageName: string, attributeName: string, expectedValue: string, options?: StepOptions): Promise<void> {
         log.verify('Verifying "%s" in "%s" has attribute "%s" = "%s"', elementName, pageName, attributeName, expectedValue);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
-        await this.verify.attribute(element, attributeName, expectedValue);
+        await this.actionWithStrategy(elementName, pageName, options).attributes.get(attributeName).toBe(expectedValue);
     }
 
     /**
@@ -748,16 +766,15 @@ export class Steps {
     }
 
     /**
-     * Asserts that an input, textarea, or select element has the expected value.     * @param elementName - The element name as defined under the given page.
-
+     * Asserts that an input, textarea, or select element has the expected value.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param expectedValue - The expected value of the input.
      * @param options - Optional step options for element resolution.
      */
     async verifyInputValue(elementName: string, pageName: string, expectedValue: string, options?: StepOptions): Promise<void> {
         log.verify('Verifying input value of "%s" in "%s" matches: "%s"', elementName, pageName, expectedValue);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
-        await this.verify.inputValue(element, expectedValue);
+        await this.actionWithStrategy(elementName, pageName, options).value.toBe(expectedValue);
     }
 
     /**
@@ -773,7 +790,7 @@ export class Steps {
      * Entry point for the matcher tree. Resolves the named element and returns
      * an `ExpectBuilder` that exposes field-scoped matchers (`.text`, `.value`,
      * `.attributes`, `.count`, `.visible`, `.enabled`, `.css(prop)`, `.not`)
-     * plus the predicate escape hatch `.toBe(predicate)` for assertions the
+     * plus the predicate escape hatch `.satisfy(predicate)` for assertions the
      * matcher tree doesn't cover.
      *
      * @example
@@ -785,7 +802,7 @@ export class Steps {
      *
      * // Predicate chain — assertion executes when awaited
      * await steps.expect('price', 'ProductPage')
-     *   .toBe(el => parseFloat(el.text.slice(1)) > 10)
+     *   .satisfy(el => parseFloat(el.text.slice(1)) > 10)
      *   .throws('price must be above $10');
      */
     expect(elementName: string, pageName: string): ExpectBuilder {
@@ -797,8 +814,8 @@ export class Steps {
 
     /**
      * Asserts that the text contents of all elements matching the locator appear
-     * in the exact order specified.     * @param elementName - The element name as defined under the given page.
-
+     * in the exact order specified.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param expectedTexts - The expected text values in their expected order.
      * @param options - Optional step options for element resolution.
@@ -810,8 +827,8 @@ export class Steps {
     }
 
     /**
-     * Asserts that a computed CSS property of an element matches the expected value.     * @param elementName - The element name as defined under the given page.
-
+     * Asserts that a computed CSS property of an element matches the expected value.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param property - The CSS property name.
      * @param expectedValue - The expected computed value.
@@ -819,14 +836,13 @@ export class Steps {
      */
     async verifyCssProperty(elementName: string, pageName: string, property: string, expectedValue: string, options?: StepOptions): Promise<void> {
         log.verify('Verifying CSS "%s" of "%s" in "%s" = "%s"', property, elementName, pageName, expectedValue);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
-        await this.verify.cssProperty(element, property, expectedValue);
+        await this.actionWithStrategy(elementName, pageName, options).css(property).toBe(expectedValue);
     }
 
     /**
      * Asserts that the text contents of all elements matching the locator are sorted
-     * in the specified direction.     * @param elementName - The element name as defined under the given page.
-
+     * in the specified direction.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param direction - `'asc'` for ascending or `'desc'` for descending.
      * @param options - Optional step options for element resolution.
@@ -842,8 +858,8 @@ export class Steps {
     // ==========================================
 
     /**
-     * Clicks a specific element within a list identified by its visible text or an HTML attribute.     * @param elementName - The element name as defined under the given page.
-
+     * Clicks a specific element within a list identified by its visible text or an HTML attribute.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param options - Match criteria.
      */
@@ -855,8 +871,8 @@ export class Steps {
     }
 
     /**
-     * Verifies a specific element within a list.     * @param elementName - The element name as defined under the given page.
-
+     * Verifies a specific element within a list.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param options - Match and assertion criteria.
      */
@@ -879,8 +895,8 @@ export class Steps {
     }
 
     /**
-     * Extracts data from a specific element within a list.     * @param elementName - The element name as defined under the given page.
-
+     * Extracts data from a specific element within a list.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param options - Match and extraction criteria.
      * @returns The extracted text content or attribute value, or `null`.
@@ -902,8 +918,8 @@ export class Steps {
     // ==========================================
 
     /**
-     * Waits for an element to reach the specified state before proceeding.     * @param elementName - The element name as defined under the given page.
-
+     * Waits for an element to reach the specified state before proceeding.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param state - The desired state to wait for.
      * @param options - Optional step options for element resolution.
@@ -924,8 +940,8 @@ export class Steps {
     }
 
     /**
-     * Waits for an element to reach a specific state, then clicks it.     * @param elementName - The element name as defined under the given page.
-
+     * Waits for an element to reach a specific state, then clicks it.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param state - The state to wait for before clicking. Defaults to `'visible'`.
      * @param options - Optional step options for element resolution.
@@ -944,8 +960,8 @@ export class Steps {
     }
 
     /**
-     * Clicks the element at a specific zero-based index from all elements matching the locator.     * @param elementName - The element name as defined under the given page.
-
+     * Clicks the element at a specific zero-based index from all elements matching the locator.
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param index - The zero-based index of the element to click.
      * @throws Error if no element exists at the specified index.

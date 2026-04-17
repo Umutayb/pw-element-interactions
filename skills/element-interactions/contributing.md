@@ -28,39 +28,108 @@ If a contribution undermines either promise, it doesn't ship.
 
 ---
 
-## 🏛️ Architecture: separation of concerns
+## 🏛️ Software Architecture
+
+### The two packages
 
 The framework is split across **two packages** for a reason. Understand the split before adding anything.
 
-### `@civitas-cerebrum/element-repository`
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ User test file (tests/*.spec.ts)                                  │
+│                                                                   │
+│   await steps.expect('price', 'ProductPage').text.toBe('$19.99') │
+│   await steps.on('btn', 'Page').nth(2).click()                   │
+└────────────────────────────┬─────────────────────────────────────┘
+                             │ string names only — no selectors,
+                             │ no Locators, no driver primitives
+                             ▼
+┌──────────────────────────────────────────────────────────────────┐
+│ @civitas-cerebrum/element-interactions                            │
+│                                                                   │
+│   Steps  ──┬─► Interactions  (click, fill, hover, ...)           │
+│            ├─► Verifications  (verifyText, verifyCount, ...)      │
+│            ├─► Extractions    (getText, getAttribute, ...)        │
+│            └─► ExpectBuilder  (.text.toBe, .count.toBeGT, ...)    │
+│                                                                   │
+│   ElementAction  (fluent builder behind steps.on(...))           │
+│   BaseFixture    (wires Steps + Repository + Interactions)        │
+└────────────────────────────┬─────────────────────────────────────┘
+                             │ uses Element abstraction —
+                             │ never raw Locator
+                             ▼
+┌──────────────────────────────────────────────────────────────────┐
+│ @civitas-cerebrum/element-repository                              │
+│                                                                   │
+│   ElementRepository.get('btn', 'Page')  ──► Element              │
+│                                                                   │
+│   Element  (platform-agnostic interface)                          │
+│     ├─► WebElement       (Playwright-backed)                      │
+│     └─► PlatformElement  (Appium / WebDriverIO-backed)            │
+│                                                                   │
+│   page-repository.json  (single source of truth for selectors)   │
+└────────────────────────────┬─────────────────────────────────────┘
+                             │
+                             ▼
+            Playwright Locator   /   WebDriverIO Element
+```
 
-Owns **element acquisition** and the platform-agnostic `Element` interface.
+### Layer responsibilities
 
-- `Element` interface — cross-platform contract: `click`, `fill`, `getAttribute`, `getCssProperty`, `boundingBox`, `screenshot`, `dragTo`, `getTagName`, `exists`, `waitFor`, `count`, `first`, `nth`, `filter`, etc.
-- `WebElement` — Playwright-backed implementation. Also exposes web-only methods that have no platform equivalent: `getAllAttributes`, `selectOption`, `rightClick`.
-- `PlatformElement` — WebDriverIO/Appium-backed implementation. Implements every `Element` method.
-- `ElementRepository` — resolves names → `Element` instances using `page-repository.json`.
-- `ElementChain` — fluent action builder returned by `element.action()`.
+| Layer | Responsibility | Forbidden |
+|---|---|---|
+| User test | Describe scenarios in domain language | Constructing locators, importing `@playwright/test` directly for assertions, calling `page.locator()` |
+| `Steps` | Top-level facade users call | Holding state across calls, exposing `Locator` in return types |
+| `ElementAction` | Fluent builder for `steps.on(...)` chains | Long-lived state (only in-flight chain state); exposing raw Playwright |
+| `ExpectMatchers` | Chain-style assertion tree | Mocking, side-effects beyond the awaited assertion |
+| `Interactions` / `Verifications` / `Extractions` | Internal helpers — accept `Element \| Locator`, route everything through `Element` | Calling raw `locator.X()` after the input is normalized |
+| `BaseFixture` | Constructs Steps with the right deps; auto-attaches failure screenshots | Test-specific logic |
+| `Element` interface | Cross-platform element abstraction | Concept that doesn't exist on one of the platforms |
+| `WebElement` | Playwright impl + web-only methods | Anything that's not a thin Playwright delegation |
+| `PlatformElement` | WebDriverIO/Appium impl | Web-only DOM concepts |
+| `ElementRepository` | Resolves name → `Element`, owns `page-repository.json` | Wrapping interactions or assertions — that's element-interactions' job |
 
-**Where things go in element-repository:**
-- A method on the **Element interface** if it has a meaningful implementation on both web and Appium.
-- A method on **WebElement only** if it's a pure DOM/HTML/mouse concept with no cross-platform equivalent (HTML `<select>`, mouse right-click, DOM attribute enumeration).
-- The `Element.click/fill/...` etc. include a presence-detection preamble (`ensureAttached(timeout)`) before the underlying driver call. New action methods MUST do the same.
+### Data flow — anatomy of one call
 
-### `@civitas-cerebrum/element-interactions`
+Tracing `await steps.on('submit-button', 'CheckoutPage').text.toBe('Place Order')`:
 
-Owns **interaction patterns, assertions, and the test-author-facing facade**.
+1. **`steps.on('submit-button', 'CheckoutPage')`** — `Steps` constructs an `ElementAction` with the element/page names and a fresh `ExpectBuilder` context.
+2. **`.text`** — getter on `ElementAction` returns a `TextMatcher` carrying the builder's context (timeout, page, name, negation flag).
+3. **`.toBe('Place Order')`** — `TextMatcher.toBe` queues a `QueuedAssertion` on the builder's queue and returns the builder. **No work runs yet.** The chain is synchronous up to this point.
+4. **`await`** — JavaScript invokes `builder.then(...)` because `ExpectBuilder` implements `PromiseLike<void>`. `then` calls `flush()`.
+5. **`flush()`** — drains the queue. For each assertion:
+   - Calls `ctx.captureSnapshot()` → `ElementAction.captureSnapshot()` resolves the named element via `ElementRepository.get(...)` (returning an `Element`), then calls `Element.count/textContent/inputValue/getAllAttributes/isVisible/isEnabled` in parallel.
+   - Runs the matcher's predicate against the snapshot.
+   - On failure, throws with a structured error that includes the snapshot pretty-printed.
+6. **`Element.click/textContent/...`** under the hood call into `WebElement` (Playwright `Locator`) or `PlatformElement` (WebDriverIO). User test code never sees these primitives.
 
-- `Steps` — top-level API used in tests (`steps.click('el', 'page')`, `steps.expect('el', 'page').text.toBe('x')`).
-- `ElementAction` — the fluent builder returned by `steps.on('el', 'page')`.
-- `Interactions`, `Verifications`, `Extractions` — internal helpers Steps delegates to.
-- `ExpectMatchers` — the chain-style matcher tree (`text.toBe`, `count.toBeGreaterThan`, `.not`, `.throws`, `.timeout`).
-- `BaseFixture` — Playwright fixture that wires everything up.
+The same shape applies to actions — `steps.on('btn', 'Page').click()` flows through `Interactions.click(target)` → `toElement(target)` → `Element.click({ timeout })` → `WebElement.click()` → `Locator.click()`.
 
-**Where things go in element-interactions:**
-- New verification matchers belong on `ExpectMatchers.ts` — extending the chain tree.
-- New action helpers (e.g. composite workflows) belong on `Steps` and possibly `ElementAction`.
-- Anything that touches a Playwright `Locator` directly is a smell — the underlying capability probably belongs in `element-repository`'s `Element` interface first.
+### Why this split exists
+
+- **Cross-platform abstraction has to be at the bottom.** If `Element` lived in element-interactions, every package that wanted platform support would have to depend on the entire interaction surface. Keeping `Element` in its own package means future platforms (desktop, smart TV, native macOS) can implement only the Element contract.
+- **Element acquisition is a different concern from interaction.** Repository logic (parsing `page-repository.json`, applying selection strategies, formatting selectors per platform) is independent of what you do with the resolved element. Mixing them produces a god-class.
+- **The fixture is the wiring layer, not the API.** Tests import from `BaseFixture`; `Steps` itself is constructible standalone for unusual scenarios. The fixture is opinionated; `Steps` is composable.
+
+### Module / file conventions
+
+- `src/steps/` — user-facing `Steps`, `ElementAction`, `ExpectMatchers`. The chain-style API lives here.
+- `src/interactions/` — internal `Interactions`, `Verifications`, `Extractions`, plus the `facade/ElementInteractions` aggregator.
+- `src/utils/` — shared helpers (`ElementUtilities` for waiting, `DateUtilities` for date formatting). Pure functions only.
+- `src/enum/` — public enum types (`DropdownSelectType`, `EmailFilterType`, etc.).
+- `src/fixture/` — `BaseFixture` and related fixture helpers.
+- `src/config/` — environment / credentials parsing.
+- `src/logger/` — debug logger for verify/interact/email categories.
+- `tests/` — Playwright tests, all hitting the real Vue test app.
+- `tests/fixture/` — test fixture wiring + shared helper functions (e.g. `pageHelpers.ts`).
+- `tests/data/` — `page-repository.json` and any fixture data.
+- `skills/element-interactions/` — agent-facing skill files (this file lives here).
+
+When you add a new file:
+- New public API entrypoint? `src/steps/`.
+- New internal helper (called only by the package itself)? `src/utils/` or co-located in the file that uses it.
+- New enum or public type? `src/enum/Options.ts` (or a new file in the same dir for large groups).
+- Never create a top-level "misc" folder.
 
 ---
 
@@ -156,34 +225,222 @@ test('new feature', async ({ steps }) => {
 
 ---
 
-## 📐 Design principles — respect when scaling
+## 📐 Design rules — invariants that must stay consistent
 
-### 1. Chain-style API for assertions
+These are the contracts that hold the framework together. Every change must respect them. If a change requires breaking one, that's a major-version-bump conversation, not a casual PR.
 
-The matcher tree (`steps.expect('price', 'Page').text.toBe('$10').count.toBe(1)`) is the canonical shape for verifications. New verifications should extend this tree, not add flat `verifyX` methods. The `verify*` family on `Steps` is legacy compatibility — keep it, don't grow it.
+### 1. Argument order — `(elementName, pageName, ...rest)` everywhere
 
-### 2. One-shot semantics for `.not`
+Every method that targets a named element starts with `elementName, pageName`. No exceptions, no historical accidents.
 
-`.not` flips the **next matcher only**, then resets. Don't introduce sticky-negation modes or multi-matcher negation scopes; it confuses reading.
+```ts
+steps.click('submit-button', 'CheckoutPage');
+steps.verifyText('summary', 'CartPage', 'Total: $42');
+steps.expect('price', 'ProductPage').text.toBe('$19');
+steps.on('row', 'TablePage').nth(2).text.toBe('Active');
+repo.get('submit-button', 'CheckoutPage');
+repo.getByText('option', 'DropdownPage', 'United States');
+```
 
-### 3. Builder-mutates, matcher-clones
+Adding a method that flips this (e.g. `(pageName, elementName)`) is a hard rejection in review.
 
-- Strategy selectors on `ElementAction` (`.first()`, `.nth()`, `.byText()`, `.timeout()`) **mutate** the builder and return `this`. Consistent with Playwright's locator semantics.
-- Matcher classes are immutable — `.timeout(ms)` and `.not` return new instances. Each matcher call is independent.
+### 2. Async-everywhere
 
-### 4. Snapshot-based predicates
+Every public method that reaches the DOM/driver is `async`. No synchronous element accessors. If you find yourself wanting a sync getter, you're doing something wrong (the only sync exception is `repo.getSelector()` which returns a string, not an element).
 
-The predicate escape hatch (`steps.expect(el, page).toBe(predicate)`) takes a function that receives an `ElementSnapshot` — plain data, no async access. This keeps custom assertions readable and predictable. **Do not** change the predicate to receive an `Element` directly — users should never need to `await` inside a predicate.
+### 3. Chain-style for assertions, flat for actions
 
-### 5. Backwards compatibility on user-facing API
+- **Assertions** extend the matcher tree (`steps.expect(el, page).field.matcher(value)`). New assertions add to `ExpectMatchers.ts`, not new flat `verifyX` on `Steps`.
+- **Actions** stay flat on `Steps` (`steps.click`, `steps.fill`, `steps.dragAndDrop`). Composite workflows (`steps.fillForm`, `steps.retryUntil`) stay flat too.
 
-`steps.click`, `steps.verifyText`, `steps.on(...).fill`, etc. — all the entry points users have written tests against — stay stable across versions. Internal refactors are fine; signature changes on user-facing methods need a major bump and a clear migration note.
+The legacy `verify*` family on `Steps` is kept for backwards compatibility — don't grow it; route new assertions through the matcher tree.
+
+### 3a. Implementation lives in the `Interactions` / `Verifications` / `Extractions` layer. Everything else is a facade.
+
+The single source of truth for assertion behavior — retry mechanics, web-first polling, error formatting, negation, timeout handling — is the `Verifications` class. For actions, it's `Interactions`. For reads, `Extractions`.
+
+All user-facing layers are **dispatch-only** and must ultimately call into the appropriate interaction class:
+
+```
+Steps.verifyText(el, page, ...)            ──┐
+Steps.expect(el, page).text.toBe(...)        │
+ElementAction.verifyText(...)                ├─► Verifications.text(target, expected, options)
+ElementAction.text.toBe(...)                 │   ↑ one implementation, one codepath
+interactions.verify.text(locator, ...)     ──┘
+```
+
+**The rule for new assertions:**
+1. If `Verifications` can do what you need, add a matcher in `ExpectMatchers.ts` that delegates to it (2–3 lines — e.g. `return this.ctx.verify.X(target, ..., opts)`).
+2. If `Verifications` can't do what you need, **add a method to `Verifications` first**. Implementation goes there. Then add the matcher that delegates.
+3. Never reimplement assertion logic in the matcher tree (snapshot-capture + predicate polling + custom retry). The exception is `.satisfy(predicate)` — the predicate escape hatch legitimately needs a snapshot-based poll because user lambdas run against plain data, not against a live element.
+
+**The rule for new actions:**
+- Same shape — `Steps.X` and `ElementAction.X` both delegate into `Interactions.X`. Never write click/fill/hover logic directly on `Steps`.
+
+**Why this matters:**
+- One bug fix propagates everywhere. Fix Playwright's web-first assertion handling in one place, every entry point benefits.
+- Error messages stay consistent because `describeFailure`-style messages are threaded as `errorMessage` into the single implementation, which embeds them via Playwright's `expect(locator, message)` overload.
+- The raw `interactions.verify.X` / `interactions.interact.X` public API (documented as the escape hatch for users with custom locators) is never out of sync with the matcher-tree / Steps behavior.
+- Adding a new matcher is cheap: write a one-liner in the tree, add one method to Verifications (which is itself a thin Playwright wrapper).
+
+**Helper pattern the matcher tree uses:**
+
+```ts
+// Matcher method — 2-line dispatch
+toBe(expected: string): ExpectBuilder {
+    return this.builder.enqueue(this.ctx, (entry) =>
+        runWithElement(entry.ctx,
+            el => entry.ctx.verify.text(el, expected, this.msgOpts(entry.ctx, 'text', 'to be', expected)),
+            entry.messageOverride));
+}
+```
+
+`runWithElement` handles the `ifVisible` gate + resolves the Element. `this.msgOpts` builds the `{ negated, timeout, errorMessage }` shape every Verifications method accepts. Verifications does the actual work.
+
+**Audit grep:** if you find yourself writing retry loops, snapshot capture, or Playwright `expect(locator)...` calls outside of `Verifications` / `Interactions` / `Extractions`, stop. It probably belongs in one of those classes instead.
+
+### 4. One-shot semantics for `.not`
+
+`.not` flips the **next matcher only**, then resets. Don't introduce sticky-negation modes or multi-matcher negation scopes; it confuses reading. Both `steps.expect('el', 'Page').not.text.toBe('x')` and `steps.expect('el', 'Page').text.not.toBe('x')` produce the same single-call negation.
+
+### 5. One timeout, uniform mutation
+
+A single chain-level `timeout` var is the source of truth across the whole chain:
+
+```
+Steps.timeout (fixture) → ElementAction._timeout → ExpectContext.timeout → VerifyOptions.timeout (threaded into Verifications)
+```
+
+`.timeout(ms)` **mutates** at every layer it appears — no cloning, no divergent semantics:
+
+- `ElementAction.timeout(ms)` mutates `_timeout`; `.text`, `.count`, etc. getters rebuild the ExpectContext with the new value.
+- `ExpectBuilder.timeout(ms)` mutates `ctx.timeout` and retroactively patches the last queued assertion (so `.satisfy(pred).timeout(500)` applies 500ms to that predicate).
+- Matcher `.timeout(ms)` (e.g. `.text.timeout(500)`) mutates its own ctx AND propagates to the builder for subsequent matchers — but does NOT retroactively patch a prior matcher's queued entry.
+
+**Scope — what `.timeout(ms)` currently affects:**
+1. Every verification/matcher (`.text.toBe`, `.count.toBeGreaterThan`, `.satisfy(pred)`, `.verifyText`, `.verifyCount`, etc.).
+2. Element-routed actions that go through `element.action(this._timeout).X()` on `ElementAction` — `hover`, `fill`, `check`, `uncheck`, `doubleClick`, `typeSequentially`, `clearInput`, `scrollIntoView`, `getText`, `getAttribute`, `getCount`, `getInputValue`.
+
+**What it does NOT currently affect** (open issue — Interactions-routed actions use the fixture-level timeout):
+- `click`, `clickIfPresent`, `rightClick`, `uploadFile`, `dragAndDrop`, `selectDropdown`, `setSliderValue`, `selectMultiple`.
+
+These flow through `this.interactions.interact.*` where `ElementInteractions.interact`'s internal `ELEMENT_TIMEOUT` is set once at construction and never mutated by `ElementAction.timeout()`. Wiring this through requires threading `timeout` into every `Interactions.*` signature — tracked as a follow-up.
+
+**Visibility probe is another deliberate exception.** `ifVisible(ms?)` has its own short `visibilityTimeout` (default 2000ms) because its whole purpose is fast-skip: a hidden element should abort the action in ~2s, not 30s. Do not unify it into the main timeout.
+
+Other builder state (queue, pendingNot) also mutates, but stays scoped: each `.expect()` / `.on()` call returns a fresh builder, so mutation doesn't leak across chains. `.not` is one-shot — it flips the next matcher only, then resets.
+
+### 6. Snapshot-based predicates
+
+The predicate escape hatch (`steps.expect(el, page).satisfy(predicate)`) takes a function that receives an `ElementSnapshot` — plain data, no async access. This keeps custom assertions readable and predictable.
+
+```ts
+// ✓
+await steps.expect('price', 'Page').satisfy(el => parseFloat(el.text.slice(1)) > 10);
+
+// ✗ Never change to this — users would need to await inside the predicate
+await steps.expect('price', 'Page').satisfy(async el => (await el.getText()) === '$10');
+```
+
+### 7. Naming conventions
+
+| Prefix | Returns | Behavior on failure |
+|---|---|---|
+| `verify*` | `Promise<void>` | Throws |
+| `expect(...)...` (matcher tree) | thenable that throws on failure | Throws on failure |
+| `is*` | `Promise<boolean>` | Returns `false` (never throws) |
+| `get*` | `Promise<value>` | Throws if element not found |
+| `wait*` | `Promise<void>` | Throws on timeout |
+| `click*` / `fill*` / `hover*` etc. | `Promise<void>` (or `Promise<boolean>` for the `IfPresent` variants) | Throws on failure |
+
+If your new method doesn't fit one of these, reconsider the shape — the naming is the API contract.
+
+### 8. Public API stability
+
+`steps.click`, `steps.verifyText`, `steps.on(...).fill`, the matcher tree shape — all the entry points users have written tests against — stay stable across patch and minor versions. Internal refactors are fine; signature changes on user-facing methods need a major bump and a clear migration note in the PR description.
 
 The current public `Target` type (`Locator | Element`) accepting raw Locators is held for backwards compatibility (see issue #74). Don't tighten this without coordination.
 
-### 6. Patch-version one-PR-one-bump rule
+### 9. Action methods presence-detect
 
-Run `npm version patch` once per PR (at the first commit). Do not bump on every follow-up commit on the same branch — the `publish.yml` workflow publishes whatever version is in `package.json` at merge time.
+Every action on `Element` (`click`, `fill`, `hover`, `dragTo`, ...) calls `ensureAttached(timeout)` first. New action methods MUST do the same. This is what gives the framework predictable failure modes ("element not attached" instead of opaque driver errors) and stable Appium behavior.
+
+```ts
+async myNewAction(options?: ElementActionOptions): Promise<Element> {
+    await this.ensureAttached(options?.timeout);  // mandatory
+    await this.locator.myUnderlyingCall({ timeout: options?.timeout });
+    return this;
+}
+```
+
+### 10. No raw `locator.*()` in element-interactions src/
+
+Every `locator.click()`, `locator.fill()`, `locator.evaluate()`, etc. that creeps into `src/` is a regression. If you need a primitive Playwright doesn't expose through `Element`, **add it to the Element interface in element-repository first**.
+
+The one exception: the `WebElement` constructor itself (`new WebElement(locator)`) is the boundary where a raw Locator legitimately enters. Everywhere else uses `Element`.
+
+To audit:
+
+```bash
+grep -rn "locator\.\(click\|fill\|textContent\|inputValue\|getAttribute\|count\|evaluate\|isVisible\|isEnabled\|waitFor\|scrollIntoView\|hover\|check\|uncheck\|selectOption\|dispatchEvent\|boundingBox\|press\|setInputFiles\|screenshot\|dragTo\|clear\)" src/ --include="*.ts" | grep -v "dist/"
+```
+
+Should return **zero** results in user-facing call sites.
+
+### 11. Web-only methods only get cast at the call site
+
+If element-interactions needs `selectOption` (which is `WebElement`-only), the call site does the narrowing:
+
+```ts
+const element = toElement(target) as WebElement;
+await element.selectOption(...);
+```
+
+Don't smuggle web-only methods onto `Element` with throw-stubs on `PlatformElement`. The cast makes the web-only intent explicit at the call site and keeps the cross-platform contract honest.
+
+### 12. Error message format
+
+User-facing assertion failures follow a consistent header format:
+
+```
+expected <PageName>.<elementName> <field> [not ]<verb> <expected>
+```
+
+Examples:
+- `expected ProductPage.price text to be "$19.99"`
+- `expected CheckoutPage.submitBtn count not to be 5`
+
+The actual value comes from Playwright's built-in "Expected / Received" diff block appended below the header — we pass the header string as the `message` argument to `expect(locator, message).<matcher>()`, and Playwright prepends it to its own assertion output. Don't hand-roll the `got <actual>` suffix — it'll duplicate what Playwright already emits.
+
+Use the `BaseMatcher.msgOpts(ctx, field, verb, expected)` helper in `ExpectMatchers.ts` — it builds `{ negated, timeout, errorMessage }` in the exact shape every Verifications method accepts. Don't hand-roll error strings.
+
+For predicate failures (`satisfy(pred)`), the path is different — we poll a snapshot manually, so there's no Playwright diff block. The message includes the full `ElementSnapshot` JSON pretty-printed under the header. Don't truncate or summarize the snapshot — users debug from it.
+
+### 13. Logging
+
+Every public method on `Steps` logs at one of: `tester:navigate`, `tester:interact`, `tester:verify`, `tester:extract`, `tester:wait`, `tester:email`. The category mirrors the operation kind. Use the existing `log.X(...)` helpers in `CommonSteps.ts` rather than `console.log`.
+
+### 14. TypeScript discipline
+
+- **No `any`** in `src/`. Test fixtures are exempted (the Playwright fixture types are awkward to spell exactly).
+- **Prefer interfaces over type aliases** for public surfaces. `ExpectContext`, `ElementSnapshot`, `QueuedAssertion` are interfaces.
+- **Use `readonly`** on snapshot/data interface fields. Mutable internal state is fine on classes; data passing between layers should be readonly.
+- **Use `as const`** for matcher verb strings and similar string literals when they need narrow types.
+- **Avoid `as unknown as X` double-casts.** If you need one, the type model is wrong somewhere — refactor.
+
+### 15. Patch-version one-PR-one-bump rule
+
+Run `npm version patch` **once** per PR (at the first commit). Do not bump on every follow-up commit on the same branch. The `publish.yml` workflow publishes whatever version is in `package.json` at merge time, so multi-bumps inflate the version number for nothing.
+
+For minor/major bumps, same rule: bump once, at the start.
+
+### 16. Tests hit the real Vue test app
+
+No mocks, no spies, no fake locators. Every test in `tests/` runs against `https://civitas-cerebrum.github.io/vue-test-app/` via Playwright. The framework's value is its Playwright wiring — mocks would only verify wiring against itself.
+
+### 17. 100% API coverage is a CI gate
+
+Every public method on `Steps`, `ElementAction`, `Verifications`, `Interactions`, `Extractions`, and the matcher classes must have at least one test that exercises it. The coverage tool (`@civitas-cerebrum/test-coverage`) introspects the public surface and fails the build if anything is uncovered. New methods need new tests.
 
 ---
 

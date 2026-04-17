@@ -81,12 +81,10 @@ export class Interactions {
         }
     }
 
-    /** @deprecated Use `click(target, { withoutScrolling: true })` instead. */
-    async clickWithoutScrolling(target: Target): Promise<void> {
-        await this.click(target, { withoutScrolling: true });
-    }
-
-    /** @deprecated Use `click(target, { ifPresent: true })` instead. */
+    /**
+     * Clicks only if the element is present and visible. Returns true if clicked,
+     * false if the element was absent — does not throw.
+     */
     async clickIfPresent(target: Target): Promise<boolean> {
         return await this.click(target, { ifPresent: true }) as boolean;
     }

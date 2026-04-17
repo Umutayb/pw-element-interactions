@@ -349,18 +349,7 @@ test.describe('Fluent API — steps.on()', () => {
     });
   });
 
-  test.describe('Deprecated Interactions methods', () => {
-
-    test('clickWithoutScrolling() on raw Interactions', async ({ interactions, steps }) => {
-      await steps.navigateTo('/');
-      await steps.click( 'buttonsLink','SidebarNav');
-      const locator = (await steps.on('primaryButton', 'ButtonsPage').getAttribute('class'))
-        ? true : false;
-      // Get a locator from the repo and call the deprecated method
-      const repo = (steps as any).repo;
-      const element = await repo.get('primaryButton', 'ButtonsPage');
-      await interactions.interact.clickWithoutScrolling(element);
-    });
+  test.describe('Raw Interactions methods', () => {
 
     test('clickIfPresent() on raw Interactions', async ({ interactions, steps }) => {
       await steps.navigateTo('/');

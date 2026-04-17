@@ -109,7 +109,7 @@ Once loaded, Claude Code will:
 * **Non-throwing visibility probes** — `isVisible()` returns a boolean with configurable timeout and text filtering, never throws.
 * **Conditional chaining** — `steps.on('banner', 'Page').ifVisible().click()` silently skips when the element isn't visible.
 * **Chain-style expect matchers** — `steps.expect('price', 'Page').text.toMatch(/^\$/).count.toBe(1).attributes.get('data-status').toBe('ready')` chains as many verifications as you need on a single element; awaiting flushes the queue and short-circuits on the first failure. `.not` is one-shot, `.throws('msg')` overrides messages, `.timeout(ms)` scopes wait time per call.
-* **Predicate escape hatch** — `steps.expect('price', 'Page').toBe(el => parseFloat(el.text.slice(1)) > 10).throws('price must be above $10')` for assertions the matcher tree doesn't cover. Predicates run against a snapshot of plain element data — no async access required inside the lambda.
+* **Predicate escape hatch** — `steps.expect('price', 'Page').satisfy(el => parseFloat(el.text.slice(1)) > 10).throws('price must be above $10')` for assertions the matcher tree doesn't cover. Predicates run against a snapshot of plain element data — no async access required inside the lambda.
 * **Role + accessible name selectors** — `{ "role": "button", "name": "Log in" }` resolves via `page.getByRole()` with regex support.
 * **Regex text selectors** — `{ "text": { "regex": "pattern", "flags": "i" } }` for matching dynamic content.
 * **Iframe-scoped pages** — Elements inside iframes are resolved transparently via `frame` property on page definitions.
@@ -245,7 +245,7 @@ test('Top-level matcher tree', async ({ steps }) => {
 
 test('Predicate escape hatch + custom message', async ({ steps }) => {
   await steps.expect('price', 'ProductPage')
-    .toBe(el => parseFloat(el.text.slice(1)) > 10)
+    .satisfy(el => parseFloat(el.text.slice(1)) > 10)
     .throws('price must be above $10');
 });
 
@@ -448,7 +448,6 @@ Every method below automatically fetches the Playwright `Locator` using your `pa
 ### 🖱️ Interaction
 
 * **`click(pageName, elementName, options?: StepOptions)`** — Clicks an element. Supports `{ strategy, withoutScrolling, ifPresent, force }`. Auto-retries with native DOM event on pointer interception.
-* **`clickWithoutScrolling(pageName, elementName)`** — Dispatches a native `click` event, bypassing actionability checks. Useful for flyout/dropdown items.
 * **`clickIfPresent(pageName, elementName)`** — Clicks only if visible; skips silently. Returns `boolean`.
 * **`clickRandom(pageName, elementName, options?: StepOptions)`** — Clicks a random element from all matches. Supports `{ withoutScrolling }`.
 * **`rightClick(pageName, elementName)`** — Right-clicks an element to trigger a context menu.

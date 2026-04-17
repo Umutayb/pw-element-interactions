@@ -49,6 +49,18 @@ export interface BaseFixtureOptions {
     screenshotOnFailure?: boolean | { fullPage?: boolean };
 }
 
+/**
+ * Extends a Playwright `test` with the StepFixture surface — `repo`, `steps`,
+ * `interactions`, `contextStore`, and a `page` wrapper that attaches a failure
+ * screenshot on every failed test.
+ *
+ * @param baseTest - The Playwright `test` (or an already-extended test) to build on.
+ * @param locatorPath - Absolute or project-relative path to `page-repository.json`.
+ * @param options - Optional fixture overrides: `timeout` (element-op default, 30000ms),
+ *   `repoTimeout` (element resolution, 15000ms), `emailCredentials`,
+ *   `blockedOrigins` (route filter), `screenshotOnFailure`.
+ * @returns A new Playwright `test` object exposing the StepFixture surface.
+ */
 export function baseFixture<T extends {}>(
     baseTest: ReturnType<typeof base.extend<T>>,
     locatorPath: string,

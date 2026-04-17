@@ -1,8 +1,19 @@
 import { Page, expect, Locator } from '@playwright/test';
+type LocatorAssertions = ReturnType<typeof expect<Locator>>;
 import { CountVerifyOptions, TextVerifyOptions } from '../enum/Options';
 import { Element, WebElement } from '@civitas-cerebrum/element-repository';
 
 type Target = Locator | Element;
+
+/** Shared options every Verifications method accepts. */
+export interface VerifyOptions {
+    /** When `true`, flips the assertion — passes when the underlying condition fails. */
+    negated?: boolean;
+    /** Override the class-level timeout for this single assertion. */
+    timeout?: number;
+    /** Custom message prepended to Playwright's error on failure. */
+    errorMessage?: string;
+}
 
 function resolveLocator(target: Target): Locator {
     if ('_type' in target) {
@@ -34,6 +45,14 @@ export class Verifications {
         this.ELEMENT_TIMEOUT = timeout;
     }
 
+    /** Pick `expect(locator)` vs `expect(locator).not` based on options, with the right timeout and custom error message. */
+    private prepare(locator: Locator, options?: VerifyOptions): { matcher: LocatorAssertions; timeout: number; message?: string } {
+        const timeout = options?.timeout ?? this.ELEMENT_TIMEOUT;
+        const base = options?.errorMessage ? expect(locator, options.errorMessage) : expect(locator);
+        const matcher = options?.negated ? base.not : base;
+        return { matcher, timeout, message: options?.errorMessage };
+    }
+
     // ==========================================
     // Standard Assertions
     // ==========================================
@@ -45,37 +64,52 @@ export class Verifications {
      * @param expectedText - The exact text string expected (optional if checking 'notEmpty').
      * @param options - Configuration to alter the verification behavior.
      */
-    async text(target: Target, expectedText?: string, options?: TextVerifyOptions): Promise<void> {
+    async text(target: Target, expectedText?: string, options?: TextVerifyOptions & VerifyOptions): Promise<void> {
         const locator = resolveLocator(target);
+        const { matcher, timeout } = this.prepare(locator, options);
         if (options?.notEmpty) {
-            await expect(locator).not.toBeEmpty({ timeout: this.ELEMENT_TIMEOUT });
+            await matcher.not.toBeEmpty({ timeout });
             return;
         }
-
         if (expectedText === undefined) {
             throw new Error(`You must provide either an 'expectedText' string or set '{ notEmpty: true }' in options.`);
         }
-
-        await expect(locator).toHaveText(expectedText, { timeout: this.ELEMENT_TIMEOUT });
+        await matcher.toHaveText(expectedText, { timeout });
     }
 
     /**
      * Asserts that the specified element contains the expected substring.
-     * @param target - A Playwright Locator or Element pointing to the target element.
-     * @param expectedText - The substring expected to be present within the element's text.
      */
-    async textContains(target: Target, expectedText: string): Promise<void> {
-        const locator = resolveLocator(target);
-        await expect(locator).toContainText(expectedText, { timeout: this.ELEMENT_TIMEOUT });
+    async textContains(target: Target, expectedText: string, options?: VerifyOptions): Promise<void> {
+        const { matcher, timeout } = this.prepare(resolveLocator(target), options);
+        await matcher.toContainText(expectedText, { timeout });
+    }
+
+    /** Asserts the element's text matches a regular expression. */
+    async textMatches(target: Target, regex: RegExp, options?: VerifyOptions): Promise<void> {
+        const { matcher, timeout } = this.prepare(resolveLocator(target), options);
+        await matcher.toHaveText(regex, { timeout });
+    }
+
+    /** Asserts the element's text starts with the given prefix. */
+    async textStartsWith(target: Target, prefix: string, options?: VerifyOptions): Promise<void> {
+        const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        await this.textMatches(target, new RegExp('^' + escaped), options);
+    }
+
+    /** Asserts the element's text ends with the given suffix. */
+    async textEndsWith(target: Target, suffix: string, options?: VerifyOptions): Promise<void> {
+        const escaped = suffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        await this.textMatches(target, new RegExp(escaped + '$'), options);
     }
 
     /**
      * Asserts that the specified element is attached to the DOM and is visible.
      * @param target - A Playwright Locator or Element pointing to the target element.
      */
-    async presence(target: Target): Promise<void> {
-        const locator = resolveLocator(target);
-        await expect(locator).toBeVisible({ timeout: this.ELEMENT_TIMEOUT });
+    async presence(target: Target, options?: VerifyOptions): Promise<void> {
+        const { matcher, timeout } = this.prepare(resolveLocator(target), options);
+        await matcher.toBeVisible({ timeout });
     }
 
     /**
@@ -96,7 +130,7 @@ export class Verifications {
   * @param target - A Playwright Locator or Element pointing to the target element.
   * @param state - The expected state to verify.
   */
-    async state(target: Target, state: 'enabled' | 'disabled' | 'editable' | 'checked' | 'focused' | 'visible' | 'hidden' | 'attached' | 'inViewport'): Promise<void>;
+    async state(target: Target, state: 'enabled' | 'disabled' | 'editable' | 'checked' | 'focused' | 'visible' | 'hidden' | 'attached' | 'inViewport', options?: VerifyOptions): Promise<void>;
 
     /**
      * Asserts the state of an element using Playwright's built-in locator assertions.
@@ -109,21 +143,24 @@ export class Verifications {
     async state(
         locator: Target | string,
         state: 'enabled' | 'disabled' | 'editable' | 'checked' | 'focused' | 'visible' | 'hidden' | 'attached' | 'inViewport',
-        timeout?: number
+        timeoutOrOptions?: number | VerifyOptions,
     ): Promise<void> {
         const resolvedLocator: Locator = typeof locator === 'string' ? this.page.locator(locator) : resolveLocator(locator);
-        const resolvedTimeout = timeout ?? this.ELEMENT_TIMEOUT;
+        const options: VerifyOptions = typeof timeoutOrOptions === 'number'
+            ? { timeout: timeoutOrOptions }
+            : (timeoutOrOptions ?? {});
+        const { matcher, timeout } = this.prepare(resolvedLocator, options);
 
         switch (state) {
-            case 'enabled': await expect(resolvedLocator).toBeEnabled({ timeout: resolvedTimeout }); break;
-            case 'disabled': await expect(resolvedLocator).toBeDisabled({ timeout: resolvedTimeout }); break;
-            case 'editable': await expect(resolvedLocator).toBeEditable({ timeout: resolvedTimeout }); break;
-            case 'checked': await expect(resolvedLocator).toBeChecked({ timeout: resolvedTimeout }); break;
-            case 'focused': await expect(resolvedLocator).toBeFocused({ timeout: resolvedTimeout }); break;
-            case 'visible': await expect(resolvedLocator).toBeVisible({ timeout: resolvedTimeout }); break;
-            case 'hidden': await expect(resolvedLocator).toBeHidden({ timeout: resolvedTimeout }); break;
-            case 'attached': await expect(resolvedLocator).toBeAttached({ timeout: resolvedTimeout }); break;
-            case 'inViewport': await expect(resolvedLocator).toBeInViewport({ timeout: resolvedTimeout }); break;
+            case 'enabled': await matcher.toBeEnabled({ timeout }); break;
+            case 'disabled': await matcher.toBeDisabled({ timeout }); break;
+            case 'editable': await matcher.toBeEditable({ timeout }); break;
+            case 'checked': await matcher.toBeChecked({ timeout }); break;
+            case 'focused': await matcher.toBeFocused({ timeout }); break;
+            case 'visible': await matcher.toBeVisible({ timeout }); break;
+            case 'hidden': await matcher.toBeHidden({ timeout }); break;
+            case 'attached': await matcher.toBeAttached({ timeout }); break;
+            case 'inViewport': await matcher.toBeInViewport({ timeout }); break;
         }
     }
 
@@ -143,9 +180,27 @@ export class Verifications {
      * @param attributeName - The name of the HTML attribute to check (e.g., 'href', 'class', 'alt').
      * @param expectedValue - The exact expected value of the attribute.
      */
-    async attribute(target: Target, attributeName: string, expectedValue: string): Promise<void> {
-        const locator = resolveLocator(target);
-        await expect(locator).toHaveAttribute(attributeName, expectedValue, { timeout: this.ELEMENT_TIMEOUT });
+    async attribute(target: Target, attributeName: string, expectedValue: string, options?: VerifyOptions): Promise<void> {
+        const { matcher, timeout } = this.prepare(resolveLocator(target), options);
+        await matcher.toHaveAttribute(attributeName, expectedValue, { timeout });
+    }
+
+    /** Asserts that a given HTML attribute contains the substring. */
+    async attributeContains(target: Target, attributeName: string, substring: string, options?: VerifyOptions): Promise<void> {
+        const escaped = substring.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        await this.attributeMatches(target, attributeName, new RegExp(escaped), options);
+    }
+
+    /** Asserts that a given HTML attribute matches a regular expression. */
+    async attributeMatches(target: Target, attributeName: string, regex: RegExp, options?: VerifyOptions): Promise<void> {
+        const { matcher, timeout } = this.prepare(resolveLocator(target), options);
+        await matcher.toHaveAttribute(attributeName, regex, { timeout });
+    }
+
+    /** Asserts that the element has a given HTML attribute present (regardless of value). */
+    async hasAttribute(target: Target, attributeName: string, options?: VerifyOptions): Promise<void> {
+        const { matcher, timeout } = this.prepare(resolveLocator(target), options);
+        await matcher.toHaveAttribute(attributeName, /[\s\S]*/, { timeout });
     }
 
     /**
@@ -196,9 +251,33 @@ export class Verifications {
      * @param target - A Playwright Locator or Element pointing to the input element.
      * @param expectedValue - The expected value of the input.
      */
-    async inputValue(target: Target, expectedValue: string): Promise<void> {
-        const locator = resolveLocator(target);
-        await expect(locator).toHaveValue(expectedValue, { timeout: this.ELEMENT_TIMEOUT });
+    async inputValue(target: Target, expectedValue: string, options?: VerifyOptions): Promise<void> {
+        const { matcher, timeout } = this.prepare(resolveLocator(target), options);
+        await matcher.toHaveValue(expectedValue, { timeout });
+    }
+
+    /** Asserts the input value contains the given substring. */
+    async inputValueContains(target: Target, substring: string, options?: VerifyOptions): Promise<void> {
+        const escaped = substring.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        await this.inputValueMatches(target, new RegExp(escaped), options);
+    }
+
+    /** Asserts the input value matches a regular expression. */
+    async inputValueMatches(target: Target, regex: RegExp, options?: VerifyOptions): Promise<void> {
+        const { matcher, timeout } = this.prepare(resolveLocator(target), options);
+        await matcher.toHaveValue(regex, { timeout });
+    }
+
+    /** Asserts the input value starts with the given prefix. */
+    async inputValueStartsWith(target: Target, prefix: string, options?: VerifyOptions): Promise<void> {
+        const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        await this.inputValueMatches(target, new RegExp('^' + escaped), options);
+    }
+
+    /** Asserts the input value ends with the given suffix. */
+    async inputValueEndsWith(target: Target, suffix: string, options?: VerifyOptions): Promise<void> {
+        const escaped = suffix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        await this.inputValueMatches(target, new RegExp(escaped + '$'), options);
     }
 
     /**
@@ -237,11 +316,6 @@ export class Verifications {
     }
 
     /**
-    * Asserts the number of elements matching the locator based on the provided conditions.
-    * @param target - A Playwright Locator or Element pointing to the target elements.
-    * @param options - Configuration specifying 'exact', 'greaterThan', or 'lessThan' logic.
-    */
-    /**
      * Asserts that the text contents of all elements matching the locator appear in the exact
      * order specified by `expectedTexts`. Each element's trimmed `textContent` is compared
      * against the corresponding entry in the array.
@@ -261,9 +335,21 @@ export class Verifications {
      * @param property - The CSS property name (e.g. `'color'`, `'font-size'`, `'display'`).
      * @param expectedValue - The expected computed value.
      */
-    async cssProperty(target: Target, property: string, expectedValue: string): Promise<void> {
-        const locator = resolveLocator(target);
-        await expect(locator).toHaveCSS(property, expectedValue, { timeout: this.ELEMENT_TIMEOUT });
+    async cssProperty(target: Target, property: string, expectedValue: string, options?: VerifyOptions): Promise<void> {
+        const { matcher, timeout } = this.prepare(resolveLocator(target), options);
+        await matcher.toHaveCSS(property, expectedValue, { timeout });
+    }
+
+    /** Asserts a computed CSS property value contains the given substring. */
+    async cssPropertyContains(target: Target, property: string, substring: string, options?: VerifyOptions): Promise<void> {
+        const escaped = substring.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        await this.cssPropertyMatches(target, property, new RegExp(escaped), options);
+    }
+
+    /** Asserts a computed CSS property value matches a regular expression. */
+    async cssPropertyMatches(target: Target, property: string, regex: RegExp, options?: VerifyOptions): Promise<void> {
+        const { matcher, timeout } = this.prepare(resolveLocator(target), options);
+        await matcher.toHaveCSS(property, regex, { timeout });
     }
 
     /**
@@ -287,8 +373,20 @@ export class Verifications {
     }
 
 
-    async count(target: Target, options: CountVerifyOptions): Promise<void> {
+    /**
+     * Asserts the number of elements matching the locator based on the provided conditions.
+     * Exactly one of `exactly`, `greaterThan`, `lessThan`, `greaterThanOrEqual`, or
+     * `lessThanOrEqual` must be set on `options`.
+     * @param target - A Playwright Locator or Element pointing to the target elements.
+     * @param options - Configuration specifying which comparator to apply and the expected count.
+     * @param verifyOptions - Optional `{ negated?, timeout?, errorMessage? }` override.
+     * @throws Error if any count in `options` is negative, or if the count does not match.
+     */
+    async count(target: Target, options: CountVerifyOptions, verifyOptions?: VerifyOptions): Promise<void> {
         const locator = resolveLocator(target);
+        const timeout = verifyOptions?.timeout ?? this.ELEMENT_TIMEOUT;
+        const { matcher } = this.prepare(locator, verifyOptions);
+
         if (options.exactly !== undefined && options.exactly < 0) {
             throw new Error(`'exact' count cannot be negative.`);
         }
@@ -298,22 +396,42 @@ export class Verifications {
         if (options.lessThan !== undefined && options.lessThan <= 0) {
             throw new Error(`'lessThan' must be greater than 0. Element counts cannot be negative.`);
         }
+        if (options.greaterThanOrEqual !== undefined && options.greaterThanOrEqual < 0) {
+            throw new Error(`'greaterThanOrEqual' count cannot be negative.`);
+        }
+        if (options.lessThanOrEqual !== undefined && options.lessThanOrEqual < 0) {
+            throw new Error(`'lessThanOrEqual' count cannot be negative.`);
+        }
 
         if (options.exactly !== undefined) {
-            await expect(locator).toHaveCount(options.exactly, { timeout: this.ELEMENT_TIMEOUT });
+            await matcher.toHaveCount(options.exactly, { timeout });
             return;
         }
 
-        if (options.greaterThan === undefined && options.lessThan === undefined) {
-            throw new Error(`You must provide 'exact', 'greaterThan', or 'lessThan' in CountVerifyOptions.`);
+        if (
+            options.greaterThan === undefined && options.lessThan === undefined
+            && options.greaterThanOrEqual === undefined && options.lessThanOrEqual === undefined
+        ) {
+            throw new Error(`You must provide 'exact', 'greaterThan', 'lessThan', 'greaterThanOrEqual', or 'lessThanOrEqual' in CountVerifyOptions.`);
         }
 
         const element = toElement(target);
+        const describe = [
+            options.greaterThan !== undefined ? `> ${options.greaterThan}` : null,
+            options.lessThan !== undefined ? `< ${options.lessThan}` : null,
+            options.greaterThanOrEqual !== undefined ? `>= ${options.greaterThanOrEqual}` : null,
+            options.lessThanOrEqual !== undefined ? `<= ${options.lessThanOrEqual}` : null,
+        ].filter(Boolean).join(' and ');
+        const negatedSuffix = verifyOptions?.negated ? ' (negated)' : '';
+
         await expect.poll(async () => {
             const actualCount = await element.count();
-            if (options.greaterThan !== undefined && actualCount <= options.greaterThan) return false;
-            if (options.lessThan !== undefined && actualCount >= options.lessThan) return false;
-            return true;
-        }, { timeout: this.ELEMENT_TIMEOUT, message: `Expected count${options.greaterThan !== undefined ? ` > ${options.greaterThan}` : ''}${options.lessThan !== undefined ? ` < ${options.lessThan}` : ''}` }).toBe(true);
+            const passes =
+                (options.greaterThan === undefined || actualCount > options.greaterThan) &&
+                (options.lessThan === undefined || actualCount < options.lessThan) &&
+                (options.greaterThanOrEqual === undefined || actualCount >= options.greaterThanOrEqual) &&
+                (options.lessThanOrEqual === undefined || actualCount <= options.lessThanOrEqual);
+            return verifyOptions?.negated ? !passes : passes;
+        }, { timeout, message: `Expected count ${describe}${negatedSuffix}` }).toBe(true);
     }
 }

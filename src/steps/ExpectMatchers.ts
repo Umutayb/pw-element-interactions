@@ -1,4 +1,4 @@
-import { Element, WebElement } from '@civitas-cerebrum/element-repository';
+import { Element } from '@civitas-cerebrum/element-repository';
 
 /**
  * Snapshot of an element's state at a single point in time.
@@ -359,8 +359,7 @@ export class CssMatcher extends BaseMatcher {
             return assertWithLiveRead(
                 entry.ctx, negated,
                 async () => {
-                    // getCssProperty is web-only; narrow to WebElement.
-                    const element = (await entry.ctx.resolveElement()) as WebElement;
+                    const element = await entry.ctx.resolveElement();
                     lastValue = await element.getCssProperty(property);
                     return test(lastValue);
                 },

@@ -55,9 +55,9 @@ export class Extractions {
         return element.count();
     }
 
-    /** Retrieves a computed CSS property value from an element. Web-only. */
+    /** Retrieves a computed CSS property value from an element. */
     async getCssProperty(target: Target, property: string): Promise<string> {
-        const element = toElement(target) as WebElement;
+        const element = toElement(target);
         await this.utils.waitForState(element, 'attached');
         return element.getCssProperty(property);
     }

@@ -173,12 +173,11 @@ export class Interactions {
      * exists today); all other paths route through `Element.dragTo`.
      */
     async dragAndDrop(target: Target, options: DragAndDropOptions): Promise<void> {
-        // dragTo is web-only (HTML drag-and-drop); narrow to WebElement.
-        const element = toElement(target) as WebElement;
+        const element = toElement(target);
         await this.utils.waitForState(element, 'visible');
 
         if (options.target) {
-            const dropElement = toElement(options.target) as WebElement;
+            const dropElement = toElement(options.target);
             await this.utils.waitForState(dropElement, 'visible');
 
             if (options.xOffset !== undefined && options.yOffset !== undefined) {

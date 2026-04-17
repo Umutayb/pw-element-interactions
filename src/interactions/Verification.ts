@@ -316,11 +316,6 @@ export class Verifications {
     }
 
     /**
-    * Asserts the number of elements matching the locator based on the provided conditions.
-    * @param target - A Playwright Locator or Element pointing to the target elements.
-    * @param options - Configuration specifying 'exact', 'greaterThan', or 'lessThan' logic.
-    */
-    /**
      * Asserts that the text contents of all elements matching the locator appear in the exact
      * order specified by `expectedTexts`. Each element's trimmed `textContent` is compared
      * against the corresponding entry in the array.
@@ -378,6 +373,15 @@ export class Verifications {
     }
 
 
+    /**
+     * Asserts the number of elements matching the locator based on the provided conditions.
+     * Exactly one of `exactly`, `greaterThan`, `lessThan`, `greaterThanOrEqual`, or
+     * `lessThanOrEqual` must be set on `options`.
+     * @param target - A Playwright Locator or Element pointing to the target elements.
+     * @param options - Configuration specifying which comparator to apply and the expected count.
+     * @param verifyOptions - Optional `{ negated?, timeout?, errorMessage? }` override.
+     * @throws Error if any count in `options` is negative, or if the count does not match.
+     */
     async count(target: Target, options: CountVerifyOptions, verifyOptions?: VerifyOptions): Promise<void> {
         const locator = resolveLocator(target);
         const timeout = verifyOptions?.timeout ?? this.ELEMENT_TIMEOUT;

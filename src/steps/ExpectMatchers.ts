@@ -211,6 +211,7 @@ abstract class StringMatcher extends BaseMatcher {
 /** Short alias for the opts shape Verifications methods accept. */
 type VerifyOpts = { negated?: boolean; timeout?: number; errorMessage?: string };
 
+/** Asserts on the visible text content of the resolved element. Reached via `.text` on `ExpectBuilder` or `ElementAction`. Supports `.toBe`, `.toContain`, `.toMatch`, `.toStartWith`, `.toEndWith`. */
 export class TextMatcher extends StringMatcher {
     get not(): TextMatcher { return new TextMatcher(this.builder, this.ctx, !this.negated); }
     protected fieldLabel() { return 'text'; }
@@ -221,6 +222,7 @@ export class TextMatcher extends StringMatcher {
     protected verifyEndsWith(t: Element, s: string, o: VerifyOpts) { return this.ctx.verify.textEndsWith(t, s, o); }
 }
 
+/** Asserts on the `value` of an input-like element. Reached via `.value`. Supports `.toBe`, `.toContain`, `.toMatch`, `.toStartWith`, `.toEndWith`. */
 export class ValueMatcher extends StringMatcher {
     get not(): ValueMatcher { return new ValueMatcher(this.builder, this.ctx, !this.negated); }
     protected fieldLabel() { return 'value'; }
@@ -231,6 +233,7 @@ export class ValueMatcher extends StringMatcher {
     protected verifyEndsWith(t: Element, s: string, o: VerifyOpts) { return this.ctx.verify.inputValueEndsWith(t, s, o); }
 }
 
+/** Asserts on a specific HTML attribute. Reached via `.attributes.get(name)`. Supports `.toBe`, `.toContain`, `.toMatch`, `.toStartWith`, `.toEndWith`. */
 export class AttributeMatcher extends StringMatcher {
     constructor(builder: ExpectBuilder, ctx: ExpectContext, private attrName: string, negated: boolean) {
         super(builder, ctx, negated);
@@ -250,6 +253,7 @@ export class AttributeMatcher extends StringMatcher {
     }
 }
 
+/** Asserts on how many elements match the locator. Reached via `.count`. Always uses the un-narrowed element, so `.first().count.toBe(5)` still counts all matches. Supports `.toBe`, `.toBeGreaterThan`, `.toBeLessThan`, and the `OrEqual` variants. */
 export class CountMatcher extends BaseMatcher {
     get not(): CountMatcher { return new CountMatcher(this.builder, this.ctx, !this.negated); }
 
@@ -278,6 +282,7 @@ export class CountMatcher extends BaseMatcher {
 
 type BooleanField = 'visible' | 'enabled';
 
+/** Asserts on a boolean element state (`visible` or `enabled`). Reached via `.visible` / `.enabled`. Supports `.toBe(true|false)`, `.toBeTrue`, `.toBeFalse`. */
 export class BooleanMatcher extends BaseMatcher {
     constructor(builder: ExpectBuilder, ctx: ExpectContext, private field: BooleanField, negated: boolean) {
         super(builder, ctx, negated);
@@ -296,6 +301,7 @@ export class BooleanMatcher extends BaseMatcher {
     toBeFalse(): ExpectBuilder { return this.toBe(false); }
 }
 
+/** Asserts on the element's attribute map. Reached via `.attributes`. Use `.get(name)` to drill into a specific attribute or `.toHaveKey(name)` to assert presence. */
 export class AttributesMatcher extends BaseMatcher {
     get not(): AttributesMatcher { return new AttributesMatcher(this.builder, this.ctx, !this.negated); }
 
@@ -310,6 +316,7 @@ export class AttributesMatcher extends BaseMatcher {
     }
 }
 
+/** Asserts on a computed CSS property value. Reached via `.css(propertyName)`. Supports `.toBe`, `.toContain`, `.toMatch`. */
 export class CssMatcher extends BaseMatcher {
     constructor(builder: ExpectBuilder, ctx: ExpectContext, private property: string, negated: boolean) {
         super(builder, ctx, negated);

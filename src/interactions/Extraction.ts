@@ -10,6 +10,12 @@ function toElement(target: Target): Element {
     return new WebElement(target as Locator);
 }
 
+/**
+ * Read-only accessors for element data: text, attributes, CSS, counts, and
+ * screenshots. Pairs with `Interactions` (writes) and `Verifications`
+ * (assertions) as the raw low-level layer. Users typically reach these through
+ * `ElementInteractions.extract` or via `Steps.get*` / `ElementAction.get*`.
+ */
 export class Extractions {
     private ELEMENT_TIMEOUT: number;
     private utils: Utils;

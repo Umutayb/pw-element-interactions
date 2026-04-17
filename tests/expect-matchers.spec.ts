@@ -197,15 +197,15 @@ test.describe('Expect matcher tree — predicate escape hatch', () => {
     });
 
     test('fluent predicate passes when true', async ({ steps }) => {
-        await steps.on('primaryButton', 'ButtonsPage').toBe(el => el.text === 'Primary');
+        await steps.on('primaryButton', 'ButtonsPage').satisfy(el => el.text === 'Primary');
     });
 
     test('top-level predicate passes when true', async ({ steps }) => {
-        await steps.expect('primaryButton', 'ButtonsPage').toBe(el => el.text === 'Primary');
+        await steps.expect('primaryButton', 'ButtonsPage').satisfy(el => el.text === 'Primary');
     });
 
     test('predicate reads multiple snapshot fields', async ({ steps }) => {
-        await steps.on('primaryButton', 'ButtonsPage').toBe(
+        await steps.on('primaryButton', 'ButtonsPage').satisfy(
             el => el.visible && el.enabled && el.text === 'Primary' && el.attributes['data-testid'] === 'btn-primary',
         );
     });
@@ -214,19 +214,19 @@ test.describe('Expect matcher tree — predicate escape hatch', () => {
         const fast = new ElementInteractions(page, { timeout: FAST_TIMEOUT });
         const action = new ElementAction(repo, 'primaryButton', 'ButtonsPage', fast, FAST_TIMEOUT);
         await expect(
-            action.toBe(el => el.text === 'NotThere').throws('primary must say NotThere'),
+            action.satisfy(el => el.text === 'NotThere').throws('primary must say NotThere'),
         ).rejects.toThrow(/primary must say NotThere/);
     });
 
     test('default failure includes snapshot JSON', async ({ page, repo }) => {
         const fast = new ElementInteractions(page, { timeout: FAST_TIMEOUT });
         const action = new ElementAction(repo, 'primaryButton', 'ButtonsPage', fast, FAST_TIMEOUT);
-        await expect(action.toBe(el => el.text === 'Nope')).rejects.toThrow(/snapshot at timeout/);
+        await expect(action.satisfy(el => el.text === 'Nope')).rejects.toThrow(/snapshot at timeout/);
     });
 
     test('chain is synchronous before await (thenable semantics)', async ({ steps }) => {
         // Build the assertion without awaiting, then await later — must succeed.
-        const pending = steps.on('primaryButton', 'ButtonsPage').toBe(el => el.visible);
+        const pending = steps.on('primaryButton', 'ButtonsPage').satisfy(el => el.visible);
         await pending;
     });
 
@@ -264,6 +264,6 @@ test.describe('Expect matcher tree — ifVisible composition', () => {
     });
 
     test('ifVisible() + predicate silently skips when element is hidden', async ({ steps }) => {
-        await steps.on('noSuchElement', 'ButtonsPage').ifVisible(200).toBe(el => el.text === 'x');
+        await steps.on('noSuchElement', 'ButtonsPage').ifVisible(200).satisfy(el => el.text === 'x');
     });
 });

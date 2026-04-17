@@ -53,7 +53,7 @@ test.describe('on().first() × matchers', () => {
     });
 
     test('first() × expect(predicate)', async ({ steps }) => {
-        await steps.on('primaryButton', 'ButtonsPage').first().toBe(el => el.text === 'Primary');
+        await steps.on('primaryButton', 'ButtonsPage').first().satisfy(el => el.text === 'Primary');
     });
 
     test('first() × not.text.toBe', async ({ steps }) => {
@@ -90,7 +90,7 @@ test.describe('on().nth() × matchers', () => {
     });
 
     test('nth(0) × expect(predicate)', async ({ steps }) => {
-        await steps.on('primaryButton', 'ButtonsPage').nth(0).toBe(el => el.enabled && el.visible);
+        await steps.on('primaryButton', 'ButtonsPage').nth(0).satisfy(el => el.enabled && el.visible);
     });
 
     test('nth(0) × not.text.toContain', async ({ steps }) => {
@@ -122,7 +122,7 @@ test.describe('on().random() × matchers', () => {
     });
 
     test('random() × expect(predicate)', async ({ steps }) => {
-        await steps.on('primaryButton', 'ButtonsPage').random().toBe(el => el.text.length > 0);
+        await steps.on('primaryButton', 'ButtonsPage').random().satisfy(el => el.text.length > 0);
     });
 
     test('random() × not.text.toBe', async ({ steps }) => {
@@ -154,7 +154,7 @@ test.describe('on().byText() × matchers', () => {
     });
 
     test('byText() × expect(predicate)', async ({ steps }) => {
-        await steps.on('primaryButton', 'ButtonsPage').byText('Primary').toBe(el => el.visible);
+        await steps.on('primaryButton', 'ButtonsPage').byText('Primary').satisfy(el => el.visible);
     });
 
     test('byText() × not.text.toContain', async ({ steps }) => {
@@ -182,7 +182,7 @@ test.describe('on().byAttribute() × matchers', () => {
     });
 
     test('byAttribute() × expect(predicate)', async ({ steps }) => {
-        await steps.on('primaryButton', 'ButtonsPage').byAttribute('data-testid', 'btn-primary').toBe(el => el.text === 'Primary');
+        await steps.on('primaryButton', 'ButtonsPage').byAttribute('data-testid', 'btn-primary').satisfy(el => el.text === 'Primary');
     });
 
     test('byAttribute() × not.attributes.get().toBe', async ({ steps }) => {
@@ -210,7 +210,7 @@ test.describe('on().ifVisible() × matchers', () => {
     });
 
     test('ifVisible() × predicate — present element runs', async ({ steps }) => {
-        await steps.on('primaryButton', 'ButtonsPage').ifVisible().toBe(el => el.text === 'Primary');
+        await steps.on('primaryButton', 'ButtonsPage').ifVisible().satisfy(el => el.text === 'Primary');
     });
 
     test('ifVisible() × text.toBe on hidden element — silently skips', async ({ steps }) => {
@@ -331,18 +331,18 @@ test.describe('steps.expect() × every field matcher (top-level)', () => {
         await steps.expect('primaryButton', 'ButtonsPage').css('cursor').toMatch(/pointer|default|auto/);
     });
 
-    test('.toBe(predicate) positive', async ({ steps }) => {
-        await steps.expect('primaryButton', 'ButtonsPage').toBe(el => el.text === 'Primary');
+    test('.satisfy(predicate) positive', async ({ steps }) => {
+        await steps.expect('primaryButton', 'ButtonsPage').satisfy(el => el.text === 'Primary');
     });
 
-    test('.toBe(predicate).throws(message) sets custom message', async ({ steps }) => {
+    test('.satisfy(predicate).throws(message) sets custom message', async ({ steps }) => {
         await steps.expect('primaryButton', 'ButtonsPage')
-            .toBe(el => el.visible && el.enabled)
+            .satisfy(el => el.visible && el.enabled)
             .throws('must be visible and enabled');
     });
 
-    test('.not.toBe(predicate) flips outcome', async ({ steps }) => {
-        await steps.expect('primaryButton', 'ButtonsPage').not.toBe(el => el.text === 'Wrong');
+    test('.not.satisfy(predicate) flips outcome', async ({ steps }) => {
+        await steps.expect('primaryButton', 'ButtonsPage').not.satisfy(el => el.text === 'Wrong');
     });
 });
 

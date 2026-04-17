@@ -55,7 +55,7 @@ test.describe('TC_041: Steps - Navigation, Viewport & Scroll', () => {
 
 test.describe('TC_042: Steps - Click Variants & Data Extraction', () => {
 
-  test('clickIfPresent, clickWithoutScrolling, getText, getAttribute, verifyAttribute', async ({ steps }) => {
+  test('clickIfPresent, click withoutScrolling, getText, getAttribute, verifyAttribute', async ({ steps }) => {
 
     await test.step('Navigate to Buttons page', async () => {
       await steps.navigateTo('/');
@@ -63,8 +63,8 @@ test.describe('TC_042: Steps - Click Variants & Data Extraction', () => {
       await steps.verifyUrlContains('/buttons');
     });
 
-    await test.step('clickWithoutScrolling clicks without scrolling', async () => {
-      await steps.clickWithoutScrolling( 'primaryButton','ButtonsPage');
+    await test.step('click with withoutScrolling option clicks without scrolling', async () => {
+      await steps.click( 'primaryButton','ButtonsPage', { withoutScrolling: true });
       await steps.verifyTextContains( 'resultText','ButtonsPage', 'Primary');
     });
 
@@ -275,14 +275,14 @@ test.describe('TC_087: Steps - expect matcher tree (top-level)', () => {
       await steps.expect('primaryButton', 'ButtonsPage').not.text.toBe('Nope');
     });
 
-    await test.step('.toBe(predicate) — positive case', async () => {
-      await steps.expect('primaryButton', 'ButtonsPage').toBe(el => el.text === 'Primary' && el.visible);
+    await test.step('.satisfy(predicate) — positive case', async () => {
+      await steps.expect('primaryButton', 'ButtonsPage').satisfy(el => el.text === 'Primary' && el.visible);
     });
 
-    await test.step('.toBe(predicate).throws(message) — custom failure message', async () => {
+    await test.step('.satisfy(predicate).throws(message) — custom failure message', async () => {
       // positive path: predicate passes, throws() never triggers
       await steps.expect('primaryButton', 'ButtonsPage')
-        .toBe(el => el.enabled)
+        .satisfy(el => el.enabled)
         .throws('should be enabled');
     });
 

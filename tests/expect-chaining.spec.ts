@@ -56,7 +56,7 @@ test.describe('steps.on() — chained multi-verification', () => {
     test('predicate form in the middle of a chain', async ({ steps }) => {
         await steps.on('primaryButton', 'ButtonsPage')
             .text.toBe('Primary')
-            .toBe(el => el.visible && el.enabled)
+            .satisfy(el => el.visible && el.enabled)
             .count.toBe(1);
     });
 
@@ -71,7 +71,7 @@ test.describe('steps.on() — chained multi-verification', () => {
             .attributes.get('data-testid').toBe('btn-primary')
             .attributes.toHaveKey('data-testid')
             .css('cursor').toMatch(/pointer|default|auto/)
-            .toBe(el => el.visible && el.enabled && el.text === 'Primary');
+            .satisfy(el => el.visible && el.enabled && el.text === 'Primary');
     });
 
     test('realistic submit-button scenario — text, state, attributes, negation, predicate', async ({ steps }) => {
@@ -86,7 +86,7 @@ test.describe('steps.on() — chained multi-verification', () => {
             .attributes.get('data-testid').toBe('btn-primary')
             .not.attributes.toHaveKey('disabled')
             .css('cursor').toMatch(/pointer|default|auto/)
-            .toBe(el => el.text === 'Primary' && el.visible && el.enabled);
+            .satisfy(el => el.text === 'Primary' && el.visible && el.enabled);
     });
 
     test('long chain with mixed matcher-level timeouts — each scoped correctly', async ({ steps }) => {
@@ -150,7 +150,7 @@ test.describe('steps.on() — chained multi-verification', () => {
         await expect(
             action
                 .text.toBe('Primary')
-                .toBe(el => el.text === 'NEVER_MATCHES').timeout(400),
+                .satisfy(el => el.text === 'NEVER_MATCHES').timeout(400),
         ).rejects.toThrow(/predicate|snapshot at timeout/i);
         const elapsed = Date.now() - start;
         expect(elapsed).toBeLessThan(2000);
@@ -169,7 +169,7 @@ test.describe('steps.on() — chained multi-verification', () => {
             .visible.toBeTrue()                             // passes
             .enabled.toBeTrue()                             // passes
             .text.toBe('WRONG')                             // fails — short-circuit
-            .toBe(el => { latePredicateCalls += 1; return true; }) // must NOT run
+            .satisfy(el => { latePredicateCalls += 1; return true; }) // must NOT run
             .count.toBe(1);                                 // must NOT run
 
         await expect(chain).rejects.toThrow(/text to be "WRONG"/);
@@ -286,13 +286,13 @@ test.describe('steps.on() chain — repeated .not behavior', () => {
     test('long chain — predicate form alternated with matcher forms, all negated correctly', async ({ steps }) => {
         await steps.on('primaryButton', 'ButtonsPage')
             .text.toBe('Primary')                                         // normal field
-            .not.toBe(el => el.text === 'Wrong')                          // negated predicate
+            .not.satisfy(el => el.text === 'Wrong')                          // negated predicate
             .count.toBe(1)                                                // normal field
-            .toBe(el => el.visible && el.enabled)                         // normal predicate
+            .satisfy(el => el.visible && el.enabled)                         // normal predicate
             .not.attributes.toHaveKey('nonexistent')                      // negated field
-            .not.toBe(el => el.text === 'NotPrimary')                     // negated predicate
+            .not.satisfy(el => el.text === 'NotPrimary')                     // negated predicate
             .visible.toBeTrue()                                           // normal field
-            .toBe(el => el.attributes['data-testid'] === 'btn-primary');  // normal predicate
+            .satisfy(el => el.attributes['data-testid'] === 'btn-primary');  // normal predicate
     });
 
     test('long chain fails at a specific mid-chain negated assertion — short-circuits remaining', async ({ page, repo }) => {
@@ -311,7 +311,7 @@ test.describe('steps.on() chain — repeated .not behavior', () => {
             .not.count.toBe(99)                                 // passes (count=1, not=99, so negated-against-99 passes)
             .not.text.toBe('Primary')                           // FAILS — text IS 'Primary' and we assert NOT Primary
             .text.toContain('rim')                              // must not run
-            .toBe(el => { tailCalls += 1; return true; })       // must not run
+            .satisfy(el => { tailCalls += 1; return true; })       // must not run
             .count.toBe(1);                                     // must not run
 
         await expect(chain).rejects.toThrow(/text not to be "Primary"/);
@@ -330,7 +330,7 @@ test.describe('steps.on() chain — repeated .not behavior', () => {
         let lateCalls = 0;
         const chain = action
             .not.not.text.toBe('WRONG')
-            .toBe(el => { lateCalls += 1; return true; });
+            .satisfy(el => { lateCalls += 1; return true; });
 
         await expect(chain).rejects.toThrow(/text to be "WRONG"/);
         expect(lateCalls).toBe(0);
@@ -349,7 +349,7 @@ test.describe('steps.on() chain — short-circuit on first failure', () => {
         let secondPredicateCalls = 0;
         const chain = action
             .text.toBe('WRONG')                            // first — will fail
-            .toBe(el => { secondPredicateCalls += 1; return true; }); // second — must NOT run
+            .satisfy(el => { secondPredicateCalls += 1; return true; }); // second — must NOT run
 
         await expect(chain).rejects.toThrow(/text to be "WRONG"/);
         expect(secondPredicateCalls).toBe(0);
@@ -377,7 +377,7 @@ test.describe('steps.on() chain — .throws() attaches to last queued assertion'
         await page.click('[data-testid=\'nav-item-buttons\']');
 
         await expect(
-            action.toBe(el => el.text === 'WRONG').throws('predicate override'),
+            action.satisfy(el => el.text === 'WRONG').throws('predicate override'),
         ).rejects.toThrow(/predicate override/);
     });
 });

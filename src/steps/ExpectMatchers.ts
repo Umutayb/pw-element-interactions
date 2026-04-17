@@ -5,8 +5,8 @@ import { Verifications } from '../interactions/Verification';
 /**
  * Snapshot of an element's state at a single point in time.
  *
- * Passed to predicates in `steps.expect(el, page).toBe(predicate)` and
- * `steps.on(el, page).toBe(predicate)`. All fields are primitives or plain
+ * Passed to predicates in `steps.expect(el, page).satisfy(predicate)` and
+ * `steps.on(el, page).satisfy(predicate)`. All fields are primitives or plain
  * data — no async methods, no Playwright types.
  */
 export interface ElementSnapshot {
@@ -115,7 +115,7 @@ async function assertPredicate(
     }
 
     const header = messageOverride
-        ?? `expect().toBe(predicate) failed on ${ctx.pageName}.${ctx.elementName} after ${ctx.timeout}ms`;
+        ?? `expect().satisfy(predicate) failed on ${ctx.pageName}.${ctx.elementName} after ${ctx.timeout}ms`;
     if (!lastSnapshot) {
         const reason = lastError instanceof Error ? lastError.message : String(lastError ?? 'unknown');
         throw new Error(`${header}\n  element could not be resolved: ${reason}`);
@@ -139,12 +139,16 @@ abstract class BaseMatcher {
         protected negated: boolean,
     ) {}
 
-    /** Override the retry timeout for this matcher only. */
+    /**
+     * Override the chain-level timeout. Mutates the matcher AND propagates to
+     * the parent builder so subsequent matchers on the same chain see the new
+     * value. Does NOT retroactively patch already-queued assertions — use
+     * `builder.timeout()` (e.g. `.satisfy(pred).timeout(ms)`) for that.
+     */
     timeout(ms: number): this {
-        const cloned = Object.create(Object.getPrototypeOf(this)) as BaseMatcher;
-        Object.assign(cloned, this);
-        cloned.ctx = { ...this.ctx, timeout: ms };
-        return cloned as this;
+        this.ctx = { ...this.ctx, timeout: ms };
+        this.builder._setCtxTimeout(ms);
+        return this;
     }
 
     /** Shortcut: build the options object that Verifications methods accept. */
@@ -346,7 +350,7 @@ export class CssMatcher extends BaseMatcher {
  * Under the hood each matcher call delegates to `Verifications` — the single
  * source of truth for assertion implementation (retry mechanics, web-first
  * behavior, error formatting, negation). The matcher tree is presentation
- * only. The predicate escape hatch (`toBe(predicate)`) is the exception — it
+ * only. The predicate escape hatch (`satisfy(predicate)`) is the exception — it
  * uses a snapshot-based poll so user lambdas can access plain data.
  */
 export class ExpectBuilder implements PromiseLike<void> {
@@ -364,11 +368,28 @@ export class ExpectBuilder implements PromiseLike<void> {
         return this;
     }
 
+    /**
+     * Override the chain-level timeout. Mutates the builder AND retroactively
+     * patches the most-recently queued assertion, so
+     * `.satisfy(pred).timeout(500)` applies 500ms to that predicate even though
+     * `.timeout()` was called after it. Subsequent matchers also pick up the
+     * new value.
+     */
     timeout(ms: number): this {
-        this.ctx = { ...this.ctx, timeout: ms };
+        this._setCtxTimeout(ms);
         const last = this.queue[this.queue.length - 1];
         if (last) last.ctx = { ...last.ctx, timeout: ms };
         return this;
+    }
+
+    /**
+     * Internal: replace the chain-level timeout for subsequent matchers without
+     * touching queued entries. Called by matcher-level `.timeout()` so
+     * `.count.timeout(500)` doesn't retroactively rewrite a prior matcher's
+     * queued entry.
+     */
+    _setCtxTimeout(ms: number): void {
+        this.ctx = { ...this.ctx, timeout: ms };
     }
 
     get text(): TextMatcher { return new TextMatcher(this, this.ctx, this.consumeNot()); }
@@ -383,8 +404,12 @@ export class ExpectBuilder implements PromiseLike<void> {
      * Predicate escape hatch. Queues a custom predicate assertion on this
      * builder. Chain further matchers or finish with `.throws(message)` to
      * override the failure message.
+     *
+     * Named `satisfy` (not `toBe`) to avoid overloading the matcher-tree
+     * equality verb — `.text.toBe('x')` asserts equality on a field, while
+     * `.satisfy(predicate)` asserts a user-supplied boolean expression.
      */
-    toBe(predicate: (el: ElementSnapshot) => boolean): this {
+    satisfy(predicate: (el: ElementSnapshot) => boolean): this {
         const negated = this.consumeNot();
         this.enqueue(this.ctx, (entry) =>
             assertPredicate(entry.ctx, negated, predicate, entry.messageOverride),

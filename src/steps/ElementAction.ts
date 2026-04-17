@@ -450,7 +450,7 @@ export class ElementAction {
     /**
      * Matcher tree rooted at this element. All field matchers (`text`, `value`,
      * `count`, `visible`, `enabled`, `attributes`, `css(...)`) and the
-     * predicate form (`toBe(pred)`) are exposed via an internal `ExpectBuilder`
+     * predicate form (`satisfy(pred)`) are exposed via an internal `ExpectBuilder`
      * so the surface stays consistent between `steps.on()` and `steps.expect()`.
      */
     private expectBuilder(negated: boolean = false): ExpectBuilder {
@@ -482,13 +482,16 @@ export class ElementAction {
      * the chain builder so more matchers can follow. End the chain with
      * `.throws(message)` to override the failure message.
      *
+     * Named `satisfy` to avoid overlap with field-matcher `.text.toBe('x')`
+     * which asserts value equality on a specific field.
+     *
      * @example
      * await steps.on('price', 'ProductPage')
-     *   .toBe(el => parseFloat(el.text.slice(1)) > 10)
+     *   .satisfy(el => parseFloat(el.text.slice(1)) > 10)
      *   .throws('price must be above $10');
      */
-    toBe(predicate: (el: ElementSnapshot) => boolean): ExpectBuilder {
-        return this.expectBuilder().toBe(predicate);
+    satisfy(predicate: (el: ElementSnapshot) => boolean): ExpectBuilder {
+        return this.expectBuilder().satisfy(predicate);
     }
 
     // -- Terminal actions: waiting --

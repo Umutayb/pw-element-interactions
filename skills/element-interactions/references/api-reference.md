@@ -165,9 +165,9 @@ const count = steps.getTabCount();
 
 ```ts
 await steps.click('elementName', 'PageName');
-await steps.click('elementName', 'PageName', { force: true });   // dispatch native click (bypasses overlays)
-await steps.clickWithoutScrolling('elementName', 'PageName');
-const clicked = await steps.clickIfPresent('elementName', 'PageName'); // returns boolean
+await steps.click('elementName', 'PageName', { force: true });              // dispatch native click (bypasses overlays)
+await steps.click('elementName', 'PageName', { withoutScrolling: true });   // click without auto-scroll
+const clicked = await steps.clickIfPresent('elementName', 'PageName');      // returns boolean, false if absent
 await steps.clickRandom('elementName', 'PageName');
 await steps.clickNth('elementName', 'PageName', 2);           // zero-based index
 await steps.rightClick('elementName', 'PageName');
@@ -290,7 +290,7 @@ await steps.on('primaryButton', 'ButtonsPage')
   .attributes.toHaveKey('data-testid')
   .not.attributes.toHaveKey('disabled')
   .css('cursor').toMatch(/pointer|default|auto/)
-  .toBe(el => el.visible && el.enabled && el.text === 'Primary');
+  .satisfy(el => el.visible && el.enabled && el.text === 'Primary');
 
 // .not is one-shot — applies to the next matcher only
 await steps.on('btn', 'Page')
@@ -327,7 +327,7 @@ await steps.expect('el', 'Page').attributes.get('href').timeout(1000).toBe('/x')
 
 // On the predicate chain — order independent with .throws()
 await steps.expect('price', 'Page')
-  .toBe(el => parseFloat(el.text.slice(1)) > 10)
+  .satisfy(el => parseFloat(el.text.slice(1)) > 10)
   .timeout(2000)
   .throws('price must be above $10');
 
@@ -347,23 +347,23 @@ await steps.on('link', 'Page').attributes.not.toHaveKey('disabled');
 await steps.on('link', 'Page').attributes.get('href').not.toBe('/wrong');
 ```
 
-**Predicate escape hatch** — for assertions the matcher tree doesn't cover (multi-field combinations, parsed numeric thresholds, JSON in `data-*`). Use `.toBe(predicate)` — returns a chainable, awaitable assertion. Add `.throws(message)` for a custom failure message.
+**Predicate escape hatch** — for assertions the matcher tree doesn't cover (multi-field combinations, parsed numeric thresholds, JSON in `data-*`). Use `.satisfy(predicate)` — returns a chainable, awaitable assertion. Add `.throws(message)` for a custom failure message.
 
 ```ts
 // Top-level
-await steps.expect('price', 'ProductPage').toBe(el => parseFloat(el.text.slice(1)) > 10);
+await steps.expect('price', 'ProductPage').satisfy(el => parseFloat(el.text.slice(1)) > 10);
 await steps.expect('price', 'ProductPage')
-  .toBe(el => parseFloat(el.text.slice(1)) > 10)
+  .satisfy(el => parseFloat(el.text.slice(1)) > 10)
   .throws('price must be above $10');
 
 // Fluent
-await steps.on('price', 'ProductPage').toBe(el => parseFloat(el.text.slice(1)) > 10);
-await steps.on('card', 'DashboardPage').toBe(
+await steps.on('price', 'ProductPage').satisfy(el => parseFloat(el.text.slice(1)) > 10);
+await steps.on('card', 'DashboardPage').satisfy(
   el => el.visible && el.attributes['data-status'] === 'ready' && el.count > 0,
 );
 
 // Negated — predicate's expected outcome is flipped
-await steps.on('error', 'Page').not.toBe(el => el.visible);
+await steps.on('error', 'Page').not.satisfy(el => el.visible);
 ```
 
 Predicates receive an `ElementSnapshot` — plain data, no async methods:
@@ -382,7 +382,7 @@ interface ElementSnapshot {
 On predicate timeout, the error message includes the full snapshot pretty-printed so you can see exactly why the assertion failed:
 
 ```
-expect().toBe(predicate) failed on ProductPage.price after 30000ms
+expect().satisfy(predicate) failed on ProductPage.price after 30000ms
   snapshot at timeout:
     {
       "text": "12.99 USD",

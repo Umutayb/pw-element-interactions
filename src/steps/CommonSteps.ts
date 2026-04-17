@@ -239,19 +239,6 @@ export class Steps {
     }
 
     /**
-     * Clicks on an element without scrolling it into view first.
-     * Useful for elements in fixed or sticky positions (e.g. headers, floating buttons).     * @param elementName - The element name as defined under the given page.
-
-     * @param pageName - The page name as defined in `page-repository.json`.
-     * @param options - Optional step options for element resolution.
-     */
-    async clickWithoutScrolling(elementName: string, pageName: string, options?: StepOptions): Promise<void> {
-        log.interact('Clicking (no scroll) on "%s" in "%s"', elementName, pageName);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
-        await this.interact.click(element, { withoutScrolling: true });
-    }
-
-    /**
      * Clicks a random visible element from a group of elements matching the locator.     * @param elementName - The element name as defined under the given page.
 
      * @param pageName - The page name as defined in `page-repository.json`.
@@ -269,8 +256,9 @@ export class Steps {
 
     /**
      * Clicks on an element only if it is present in the DOM.
-     * Does nothing if the element is not found.     * @param elementName - The element name as defined under the given page.
-
+     * Does nothing and returns false if the element is not found.
+     *
+     * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param options - Optional step options for element resolution.
      */
@@ -802,7 +790,7 @@ export class Steps {
      * Entry point for the matcher tree. Resolves the named element and returns
      * an `ExpectBuilder` that exposes field-scoped matchers (`.text`, `.value`,
      * `.attributes`, `.count`, `.visible`, `.enabled`, `.css(prop)`, `.not`)
-     * plus the predicate escape hatch `.toBe(predicate)` for assertions the
+     * plus the predicate escape hatch `.satisfy(predicate)` for assertions the
      * matcher tree doesn't cover.
      *
      * @example
@@ -814,7 +802,7 @@ export class Steps {
      *
      * // Predicate chain — assertion executes when awaited
      * await steps.expect('price', 'ProductPage')
-     *   .toBe(el => parseFloat(el.text.slice(1)) > 10)
+     *   .satisfy(el => parseFloat(el.text.slice(1)) > 10)
      *   .throws('price must be above $10');
      */
     expect(elementName: string, pageName: string): ExpectBuilder {

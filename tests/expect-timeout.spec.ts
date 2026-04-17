@@ -4,7 +4,7 @@ import { test, expect } from './fixture/StepFixture';
  * Validates `.timeout(ms)` as a chainable override that composes at every
  * level: on `steps.on()` (ElementAction), on `steps.expect()` (ExpectBuilder),
  * on individual matchers (TextMatcher/CountMatcher/etc.), on `.not` chains,
- * on ifVisible chains, and on `.toBe(predicate)` (PredicateAssertion).
+ * on ifVisible chains, and on `.satisfy(predicate)` (PredicateAssertion).
  *
  * Negative-path tests pass a short timeout and assert the failure bubbles
  * within a bounded window — proof that the override is actually honored
@@ -53,7 +53,7 @@ test.describe('timeout() — positive override (long timeout tolerated)', () => 
     });
 
     test('on PredicateAssertion — .toBe(pred).timeout()', async ({ steps }) => {
-        await steps.expect('primaryButton', 'ButtonsPage').toBe(el => el.text === 'Primary').timeout(5000);
+        await steps.expect('primaryButton', 'ButtonsPage').satisfy(el => el.text === 'Primary').timeout(5000);
     });
 
     test('composes with .not — .timeout().not.text.toBe', async ({ steps }) => {
@@ -74,7 +74,7 @@ test.describe('timeout() — positive override (long timeout tolerated)', () => 
 
     test('composes with .toBe(pred).throws() — .toBe(pred).throws().timeout()', async ({ steps }) => {
         await steps.expect('primaryButton', 'ButtonsPage')
-            .toBe(el => el.visible)
+            .satisfy(el => el.visible)
             .throws('must be visible')
             .timeout(5000);
     });
@@ -113,7 +113,7 @@ test.describe('timeout() — negative override (short timeout fails fast)', () =
     test('fails within the override window on PredicateAssertion', async ({ steps }) => {
         const start = Date.now();
         await expect(
-            steps.expect('primaryButton', 'ButtonsPage').toBe(el => el.text === 'WRONG').timeout(500),
+            steps.expect('primaryButton', 'ButtonsPage').satisfy(el => el.text === 'WRONG').timeout(500),
         ).rejects.toThrow(/snapshot at timeout/);
         const elapsed = Date.now() - start;
         expect(elapsed).toBeLessThan(2000);
@@ -123,7 +123,7 @@ test.describe('timeout() — negative override (short timeout fails fast)', () =
         const start = Date.now();
         await expect(
             steps.expect('primaryButton', 'ButtonsPage')
-                .toBe(el => el.text === 'WRONG')
+                .satisfy(el => el.text === 'WRONG')
                 .timeout(500)
                 .throws('domain message'),
         ).rejects.toThrow(/domain message/);
@@ -135,7 +135,7 @@ test.describe('timeout() — negative override (short timeout fails fast)', () =
         // throws first, then timeout
         await expect(
             steps.expect('primaryButton', 'ButtonsPage')
-                .toBe(el => el.text === 'WRONG')
+                .satisfy(el => el.text === 'WRONG')
                 .throws('msg A')
                 .timeout(500),
         ).rejects.toThrow(/msg A/);
@@ -143,7 +143,7 @@ test.describe('timeout() — negative override (short timeout fails fast)', () =
         // timeout first, then throws
         await expect(
             steps.expect('primaryButton', 'ButtonsPage')
-                .toBe(el => el.text === 'WRONG')
+                .satisfy(el => el.text === 'WRONG')
                 .timeout(500)
                 .throws('msg B'),
         ).rejects.toThrow(/msg B/);

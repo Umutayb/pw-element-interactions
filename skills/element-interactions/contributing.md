@@ -272,7 +272,7 @@ interactions.verify.text(locator, ...)     ──┘
 **The rule for new assertions:**
 1. If `Verifications` can do what you need, add a matcher in `ExpectMatchers.ts` that delegates to it (2–3 lines — e.g. `return this.ctx.verify.X(target, ..., opts)`).
 2. If `Verifications` can't do what you need, **add a method to `Verifications` first**. Implementation goes there. Then add the matcher that delegates.
-3. Never reimplement assertion logic in the matcher tree (snapshot-capture + predicate polling + custom retry). The exception is `.toBe(predicate)` — the predicate escape hatch legitimately needs a snapshot-based poll because user lambdas run against plain data, not against a live element.
+3. Never reimplement assertion logic in the matcher tree (snapshot-capture + predicate polling + custom retry). The exception is `.satisfy(predicate)` — the predicate escape hatch legitimately needs a snapshot-based poll because user lambdas run against plain data, not against a live element.
 
 **The rule for new actions:**
 - Same shape — `Steps.X` and `ElementAction.X` both delegate into `Interactions.X`. Never write click/fill/hover logic directly on `Steps`.
@@ -303,22 +303,34 @@ toBe(expected: string): ExpectBuilder {
 
 `.not` flips the **next matcher only**, then resets. Don't introduce sticky-negation modes or multi-matcher negation scopes; it confuses reading. Both `steps.expect('el', 'Page').not.text.toBe('x')` and `steps.expect('el', 'Page').text.not.toBe('x')` produce the same single-call negation.
 
-### 5. Builder mutates, matcher clones
+### 5. One timeout, uniform mutation
 
-- Strategy selectors on `ElementAction` (`.first()`, `.nth()`, `.byText()`, `.byAttribute()`, `.ifVisible()`, `.timeout()`) **mutate** the builder and return `this`. Consistent with Playwright's locator semantics; consistent with how the chain reads.
-- Matcher classes (`TextMatcher`, `CountMatcher`, `BooleanMatcher`, etc.) are **immutable** — `.timeout(ms)` and `.not` return new instances. Each matcher call is independent.
-- `ExpectBuilder` has mutable internal state (queue, pendingNot, ctx) — also fine, since each `.expect()` / `.on()` call returns a fresh builder.
+A single chain-level `timeout` var is the source of truth across the whole chain:
+
+```
+Steps.timeout (fixture) → ElementAction._timeout → ExpectContext.timeout → VerifyOptions.timeout (threaded into Verifications)
+```
+
+`.timeout(ms)` **mutates** at every layer it appears — no cloning, no divergent semantics:
+
+- `ElementAction.timeout(ms)` mutates `_timeout`; `.text`, `.count`, etc. getters rebuild the ExpectContext with the new value.
+- `ExpectBuilder.timeout(ms)` mutates `ctx.timeout` and retroactively patches the last queued assertion (so `.satisfy(pred).timeout(500)` applies 500ms to that predicate).
+- Matcher `.timeout(ms)` (e.g. `.text.timeout(500)`) mutates its own ctx AND propagates to the builder for subsequent matchers — but does NOT retroactively patch a prior matcher's queued entry.
+
+**Visibility probe is the one deliberate exception.** `ifVisible(ms?)` has its own short `visibilityTimeout` (default 2000ms) because its whole purpose is fast-skip: a hidden element should abort the action in ~2s, not 30s. Do not unify it into the main timeout.
+
+Other builder state (queue, pendingNot) also mutates, but stays scoped: each `.expect()` / `.on()` call returns a fresh builder, so mutation doesn't leak across chains. `.not` is one-shot — it flips the next matcher only, then resets.
 
 ### 6. Snapshot-based predicates
 
-The predicate escape hatch (`steps.expect(el, page).toBe(predicate)`) takes a function that receives an `ElementSnapshot` — plain data, no async access. This keeps custom assertions readable and predictable.
+The predicate escape hatch (`steps.expect(el, page).satisfy(predicate)`) takes a function that receives an `ElementSnapshot` — plain data, no async access. This keeps custom assertions readable and predictable.
 
 ```ts
 // ✓
-await steps.expect('price', 'Page').toBe(el => parseFloat(el.text.slice(1)) > 10);
+await steps.expect('price', 'Page').satisfy(el => parseFloat(el.text.slice(1)) > 10);
 
 // ✗ Never change to this — users would need to await inside the predicate
-await steps.expect('price', 'Page').toBe(async el => (await el.getText()) === '$10');
+await steps.expect('price', 'Page').satisfy(async el => (await el.getText()) === '$10');
 ```
 
 ### 7. Naming conventions

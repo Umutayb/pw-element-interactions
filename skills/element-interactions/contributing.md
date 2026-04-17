@@ -255,6 +255,50 @@ Every public method that reaches the DOM/driver is `async`. No synchronous eleme
 
 The legacy `verify*` family on `Steps` is kept for backwards compatibility — don't grow it; route new assertions through the matcher tree.
 
+### 3a. Implementation lives in the `Interactions` / `Verifications` / `Extractions` layer. Everything else is a facade.
+
+The single source of truth for assertion behavior — retry mechanics, web-first polling, error formatting, negation, timeout handling — is the `Verifications` class. For actions, it's `Interactions`. For reads, `Extractions`.
+
+All user-facing layers are **dispatch-only** and must ultimately call into the appropriate interaction class:
+
+```
+Steps.verifyText(el, page, ...)            ──┐
+Steps.expect(el, page).text.toBe(...)        │
+ElementAction.verifyText(...)                ├─► Verifications.text(target, expected, options)
+ElementAction.text.toBe(...)                 │   ↑ one implementation, one codepath
+interactions.verify.text(locator, ...)     ──┘
+```
+
+**The rule for new assertions:**
+1. If `Verifications` can do what you need, add a matcher in `ExpectMatchers.ts` that delegates to it (2–3 lines — e.g. `return this.ctx.verify.X(target, ..., opts)`).
+2. If `Verifications` can't do what you need, **add a method to `Verifications` first**. Implementation goes there. Then add the matcher that delegates.
+3. Never reimplement assertion logic in the matcher tree (snapshot-capture + predicate polling + custom retry). The exception is `.toBe(predicate)` — the predicate escape hatch legitimately needs a snapshot-based poll because user lambdas run against plain data, not against a live element.
+
+**The rule for new actions:**
+- Same shape — `Steps.X` and `ElementAction.X` both delegate into `Interactions.X`. Never write click/fill/hover logic directly on `Steps`.
+
+**Why this matters:**
+- One bug fix propagates everywhere. Fix Playwright's web-first assertion handling in one place, every entry point benefits.
+- Error messages stay consistent because `describeFailure`-style messages are threaded as `errorMessage` into the single implementation, which embeds them via Playwright's `expect(locator, message)` overload.
+- The raw `interactions.verify.X` / `interactions.interact.X` public API (documented as the escape hatch for users with custom locators) is never out of sync with the matcher-tree / Steps behavior.
+- Adding a new matcher is cheap: write a one-liner in the tree, add one method to Verifications (which is itself a thin Playwright wrapper).
+
+**Helper pattern the matcher tree uses:**
+
+```ts
+// Matcher method — 2-line dispatch
+toBe(expected: string): ExpectBuilder {
+    return this.builder.enqueue(this.ctx, (entry) =>
+        runWithElement(entry.ctx,
+            el => entry.ctx.verify.text(el, expected, this.msgOpts(entry.ctx, 'text', 'to be', expected)),
+            entry.messageOverride));
+}
+```
+
+`runWithElement` handles the `ifVisible` gate + resolves the Element. `this.msgOpts` builds the `{ negated, timeout, errorMessage }` shape every Verifications method accepts. Verifications does the actual work.
+
+**Audit grep:** if you find yourself writing retry loops, snapshot capture, or Playwright `expect(locator)...` calls outside of `Verifications` / `Interactions` / `Extractions`, stop. It probably belongs in one of those classes instead.
+
 ### 4. One-shot semantics for `.not`
 
 `.not` flips the **next matcher only**, then resets. Don't introduce sticky-negation modes or multi-matcher negation scopes; it confuses reading. Both `steps.expect('el', 'Page').not.text.toBe('x')` and `steps.expect('el', 'Page').text.not.toBe('x')` produce the same single-call negation.

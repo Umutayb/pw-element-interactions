@@ -30,7 +30,7 @@ export interface DropdownSelectOptions {
  */
 export interface TextVerifyOptions {
     /** Asserts that the element has text content, ignoring 'expectedText'. */
-    notEmpty: true;
+    notEmpty?: boolean;
 }
 
 /**
@@ -38,9 +38,11 @@ export interface TextVerifyOptions {
  * At least one constraint is required: exactly, greaterThan, or lessThan.
  */
 export type CountVerifyOptions =
-    | { exactly: number; greaterThan?: never; lessThan?: never }
-    | { exactly?: never; greaterThan: number; lessThan?: number }
-    | { exactly?: never; greaterThan?: number; lessThan: number };
+    | { exactly: number; greaterThan?: never; lessThan?: never; greaterThanOrEqual?: never; lessThanOrEqual?: never }
+    | { exactly?: never; greaterThan: number; lessThan?: number; greaterThanOrEqual?: never; lessThanOrEqual?: never }
+    | { exactly?: never; greaterThan?: number; lessThan: number; greaterThanOrEqual?: never; lessThanOrEqual?: never }
+    | { exactly?: never; greaterThan?: never; lessThan?: never; greaterThanOrEqual: number; lessThanOrEqual?: number }
+    | { exactly?: never; greaterThan?: never; lessThan?: never; greaterThanOrEqual?: number; lessThanOrEqual: number };
 
 /**
  * Configuration options for the `dragAndDrop` method.

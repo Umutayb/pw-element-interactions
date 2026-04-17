@@ -441,7 +441,9 @@ export class ElementAction {
             conditionalVisible: this.conditionalVisible,
             visibilityTimeout: this.visibilityTimeout,
             resolveElement: () => this.resolve(),
+            resolveAll: () => this.repo.get(this.elementName, this.pageName, { strategy: SelectionStrategy.ALL }),
             captureSnapshot: () => this.captureSnapshot(),
+            verify: this.interactions.verify,
         };
     }
 

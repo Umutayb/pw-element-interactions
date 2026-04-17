@@ -1,11 +1,13 @@
-import { Element } from '@civitas-cerebrum/element-repository';
+import { Locator } from '@playwright/test';
+import { Element, WebElement } from '@civitas-cerebrum/element-repository';
+import { Verifications } from '../interactions/Verification';
 
 /**
  * Snapshot of an element's state at a single point in time.
  *
- * Passed to predicates in `steps.on(el, page).toBe(predicate)` and
- * `steps.expect(el, page).toBe(predicate)`. All fields are primitives or
- * plain data — no async methods, no Playwright types.
+ * Passed to predicates in `steps.expect(el, page).toBe(predicate)` and
+ * `steps.on(el, page).toBe(predicate)`. All fields are primitives or plain
+ * data — no async methods, no Playwright types.
  */
 export interface ElementSnapshot {
     readonly text: string;
@@ -27,8 +29,13 @@ export interface ExpectContext {
     readonly timeout: number;
     readonly conditionalVisible: boolean;
     readonly visibilityTimeout: number;
+    /** Resolves the element with the current strategy (may be `.first()`-narrowed). */
     resolveElement(): Promise<Element>;
+    /** Resolves the element with the ALL strategy — no narrowing, used by count matchers. */
+    resolveAll(): Promise<Element>;
     captureSnapshot(): Promise<ElementSnapshot>;
+    /** The shared Verifications facade — the single implementation source for all matcher assertions. */
+    readonly verify: Verifications;
 }
 
 /** One assertion queued on an `ExpectBuilder`. Executes when the builder is awaited. */
@@ -41,22 +48,7 @@ interface QueuedAssertion {
     messageOverride?: string;
 }
 
-// ─── Shared helpers ──────────────────────────────────────────────────
-
-const POLL_MS = 100;
-
-function describeFailure(
-    ctx: ExpectContext,
-    field: string,
-    verb: string,
-    expected: unknown,
-    actual: unknown,
-    negated: boolean,
-): string {
-    const quote = (v: unknown) => (typeof v === 'string' ? `"${v}"` : String(v));
-    const neg = negated ? 'not ' : '';
-    return `expected ${ctx.pageName}.${ctx.elementName} ${field} ${neg}${verb} ${quote(expected)}, got ${quote(actual)}`;
-}
+// ─── Helpers — only retained for the ifVisible gate + predicate path ─
 
 async function honorIfVisibleGate(ctx: ExpectContext): Promise<boolean> {
     if (!ctx.conditionalVisible) return true;
@@ -69,64 +61,36 @@ async function honorIfVisibleGate(ctx: ExpectContext): Promise<boolean> {
     }
 }
 
-/** Retry-and-assert against a captured snapshot. Honors `ifVisible` gate. */
-async function assertWithSnapshot(
+/** Wraps a delegation into `Verifications` with the ifVisible gate and optional custom error header. */
+async function runViaVerify(
     ctx: ExpectContext,
-    negated: boolean,
-    predicate: (snap: ElementSnapshot) => boolean,
-    describe: (snap: ElementSnapshot, negated: boolean) => string,
+    action: () => Promise<void>,
     messageOverride?: string,
 ): Promise<void> {
     if (!(await honorIfVisibleGate(ctx))) return;
-
-    const deadline = Date.now() + ctx.timeout;
-    let lastSnapshot: ElementSnapshot | null = null;
-    let lastError: unknown = null;
-
-    while (Date.now() < deadline) {
-        try {
-            lastSnapshot = await ctx.captureSnapshot();
-            if (predicate(lastSnapshot) !== negated) return;
-        } catch (err) {
-            lastError = err;
-        }
-        await new Promise(resolve => setTimeout(resolve, POLL_MS));
+    try {
+        await action();
+    } catch (err) {
+        if (!messageOverride) throw err;
+        const original = err instanceof Error ? err.message : String(err);
+        throw new Error(`${messageOverride}\n  ${original}`);
     }
-
-    if (!lastSnapshot) {
-        const reason = lastError instanceof Error ? lastError.message : String(lastError ?? 'unknown');
-        throw new Error(
-            `expect() failed on ${ctx.pageName}.${ctx.elementName}: could not resolve element within ${ctx.timeout}ms — ${reason}`,
-        );
-    }
-    throw new Error(messageOverride ?? describe(lastSnapshot, negated));
 }
 
-/** Retry-and-assert against a live-read boolean evaluation. Honors `ifVisible` gate. */
-async function assertWithLiveRead(
+/** Runs a matcher body that needs a resolved element. Applies the ifVisible gate first so resolve errors on absent elements are silently skipped when conditional. */
+async function runWithElement(
     ctx: ExpectContext,
-    negated: boolean,
-    evaluate: () => Promise<boolean>,
-    describe: (negated: boolean) => string,
-    messageOverride?: string,
+    body: (el: Element) => Promise<void>,
+    messageOverride: string | undefined,
+    resolve: (ctx: ExpectContext) => Promise<Element> = c => c.resolveElement(),
 ): Promise<void> {
-    if (!(await honorIfVisibleGate(ctx))) return;
-
-    const deadline = Date.now() + ctx.timeout;
-
-    while (Date.now() < deadline) {
-        try {
-            if ((await evaluate()) !== negated) return;
-        } catch {
-            // swallow and retry
-        }
-        await new Promise(resolve => setTimeout(resolve, POLL_MS));
-    }
-
-    throw new Error(messageOverride ?? describe(negated));
+    await runViaVerify(ctx, async () => {
+        const el = await resolve(ctx);
+        await body(el);
+    }, messageOverride);
 }
 
-/** Predicate-specific failure path — prints the captured snapshot for debugging. */
+/** Predicate-specific failure path — runs a snapshot loop, prints the captured snapshot on failure. */
 async function assertPredicate(
     ctx: ExpectContext,
     negated: boolean,
@@ -136,6 +100,7 @@ async function assertPredicate(
     if (!(await honorIfVisibleGate(ctx))) return;
 
     const deadline = Date.now() + ctx.timeout;
+    const pollMs = 100;
     let lastSnapshot: ElementSnapshot | null = null;
     let lastError: unknown = null;
 
@@ -146,7 +111,7 @@ async function assertPredicate(
         } catch (err) {
             lastError = err;
         }
-        await new Promise(resolve => setTimeout(resolve, POLL_MS));
+        await new Promise(resolve => setTimeout(resolve, pollMs));
     }
 
     const header = messageOverride
@@ -159,16 +124,14 @@ async function assertPredicate(
     throw new Error(`${header}\n  snapshot at timeout:\n${snapshotJson}`);
 }
 
-// ─── Matcher base class ──────────────────────────────────────────────
+// ─── Matcher adapters ────────────────────────────────────────────────
+//
+// Every matcher method is a 2-line dispatch into `Verifications`. The
+// Verifications class is the single source of truth for assertion
+// implementation — retry mechanics, web-first assertion, error formatting,
+// negation — all live there. The matcher tree is a presentation-layer
+// wrapper that composes `Verifications` calls through a chainable builder.
 
-/**
- * Shared shape for all field matchers. Concrete subclasses provide:
- *   - `withCtx(ctx)`  → clone with replaced context (used by `timeout(ms)`)
- *   - `withNegated(n)` → clone with flipped negation (used by `get not()`)
- *
- * `timeout(ms)` and `get not()` then live on this base, not duplicated across
- * every concrete matcher.
- */
 abstract class BaseMatcher {
     constructor(
         protected builder: ExpectBuilder,
@@ -176,122 +139,137 @@ abstract class BaseMatcher {
         protected negated: boolean,
     ) {}
 
-    protected abstract withCtx(ctx: ExpectContext): this;
-    protected abstract withNegated(negated: boolean): this;
-
     /** Override the retry timeout for this matcher only. */
     timeout(ms: number): this {
-        return this.withCtx({ ...this.ctx, timeout: ms });
+        const cloned = Object.create(Object.getPrototypeOf(this)) as BaseMatcher;
+        Object.assign(cloned, this);
+        cloned.ctx = { ...this.ctx, timeout: ms };
+        return cloned as this;
     }
 
-    /** Flip the expected outcome of this matcher. */
-    get not(): this {
-        return this.withNegated(!this.negated);
+    /** Shortcut: build the options object that Verifications methods accept. */
+    protected opts() {
+        return { negated: this.negated, timeout: this.ctx.timeout };
+    }
+
+    /**
+     * Build the standard failure message + VerifyOptions for a given verb + expected value.
+     * Accepts the execution-time ctx so trailing `.timeout()` updates flow through.
+     */
+    protected msgOpts(ctx: ExpectContext, field: string, verb: string, expected: unknown) {
+        const neg = this.negated ? 'not ' : '';
+        const quote = (v: unknown) => (typeof v === 'string' ? `"${v}"` : String(v));
+        return {
+            negated: this.negated,
+            timeout: ctx.timeout,
+            errorMessage: `expected ${ctx.pageName}.${ctx.elementName} ${field} ${neg}${verb} ${quote(expected)}`,
+        };
     }
 }
 
-/** Shared string-matcher surface: text / value / attribute / (css uses its own live-read). */
+// ─── Field matchers — each method is a one-line delegate ─────────────
+
 abstract class StringMatcher extends BaseMatcher {
     protected abstract fieldLabel(): string;
-    protected abstract read(snap: ElementSnapshot): string;
+    /** Subclasses identify which Verifications family handles their field. */
+    protected abstract verifyEq(target: Element, expected: string, opts: VerifyOpts): Promise<void>;
+    protected abstract verifyContains(target: Element, expected: string, opts: VerifyOpts): Promise<void>;
+    protected abstract verifyMatches(target: Element, re: RegExp, opts: VerifyOpts): Promise<void>;
+    protected abstract verifyStartsWith(target: Element, prefix: string, opts: VerifyOpts): Promise<void>;
+    protected abstract verifyEndsWith(target: Element, suffix: string, opts: VerifyOpts): Promise<void>;
 
     toBe(expected: string): ExpectBuilder {
-        return this.enqueue(
-            s => this.read(s) === expected,
-            (s, n) => describeFailure(this.ctx, this.fieldLabel(), 'to be', expected, this.read(s), n),
-        );
-    }
-    toContain(expected: string): ExpectBuilder {
-        return this.enqueue(
-            s => this.read(s).includes(expected),
-            (s, n) => describeFailure(this.ctx, this.fieldLabel(), 'to contain', expected, this.read(s), n),
-        );
-    }
-    toMatch(re: RegExp): ExpectBuilder {
-        return this.enqueue(
-            s => re.test(this.read(s)),
-            (s, n) => describeFailure(this.ctx, this.fieldLabel(), 'to match', re, this.read(s), n),
-        );
-    }
-    toStartWith(prefix: string): ExpectBuilder {
-        return this.enqueue(
-            s => this.read(s).startsWith(prefix),
-            (s, n) => describeFailure(this.ctx, this.fieldLabel(), 'to start with', prefix, this.read(s), n),
-        );
-    }
-    toEndWith(suffix: string): ExpectBuilder {
-        return this.enqueue(
-            s => this.read(s).endsWith(suffix),
-            (s, n) => describeFailure(this.ctx, this.fieldLabel(), 'to end with', suffix, this.read(s), n),
-        );
+        return this.builder.enqueue(this.ctx, (entry) =>
+            runWithElement(entry.ctx, el => this.verifyEq(el, expected, this.msgOpts(entry.ctx, this.fieldLabel(), 'to be', expected)), entry.messageOverride));
     }
 
-    private enqueue(
-        predicate: (snap: ElementSnapshot) => boolean,
-        describe: (snap: ElementSnapshot, negated: boolean) => string,
-    ): ExpectBuilder {
-        const negated = this.negated;
+    toContain(expected: string): ExpectBuilder {
         return this.builder.enqueue(this.ctx, (entry) =>
-            assertWithSnapshot(entry.ctx, negated, predicate, describe, entry.messageOverride),
-        );
+            runWithElement(entry.ctx, el => this.verifyContains(el, expected, this.msgOpts(entry.ctx, this.fieldLabel(), 'to contain', expected)), entry.messageOverride));
+    }
+
+    toMatch(re: RegExp): ExpectBuilder {
+        return this.builder.enqueue(this.ctx, (entry) =>
+            runWithElement(entry.ctx, el => this.verifyMatches(el, re, this.msgOpts(entry.ctx, this.fieldLabel(), 'to match', re)), entry.messageOverride));
+    }
+
+    toStartWith(prefix: string): ExpectBuilder {
+        return this.builder.enqueue(this.ctx, (entry) =>
+            runWithElement(entry.ctx, el => this.verifyStartsWith(el, prefix, this.msgOpts(entry.ctx, this.fieldLabel(), 'to start with', prefix)), entry.messageOverride));
+    }
+
+    toEndWith(suffix: string): ExpectBuilder {
+        return this.builder.enqueue(this.ctx, (entry) =>
+            runWithElement(entry.ctx, el => this.verifyEndsWith(el, suffix, this.msgOpts(entry.ctx, this.fieldLabel(), 'to end with', suffix)), entry.messageOverride));
     }
 }
 
-// ─── Concrete field matchers ─────────────────────────────────────────
+/** Short alias for the opts shape Verifications methods accept. */
+type VerifyOpts = { negated?: boolean; timeout?: number; errorMessage?: string };
 
 export class TextMatcher extends StringMatcher {
-    protected withCtx(ctx: ExpectContext): this { return new TextMatcher(this.builder, ctx, this.negated) as this; }
-    protected withNegated(negated: boolean): this { return new TextMatcher(this.builder, this.ctx, negated) as this; }
-    protected fieldLabel(): string { return 'text'; }
-    protected read(snap: ElementSnapshot): string { return snap.text; }
+    get not(): TextMatcher { return new TextMatcher(this.builder, this.ctx, !this.negated); }
+    protected fieldLabel() { return 'text'; }
+    protected verifyEq(t: Element, v: string, o: VerifyOpts) { return this.ctx.verify.text(t, v, o); }
+    protected verifyContains(t: Element, v: string, o: VerifyOpts) { return this.ctx.verify.textContains(t, v, o); }
+    protected verifyMatches(t: Element, re: RegExp, o: VerifyOpts) { return this.ctx.verify.textMatches(t, re, o); }
+    protected verifyStartsWith(t: Element, p: string, o: VerifyOpts) { return this.ctx.verify.textStartsWith(t, p, o); }
+    protected verifyEndsWith(t: Element, s: string, o: VerifyOpts) { return this.ctx.verify.textEndsWith(t, s, o); }
 }
 
 export class ValueMatcher extends StringMatcher {
-    protected withCtx(ctx: ExpectContext): this { return new ValueMatcher(this.builder, ctx, this.negated) as this; }
-    protected withNegated(negated: boolean): this { return new ValueMatcher(this.builder, this.ctx, negated) as this; }
-    protected fieldLabel(): string { return 'value'; }
-    protected read(snap: ElementSnapshot): string { return snap.value; }
+    get not(): ValueMatcher { return new ValueMatcher(this.builder, this.ctx, !this.negated); }
+    protected fieldLabel() { return 'value'; }
+    protected verifyEq(t: Element, v: string, o: VerifyOpts) { return this.ctx.verify.inputValue(t, v, o); }
+    protected verifyContains(t: Element, v: string, o: VerifyOpts) { return this.ctx.verify.inputValueContains(t, v, o); }
+    protected verifyMatches(t: Element, re: RegExp, o: VerifyOpts) { return this.ctx.verify.inputValueMatches(t, re, o); }
+    protected verifyStartsWith(t: Element, p: string, o: VerifyOpts) { return this.ctx.verify.inputValueStartsWith(t, p, o); }
+    protected verifyEndsWith(t: Element, s: string, o: VerifyOpts) { return this.ctx.verify.inputValueEndsWith(t, s, o); }
 }
 
 export class AttributeMatcher extends StringMatcher {
     constructor(builder: ExpectBuilder, ctx: ExpectContext, private attrName: string, negated: boolean) {
         super(builder, ctx, negated);
     }
-    protected withCtx(ctx: ExpectContext): this { return new AttributeMatcher(this.builder, ctx, this.attrName, this.negated) as this; }
-    protected withNegated(negated: boolean): this { return new AttributeMatcher(this.builder, this.ctx, this.attrName, negated) as this; }
-    protected fieldLabel(): string { return `attribute "${this.attrName}"`; }
-    protected read(snap: ElementSnapshot): string { return snap.attributes[this.attrName] ?? ''; }
+    get not(): AttributeMatcher { return new AttributeMatcher(this.builder, this.ctx, this.attrName, !this.negated); }
+    protected fieldLabel() { return `attribute "${this.attrName}"`; }
+    protected verifyEq(t: Element, v: string, o: VerifyOpts) { return this.ctx.verify.attribute(t, this.attrName, v, o); }
+    protected verifyContains(t: Element, v: string, o: VerifyOpts) { return this.ctx.verify.attributeContains(t, this.attrName, v, o); }
+    protected verifyMatches(t: Element, re: RegExp, o: VerifyOpts) { return this.ctx.verify.attributeMatches(t, this.attrName, re, o); }
+    protected verifyStartsWith(t: Element, p: string, o: VerifyOpts) {
+        const escaped = p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return this.ctx.verify.attributeMatches(t, this.attrName, new RegExp('^' + escaped), o);
+    }
+    protected verifyEndsWith(t: Element, s: string, o: VerifyOpts) {
+        const escaped = s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return this.ctx.verify.attributeMatches(t, this.attrName, new RegExp(escaped + '$'), o);
+    }
 }
 
 export class CountMatcher extends BaseMatcher {
-    protected withCtx(ctx: ExpectContext): this { return new CountMatcher(this.builder, ctx, this.negated) as this; }
-    protected withNegated(negated: boolean): this { return new CountMatcher(this.builder, this.ctx, negated) as this; }
+    get not(): CountMatcher { return new CountMatcher(this.builder, this.ctx, !this.negated); }
 
-    toBe(expected: number): ExpectBuilder {
-        return this.enqueue(s => s.count === expected, 'to be', expected);
-    }
-    toBeGreaterThan(n: number): ExpectBuilder {
-        return this.enqueue(s => s.count > n, 'to be greater than', n);
-    }
-    toBeLessThan(n: number): ExpectBuilder {
-        return this.enqueue(s => s.count < n, 'to be less than', n);
-    }
-    toBeGreaterThanOrEqual(n: number): ExpectBuilder {
-        return this.enqueue(s => s.count >= n, 'to be greater than or equal to', n);
-    }
-    toBeLessThanOrEqual(n: number): ExpectBuilder {
-        return this.enqueue(s => s.count <= n, 'to be less than or equal to', n);
-    }
-
-    private enqueue(predicate: (s: ElementSnapshot) => boolean, verb: string, expected: number): ExpectBuilder {
-        const negated = this.negated;
+    private delegate(
+        opts: { exactly?: number; greaterThan?: number; lessThan?: number; greaterThanOrEqual?: number; lessThanOrEqual?: number },
+        verb: string,
+        expected: number,
+    ): ExpectBuilder {
         return this.builder.enqueue(this.ctx, (entry) =>
-            assertWithSnapshot(
-                entry.ctx, negated, predicate,
-                (s, n) => describeFailure(entry.ctx, 'count', verb, expected, s.count, n),
+            runWithElement(
+                entry.ctx,
+                // Count always uses the un-narrowed element — otherwise `.first()`
+                // narrowing reduces count to 1 regardless of how many elements match.
+                el => entry.ctx.verify.count(el, opts as never, this.msgOpts(entry.ctx, 'count', verb, expected)),
                 entry.messageOverride,
+                c => c.resolveAll(),
             ));
     }
+
+    toBe(expected: number): ExpectBuilder { return this.delegate({ exactly: expected }, 'to be', expected); }
+    toBeGreaterThan(n: number): ExpectBuilder { return this.delegate({ greaterThan: n }, 'to be greater than', n); }
+    toBeLessThan(n: number): ExpectBuilder { return this.delegate({ lessThan: n }, 'to be less than', n); }
+    toBeGreaterThanOrEqual(n: number): ExpectBuilder { return this.delegate({ greaterThanOrEqual: n }, 'to be greater than or equal to', n); }
+    toBeLessThanOrEqual(n: number): ExpectBuilder { return this.delegate({ lessThanOrEqual: n }, 'to be less than or equal to', n); }
 }
 
 type BooleanField = 'visible' | 'enabled';
@@ -300,43 +278,31 @@ export class BooleanMatcher extends BaseMatcher {
     constructor(builder: ExpectBuilder, ctx: ExpectContext, private field: BooleanField, negated: boolean) {
         super(builder, ctx, negated);
     }
-    protected withCtx(ctx: ExpectContext): this { return new BooleanMatcher(this.builder, ctx, this.field, this.negated) as this; }
-    protected withNegated(negated: boolean): this { return new BooleanMatcher(this.builder, this.ctx, this.field, negated) as this; }
+    get not(): BooleanMatcher { return new BooleanMatcher(this.builder, this.ctx, this.field, !this.negated); }
 
     toBe(expected: boolean): ExpectBuilder {
-        const negated = this.negated;
-        const field = this.field;
+        // True for visible/enabled; false flips the Playwright state accordingly.
+        const state = this.field === 'visible'
+            ? (expected ? 'visible' : 'hidden')
+            : (expected ? 'enabled' : 'disabled');
         return this.builder.enqueue(this.ctx, (entry) =>
-            assertWithSnapshot(
-                entry.ctx, negated,
-                s => s[field] === expected,
-                (s, n) => describeFailure(entry.ctx, field, 'to be', expected, s[field], n),
-                entry.messageOverride,
-            ));
+            runWithElement(entry.ctx, el => entry.ctx.verify.state(el, state, this.msgOpts(entry.ctx, this.field, 'to be', expected)), entry.messageOverride));
     }
     toBeTrue(): ExpectBuilder { return this.toBe(true); }
     toBeFalse(): ExpectBuilder { return this.toBe(false); }
 }
 
 export class AttributesMatcher extends BaseMatcher {
-    protected withCtx(ctx: ExpectContext): this { return new AttributesMatcher(this.builder, ctx, this.negated) as this; }
-    protected withNegated(negated: boolean): this { return new AttributesMatcher(this.builder, this.ctx, negated) as this; }
+    get not(): AttributesMatcher { return new AttributesMatcher(this.builder, this.ctx, !this.negated); }
 
-    /** Navigate into a specific attribute. The resulting matcher supports the full string-matcher surface. */
+    /** Navigate into a specific attribute. Returns a StringMatcher scoped to that attribute. */
     get(name: string): AttributeMatcher {
         return new AttributeMatcher(this.builder, this.ctx, name, this.negated);
     }
 
     toHaveKey(name: string): ExpectBuilder {
-        const negated = this.negated;
         return this.builder.enqueue(this.ctx, (entry) =>
-            assertWithSnapshot(
-                entry.ctx, negated,
-                s => name in s.attributes,
-                (s, n) =>
-                    `expected ${entry.ctx.pageName}.${entry.ctx.elementName} attributes ${n ? 'not ' : ''}to have key "${name}", present keys: [${Object.keys(s.attributes).join(', ')}]`,
-                entry.messageOverride,
-            ));
+            runWithElement(entry.ctx, el => entry.ctx.verify.hasAttribute(el, name, this.msgOpts(entry.ctx, 'attributes', 'to have key', name)), entry.messageOverride));
     }
 }
 
@@ -344,29 +310,20 @@ export class CssMatcher extends BaseMatcher {
     constructor(builder: ExpectBuilder, ctx: ExpectContext, private property: string, negated: boolean) {
         super(builder, ctx, negated);
     }
-    protected withCtx(ctx: ExpectContext): this { return new CssMatcher(this.builder, ctx, this.property, this.negated) as this; }
-    protected withNegated(negated: boolean): this { return new CssMatcher(this.builder, this.ctx, this.property, negated) as this; }
+    get not(): CssMatcher { return new CssMatcher(this.builder, this.ctx, this.property, !this.negated); }
 
-    toBe(expected: string): ExpectBuilder { return this.enqueue(v => v === expected, 'to be', expected); }
-    toContain(expected: string): ExpectBuilder { return this.enqueue(v => v.includes(expected), 'to contain', expected); }
-    toMatch(re: RegExp): ExpectBuilder { return this.enqueue(v => re.test(v), 'to match', re); }
-
-    private enqueue(test: (value: string) => boolean, verb: string, expected: unknown): ExpectBuilder {
-        const negated = this.negated;
-        const property = this.property;
-        return this.builder.enqueue(this.ctx, (entry) => {
-            let lastValue = '';
-            return assertWithLiveRead(
-                entry.ctx, negated,
-                async () => {
-                    const element = await entry.ctx.resolveElement();
-                    lastValue = await element.getCssProperty(property);
-                    return test(lastValue);
-                },
-                n => describeFailure(entry.ctx, `css "${property}"`, verb, expected, lastValue, n),
-                entry.messageOverride,
-            );
-        });
+    private label() { return `css "${this.property}"`; }
+    toBe(expected: string): ExpectBuilder {
+        return this.builder.enqueue(this.ctx, (entry) =>
+            runWithElement(entry.ctx, el => entry.ctx.verify.cssProperty(el, this.property, expected, this.msgOpts(entry.ctx, this.label(), 'to be', expected)), entry.messageOverride));
+    }
+    toContain(expected: string): ExpectBuilder {
+        return this.builder.enqueue(this.ctx, (entry) =>
+            runWithElement(entry.ctx, el => entry.ctx.verify.cssPropertyContains(el, this.property, expected, this.msgOpts(entry.ctx, this.label(), 'to contain', expected)), entry.messageOverride));
+    }
+    toMatch(re: RegExp): ExpectBuilder {
+        return this.builder.enqueue(this.ctx, (entry) =>
+            runWithElement(entry.ctx, el => entry.ctx.verify.cssPropertyMatches(el, this.property, re, this.msgOpts(entry.ctx, this.label(), 'to match', re)), entry.messageOverride));
     }
 }
 
@@ -386,15 +343,11 @@ export class CssMatcher extends BaseMatcher {
  *   .visible.toBeTrue();
  * ```
  *
- * Semantics:
- *   - `.not` toggles negation for the *next* matcher only (one-shot).
- *   - `.throws(message)` replaces the failure message of the most recently
- *     queued assertion.
- *   - `.timeout(ms)` mutates the forward context AND retroactively updates
- *     the most recently queued assertion. Per-matcher `.timeout(ms)`
- *     (e.g. `.text.timeout(500).toBe(...)`) scopes to that matcher only.
- *   - Awaiting executes every queued assertion sequentially; the first
- *     failure throws and subsequent assertions do not run.
+ * Under the hood each matcher call delegates to `Verifications` — the single
+ * source of truth for assertion implementation (retry mechanics, web-first
+ * behavior, error formatting, negation). The matcher tree is presentation
+ * only. The predicate escape hatch (`toBe(predicate)`) is the exception — it
+ * uses a snapshot-based poll so user lambdas can access plain data.
  */
 export class ExpectBuilder implements PromiseLike<void> {
     private ctx: ExpectContext;
@@ -406,18 +359,11 @@ export class ExpectBuilder implements PromiseLike<void> {
         this.pendingNot = initialNegated;
     }
 
-    /** One-shot negation for the next matcher reached from this builder. */
     get not(): this {
         this.pendingNot = !this.pendingNot;
         return this;
     }
 
-    /**
-     * Override the retry timeout. Mutates the forward context so every matcher
-     * queued after this call uses the new timeout; retroactively updates the
-     * most recently queued assertion so trailing `.toBe(pred).timeout(ms)`
-     * scopes to that predicate.
-     */
     timeout(ms: number): this {
         this.ctx = { ...this.ctx, timeout: ms };
         const last = this.queue[this.queue.length - 1];
@@ -453,15 +399,6 @@ export class ExpectBuilder implements PromiseLike<void> {
         return this;
     }
 
-    then<TResult1 = void, TResult2 = never>(
-        onfulfilled?: ((value: void) => TResult1 | PromiseLike<TResult1>) | null | undefined,
-        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null | undefined,
-    ): PromiseLike<TResult1 | TResult2> {
-        return this.flush().then(onfulfilled, onrejected);
-    }
-
-    // ─── internals used by matchers ─────────────────────────────────
-
     /**
      * Enqueue an assertion. Matchers call this with the context they captured
      * at matcher-creation time and a runner that reads `entry.ctx` and
@@ -473,6 +410,13 @@ export class ExpectBuilder implements PromiseLike<void> {
         entry.run = () => run(entry);
         this.queue.push(entry);
         return this;
+    }
+
+    then<TResult1 = void, TResult2 = never>(
+        onfulfilled?: ((value: void) => TResult1 | PromiseLike<TResult1>) | null | undefined,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null | undefined,
+    ): PromiseLike<TResult1 | TResult2> {
+        return this.flush().then(onfulfilled, onrejected);
     }
 
     private consumeNot(): boolean {

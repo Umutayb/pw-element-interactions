@@ -150,6 +150,28 @@ test.describe('Verifications — direct method validation', () => {
     await interactions.verify.cssProperty(locator, 'display', display);
   });
 
+  test('text/value/attribute variants — contains / matches / startsWith / endsWith', async ({ page, steps, interactions }) => {
+    await steps.navigateTo('/buttons');
+    const btn = page.locator('[data-testid="btn-primary"]');
+
+    await interactions.verify.textContains(btn, 'rim');
+    await interactions.verify.textMatches(btn, /^Prim/);
+    await interactions.verify.textStartsWith(btn, 'Prim');
+    await interactions.verify.textEndsWith(btn, 'mary');
+
+    await interactions.verify.attributeContains(btn, 'data-testid', 'primary');
+    await interactions.verify.attributeMatches(btn, 'data-testid', /^btn-/);
+
+    await steps.navigateTo('/forms');
+    const input = page.locator('#name');
+    await input.waitFor({ state: 'visible' });
+    await input.fill('Alice Example');
+    await interactions.verify.inputValueContains(input, 'lice');
+    await interactions.verify.inputValueMatches(input, /^Alice/);
+    await interactions.verify.inputValueStartsWith(input, 'Alice');
+    await interactions.verify.inputValueEndsWith(input, 'Example');
+  });
+
   test('urlContains — verifies URL substring is present', async ({ steps, interactions }) => {
     await steps.navigateTo('/buttons');
     await interactions.verify.urlContains('buttons');

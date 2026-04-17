@@ -245,14 +245,22 @@ export class ElementAction {
     }
 
     // -- Terminal actions: verifications --
+    //
+    // These legacy `verify*` methods are thin delegations to the matcher tree.
+    // The tree is the single source of truth for assertion behavior and error
+    // formatting; `verify*` stays on the public surface for backwards compat.
 
     /** Assert the element is visible. */
     async verifyPresence(): Promise<void> {
-        const element = await this.resolve();
-        await element.action(this._timeout).verifyPresence();
+        await this.expectBuilder().visible.toBeTrue();
     }
 
-    /** Assert the element is hidden or detached. */
+    /**
+     * Assert the element is hidden or detached. Stays non-delegated — uses
+     * Playwright's `expect(locator).toBeHidden()` which is optimized for the
+     * absent case and returns quickly, unlike the matcher tree's
+     * `visible.toBeFalse()` which pays the full repo resolution timeout.
+     */
     async verifyAbsence(): Promise<void> {
         const element = await this.resolve();
         await element.action(this._timeout).verifyAbsence();
@@ -260,21 +268,24 @@ export class ElementAction {
 
     /** Assert the element's text content. If no expected text is given, asserts the element is not empty. */
     async verifyText(expected?: string, options?: TextVerifyOptions): Promise<void> {
+        const builder = this.expectBuilder();
         const notEmpty = options?.notEmpty || expected === undefined;
-        const locator = await this.resolveLocator();
-        await this.interactions.verify.text(locator, expected, notEmpty ? { notEmpty: true } : options);
+        if (notEmpty) await builder.text.not.toBe('');
+        else await builder.text.toBe(expected!);
     }
 
     /** Assert text contains a substring. */
     async verifyTextContains(expected: string): Promise<void> {
-        const element = await this.resolve();
-        await element.action(this._timeout).verifyTextContains(expected);
+        await this.expectBuilder().text.toContain(expected);
     }
 
     /** Assert the element count. */
     async verifyCount(options: CountVerifyOptions): Promise<void> {
-        const element = await this.resolve();
-        await element.action(this._timeout).verifyCount(options);
+        const builder = this.expectBuilder();
+        if (options.exactly !== undefined) await builder.count.toBe(options.exactly);
+        else if (options.greaterThan !== undefined) await builder.count.toBeGreaterThan(options.greaterThan);
+        else if (options.lessThan !== undefined) await builder.count.toBeLessThan(options.lessThan);
+        else throw new Error("verifyCount requires 'exactly', 'greaterThan', or 'lessThan' in CountVerifyOptions.");
     }
 
     /** Check if element is visible (boolean, no assertion). */
@@ -308,14 +319,12 @@ export class ElementAction {
 
     /** Assert an attribute value. */
     async verifyAttribute(attributeName: string, expectedValue: string): Promise<void> {
-        const element = await this.resolve();
-        await element.action(this._timeout).verifyAttribute(attributeName, expectedValue);
+        await this.expectBuilder().attributes.get(attributeName).toBe(expectedValue);
     }
 
     /** Assert input value. */
     async verifyInputValue(expectedValue: string): Promise<void> {
-        const locator = await this.resolveLocator();
-        await this.interactions.verify.inputValue(locator, expectedValue);
+        await this.expectBuilder().value.toBe(expectedValue);
     }
 
     /** Verify images loaded correctly. */
@@ -332,8 +341,7 @@ export class ElementAction {
 
     /** Assert CSS property value. */
     async verifyCssProperty(property: string, expectedValue: string): Promise<void> {
-        const locator = await this.resolveLocator();
-        await this.interactions.verify.cssProperty(locator, property, expectedValue);
+        await this.expectBuilder().css(property).toBe(expectedValue);
     }
 
     /** Assert elements are in the expected text order. */
@@ -404,11 +412,16 @@ export class ElementAction {
     async captureSnapshot(): Promise<ElementSnapshot> {
         const element = await this.resolve();
         const first = element.first();
+        // Count is always the un-narrowed match count so count-based matchers
+        // work even when the default `.first()` narrowing has been applied.
+        // Other fields use the narrowed element so strategy selectors
+        // (nth / byText / byAttribute) still scope to the chosen element.
+        const allElement = await this.repo.get(this.elementName, this.pageName, { strategy: SelectionStrategy.ALL });
         // getAllAttributes is web-only (DOM iteration); narrow for that one read.
         const firstAsWeb = first as WebElement;
 
         const [count, rawText, value, attributes, visible, enabled] = await Promise.all([
-            element.count().catch(() => 0),
+            allElement.count().catch(() => 0),
             first.textContent().catch(() => null),
             first.inputValue().catch(() => ''),
             firstAsWeb.getAllAttributes().catch(() => ({} as Record<string, string>)),

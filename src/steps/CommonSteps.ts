@@ -98,6 +98,29 @@ export class Steps {
     }
 
     /**
+     * Returns a fluent `ElementAction` with the caller's `StepOptions` strategy
+     * applied via the fluent strategy selectors. Lets the legacy positional
+     * `verify*` methods delegate into the matcher tree without losing the
+     * `{ strategy: 'random' | 'index' | 'text' | 'attribute' }` escape hatch.
+     */
+    private actionWithStrategy(elementName: string, pageName: string, options?: StepOptions): ElementAction {
+        const action = this.on(elementName, pageName);
+        if (!options?.strategy || options.strategy === 'first') return action;
+        switch (options.strategy) {
+            case 'random':
+                return action.random();
+            case 'index':
+                return action.nth(options.index ?? 0);
+            case 'text':
+                return action.byText(options.text ?? options.value ?? '');
+            case 'attribute':
+                return action.byAttribute(options.attribute ?? '', options.value ?? '');
+            default:
+                return action;
+        }
+    }
+
+    /**
      * Returns a fluent builder for performing actions on a repository element.
      * Chain a strategy selector (optional) and terminate with an action.
      *
@@ -584,8 +607,7 @@ export class Steps {
      */
     async verifyPresence(elementName: string, pageName: string, options?: StepOptions): Promise<void> {
         log.verify('Verifying presence of "%s" in "%s"', elementName, pageName);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
-        await this.verify.presence(element);
+        await this.actionWithStrategy(elementName, pageName, options).visible.toBeTrue();
     }
 
     /**
@@ -647,6 +669,12 @@ export class Steps {
      */
     async verifyAbsence(elementName: string, pageName: string, options?: StepOptions): Promise<void> {
         log.verify('Verifying absence of "%s" in "%s"', elementName, pageName);
+        // Stays non-delegated: uses Playwright's `expect(locator).toBeHidden()`
+        // which is optimized for the absent case (returns quickly, no 15s repo
+        // resolution wait). The matcher tree's visible.toBeFalse() would work
+        // but pays the full repo-timeout to "fail to find" the element before
+        // even starting the polling loop.
+        void options;
         const selector = this.repo.getSelector(elementName, pageName);
         await this.verify.absence(selector);
     }
@@ -663,8 +691,9 @@ export class Steps {
         const notEmpty = verifyOptions?.notEmpty || expectedText === undefined;
         const logDetail = notEmpty ? 'is not empty' : `matches: "${expectedText}"`;
         log.verify('Verifying text of "%s" in "%s" %s', elementName, pageName, logDetail);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
-        await this.verify.text(element, expectedText, notEmpty ? { notEmpty: true } : verifyOptions);
+        const action = this.actionWithStrategy(elementName, pageName, options);
+        if (notEmpty) await action.text.not.toBe('');
+        else await action.text.toBe(expectedText!);
     }
 
     /**
@@ -676,8 +705,11 @@ export class Steps {
      */
     async verifyCount(elementName: string, pageName: string, countOptions: CountVerifyOptions, options?: StepOptions): Promise<void> {
         log.verify('Verifying count for "%s" in "%s" with options: %O', elementName, pageName, countOptions);
-        const element = await this.repo.get(elementName, pageName, this.toAllResolutionOptions(options));
-        await this.verify.count(element, countOptions);
+        const action = this.actionWithStrategy(elementName, pageName, options);
+        if (countOptions.exactly !== undefined) await action.count.toBe(countOptions.exactly);
+        else if (countOptions.greaterThan !== undefined) await action.count.toBeGreaterThan(countOptions.greaterThan);
+        else if (countOptions.lessThan !== undefined) await action.count.toBeLessThan(countOptions.lessThan);
+        else throw new Error("verifyCount requires 'exactly', 'greaterThan', or 'lessThan' in CountVerifyOptions.");
     }
 
     /**
@@ -702,8 +734,7 @@ export class Steps {
      */
     async verifyTextContains(elementName: string, pageName: string, expectedText: string, options?: StepOptions): Promise<void> {
         log.verify('Verifying "%s" in "%s" contains text: "%s"', elementName, pageName, expectedText);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
-        await this.verify.textContains(element, expectedText);
+        await this.actionWithStrategy(elementName, pageName, options).text.toContain(expectedText);
     }
 
     /**
@@ -734,8 +765,7 @@ export class Steps {
      */
     async verifyAttribute(elementName: string, pageName: string, attributeName: string, expectedValue: string, options?: StepOptions): Promise<void> {
         log.verify('Verifying "%s" in "%s" has attribute "%s" = "%s"', elementName, pageName, attributeName, expectedValue);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
-        await this.verify.attribute(element, attributeName, expectedValue);
+        await this.actionWithStrategy(elementName, pageName, options).attributes.get(attributeName).toBe(expectedValue);
     }
 
     /**
@@ -756,8 +786,7 @@ export class Steps {
      */
     async verifyInputValue(elementName: string, pageName: string, expectedValue: string, options?: StepOptions): Promise<void> {
         log.verify('Verifying input value of "%s" in "%s" matches: "%s"', elementName, pageName, expectedValue);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
-        await this.verify.inputValue(element, expectedValue);
+        await this.actionWithStrategy(elementName, pageName, options).value.toBe(expectedValue);
     }
 
     /**
@@ -819,8 +848,7 @@ export class Steps {
      */
     async verifyCssProperty(elementName: string, pageName: string, property: string, expectedValue: string, options?: StepOptions): Promise<void> {
         log.verify('Verifying CSS "%s" of "%s" in "%s" = "%s"', property, elementName, pageName, expectedValue);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
-        await this.verify.cssProperty(element, property, expectedValue);
+        await this.actionWithStrategy(elementName, pageName, options).css(property).toBe(expectedValue);
     }
 
     /**

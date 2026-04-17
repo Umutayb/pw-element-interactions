@@ -404,12 +404,14 @@ export class ElementAction {
     async captureSnapshot(): Promise<ElementSnapshot> {
         const element = await this.resolve();
         const first = element.first();
+        // getAllAttributes is web-only; cast for this read.
+        const firstAsWeb = first as WebElement;
 
         const [count, rawText, value, attributes, visible, enabled] = await Promise.all([
             element.count().catch(() => 0),
             first.textContent().catch(() => null),
             first.inputValue().catch(() => ''),
-            first.getAllAttributes().catch(() => ({} as Record<string, string>)),
+            firstAsWeb.getAllAttributes().catch(() => ({} as Record<string, string>)),
             first.isVisible().catch(() => false),
             first.isEnabled().catch(() => false),
         ]);

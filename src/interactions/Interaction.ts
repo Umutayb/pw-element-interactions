@@ -111,7 +111,8 @@ export class Interactions {
         target: Target,
         options: DropdownSelectOptions = { type: DropdownSelectType.RANDOM }
     ): Promise<string> {
-        const element = toElement(target);
+        // selectOption is a web-only method (HTML `<select>`); narrow to WebElement.
+        const element = toElement(target) as WebElement;
         await this.utils.waitForState(element, 'visible');
         const type = options.type ?? DropdownSelectType.RANDOM;
 
@@ -172,11 +173,12 @@ export class Interactions {
      * exists today); all other paths route through `Element.dragTo`.
      */
     async dragAndDrop(target: Target, options: DragAndDropOptions): Promise<void> {
-        const element = toElement(target);
+        // dragTo is web-only (HTML drag-and-drop); narrow to WebElement.
+        const element = toElement(target) as WebElement;
         await this.utils.waitForState(element, 'visible');
 
         if (options.target) {
-            const dropElement = toElement(options.target);
+            const dropElement = toElement(options.target) as WebElement;
             await this.utils.waitForState(dropElement, 'visible');
 
             if (options.xOffset !== undefined && options.yOffset !== undefined) {
@@ -258,9 +260,9 @@ export class Interactions {
         await element.pressSequentially(text, delay, { timeout: this.ELEMENT_TIMEOUT });
     }
 
-    /** Right-click (context menu) on the given target. */
+    /** Right-click (context menu) on the given target. Web-only. */
     async rightClick(target: Target): Promise<void> {
-        const element = toElement(target);
+        const element = toElement(target) as WebElement;
         await this.utils.waitForState(element, 'visible');
         await element.rightClick({ timeout: this.ELEMENT_TIMEOUT });
     }
@@ -300,7 +302,8 @@ export class Interactions {
     }
 
     async selectMultiple(target: Target, values: string[]): Promise<string[]> {
-        const element = toElement(target);
+        // selectOption is web-only; narrow to WebElement.
+        const element = toElement(target) as WebElement;
         await this.utils.waitForState(element, 'visible');
         return element.selectOption(values.map(v => ({ value: v })), { timeout: this.ELEMENT_TIMEOUT });
     }

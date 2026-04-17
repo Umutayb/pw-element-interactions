@@ -3,9 +3,9 @@ import { Locator } from '@playwright/test';
 /**
  * Snapshot of an element's state at a single point in time.
  *
- * Passed to predicates in `steps.expect(el, page, predicate)` and
- * `steps.on(el, page).expect(predicate)`. All fields are primitives or
- * plain data — no async methods, no Playwright types.
+ * Passed to predicates in `steps.expect(el, page).toBe(predicate)` and
+ * `steps.on(el, page).toBe(predicate)`. All fields are primitives or plain
+ * data — no async methods, no Playwright types.
  */
 export interface ElementSnapshot {
     readonly text: string;
@@ -39,21 +39,38 @@ async function readCssProperty(locator: Locator, property: string): Promise<stri
     );
 }
 
+function describeFailure(
+    ctx: ExpectContext,
+    field: string,
+    verb: string,
+    expected: unknown,
+    actual: unknown,
+    negated: boolean,
+): string {
+    const quote = (v: unknown) => (typeof v === 'string' ? `"${v}"` : String(v));
+    const neg = negated ? 'not ' : '';
+    return `expected ${ctx.pageName}.${ctx.elementName} ${field} ${neg}${verb} ${quote(expected)}, got ${quote(actual)}`;
+}
+
 abstract class BaseMatcher {
     constructor(protected ctx: ExpectContext, protected negated: boolean = false) {}
+
+    protected async honorIfVisibleGate(): Promise<boolean> {
+        if (!this.ctx.conditionalVisible) return true;
+        try {
+            const locator = await this.ctx.resolveLocator();
+            await locator.waitFor({ state: 'visible', timeout: this.ctx.visibilityTimeout });
+            return true;
+        } catch {
+            return false;
+        }
+    }
 
     protected async assertSnapshot(
         predicate: (snap: ElementSnapshot) => boolean,
         describe: (snap: ElementSnapshot, negated: boolean) => string,
     ): Promise<void> {
-        if (this.ctx.conditionalVisible) {
-            try {
-                const locator = await this.ctx.resolveLocator();
-                await locator.waitFor({ state: 'visible', timeout: this.ctx.visibilityTimeout });
-            } catch {
-                return;
-            }
-        }
+        if (!(await this.honorIfVisibleGate())) return;
 
         const deadline = Date.now() + this.ctx.timeout;
         const pollMs = 100;
@@ -63,8 +80,7 @@ abstract class BaseMatcher {
         while (Date.now() < deadline) {
             try {
                 lastSnapshot = await this.ctx.captureSnapshot();
-                const rawResult = predicate(lastSnapshot);
-                if (rawResult !== this.negated) return;
+                if (predicate(lastSnapshot) !== this.negated) return;
             } catch (err) {
                 lastError = err;
             }
@@ -84,22 +100,14 @@ abstract class BaseMatcher {
         evaluate: () => Promise<boolean>,
         describe: (negated: boolean) => string,
     ): Promise<void> {
-        if (this.ctx.conditionalVisible) {
-            try {
-                const locator = await this.ctx.resolveLocator();
-                await locator.waitFor({ state: 'visible', timeout: this.ctx.visibilityTimeout });
-            } catch {
-                return;
-            }
-        }
+        if (!(await this.honorIfVisibleGate())) return;
 
         const deadline = Date.now() + this.ctx.timeout;
         const pollMs = 100;
 
         while (Date.now() < deadline) {
             try {
-                const rawResult = await evaluate();
-                if (rawResult !== this.negated) return;
+                if ((await evaluate()) !== this.negated) return;
             } catch {
                 // swallow and retry
             }
@@ -110,96 +118,77 @@ abstract class BaseMatcher {
     }
 }
 
-export class TextMatcher extends BaseMatcher {
-    get not(): TextMatcher {
-        return new TextMatcher(this.ctx, !this.negated);
-    }
+/**
+ * Shared string-matcher surface for any field whose value reduces to a string:
+ * element text, input value, a specific attribute, a computed CSS property.
+ * Subclasses supply a `label` (for error messages) and a `read` (how to fetch
+ * the string — from the snapshot or a live read).
+ */
+abstract class StringMatcher extends BaseMatcher {
+    protected abstract fieldLabel(): string;
+    protected abstract read(snap: ElementSnapshot): string;
 
     async toBe(expected: string): Promise<void> {
         await this.assertSnapshot(
-            s => s.text === expected,
-            (s, n) =>
-                `expected ${this.ctx.pageName}.${this.ctx.elementName} text ${n ? 'not ' : ''}to be "${expected}", got "${s.text}"`,
+            s => this.read(s) === expected,
+            (s, n) => describeFailure(this.ctx, this.fieldLabel(), 'to be', expected, this.read(s), n),
         );
     }
 
     async toContain(expected: string): Promise<void> {
         await this.assertSnapshot(
-            s => s.text.includes(expected),
-            (s, n) =>
-                `expected ${this.ctx.pageName}.${this.ctx.elementName} text ${n ? 'not ' : ''}to contain "${expected}", got "${s.text}"`,
+            s => this.read(s).includes(expected),
+            (s, n) => describeFailure(this.ctx, this.fieldLabel(), 'to contain', expected, this.read(s), n),
         );
     }
 
     async toMatch(re: RegExp): Promise<void> {
         await this.assertSnapshot(
-            s => re.test(s.text),
-            (s, n) =>
-                `expected ${this.ctx.pageName}.${this.ctx.elementName} text ${n ? 'not ' : ''}to match ${re}, got "${s.text}"`,
+            s => re.test(this.read(s)),
+            (s, n) => describeFailure(this.ctx, this.fieldLabel(), 'to match', re, this.read(s), n),
         );
     }
 
     async toStartWith(prefix: string): Promise<void> {
         await this.assertSnapshot(
-            s => s.text.startsWith(prefix),
-            (s, n) =>
-                `expected ${this.ctx.pageName}.${this.ctx.elementName} text ${n ? 'not ' : ''}to start with "${prefix}", got "${s.text}"`,
+            s => this.read(s).startsWith(prefix),
+            (s, n) => describeFailure(this.ctx, this.fieldLabel(), 'to start with', prefix, this.read(s), n),
         );
     }
 
     async toEndWith(suffix: string): Promise<void> {
         await this.assertSnapshot(
-            s => s.text.endsWith(suffix),
-            (s, n) =>
-                `expected ${this.ctx.pageName}.${this.ctx.elementName} text ${n ? 'not ' : ''}to end with "${suffix}", got "${s.text}"`,
+            s => this.read(s).endsWith(suffix),
+            (s, n) => describeFailure(this.ctx, this.fieldLabel(), 'to end with', suffix, this.read(s), n),
         );
     }
 }
 
-export class ValueMatcher extends BaseMatcher {
+export class TextMatcher extends StringMatcher {
+    get not(): TextMatcher {
+        return new TextMatcher(this.ctx, !this.negated);
+    }
+    protected fieldLabel(): string { return 'text'; }
+    protected read(snap: ElementSnapshot): string { return snap.text; }
+}
+
+export class ValueMatcher extends StringMatcher {
     get not(): ValueMatcher {
         return new ValueMatcher(this.ctx, !this.negated);
     }
+    protected fieldLabel(): string { return 'value'; }
+    protected read(snap: ElementSnapshot): string { return snap.value; }
+}
 
-    async toBe(expected: string): Promise<void> {
-        await this.assertSnapshot(
-            s => s.value === expected,
-            (s, n) =>
-                `expected ${this.ctx.pageName}.${this.ctx.elementName} value ${n ? 'not ' : ''}to be "${expected}", got "${s.value}"`,
-        );
+export class AttributeMatcher extends StringMatcher {
+    constructor(ctx: ExpectContext, private attrName: string, negated: boolean = false) {
+        super(ctx, negated);
     }
-
-    async toContain(expected: string): Promise<void> {
-        await this.assertSnapshot(
-            s => s.value.includes(expected),
-            (s, n) =>
-                `expected ${this.ctx.pageName}.${this.ctx.elementName} value ${n ? 'not ' : ''}to contain "${expected}", got "${s.value}"`,
-        );
+    get not(): AttributeMatcher {
+        return new AttributeMatcher(this.ctx, this.attrName, !this.negated);
     }
-
-    async toMatch(re: RegExp): Promise<void> {
-        await this.assertSnapshot(
-            s => re.test(s.value),
-            (s, n) =>
-                `expected ${this.ctx.pageName}.${this.ctx.elementName} value ${n ? 'not ' : ''}to match ${re}, got "${s.value}"`,
-        );
-    }
-
-    async toStartWith(prefix: string): Promise<void> {
-        await this.assertSnapshot(
-            s => s.value.startsWith(prefix),
-            (s, n) =>
-                `expected ${this.ctx.pageName}.${this.ctx.elementName} value ${n ? 'not ' : ''}to start with "${prefix}", got "${s.value}"`,
-        );
-    }
-
-    async toEndWith(suffix: string): Promise<void> {
-        await this.assertSnapshot(
-            s => s.value.endsWith(suffix),
-            (s, n) =>
-                `expected ${this.ctx.pageName}.${this.ctx.elementName} value ${n ? 'not ' : ''}to end with "${suffix}", got "${s.value}"`,
-        );
-    }
+    protected fieldLabel(): string { return `attribute "${this.attrName}"`; }
+    protected read(snap: ElementSnapshot): string { return snap.attributes[this.attrName] ?? ''; }
 }
 
 export class CountMatcher extends BaseMatcher {
@@ -210,40 +199,35 @@ export class CountMatcher extends BaseMatcher {
     async toBe(expected: number): Promise<void> {
         await this.assertSnapshot(
             s => s.count === expected,
-            (s, n) =>
-                `expected ${this.ctx.pageName}.${this.ctx.elementName} count ${n ? 'not ' : ''}to be ${expected}, got ${s.count}`,
+            (s, n) => describeFailure(this.ctx, 'count', 'to be', expected, s.count, n),
         );
     }
 
     async toBeGreaterThan(n: number): Promise<void> {
         await this.assertSnapshot(
             s => s.count > n,
-            (s, neg) =>
-                `expected ${this.ctx.pageName}.${this.ctx.elementName} count ${neg ? 'not ' : ''}to be greater than ${n}, got ${s.count}`,
+            (s, neg) => describeFailure(this.ctx, 'count', 'to be greater than', n, s.count, neg),
         );
     }
 
     async toBeLessThan(n: number): Promise<void> {
         await this.assertSnapshot(
             s => s.count < n,
-            (s, neg) =>
-                `expected ${this.ctx.pageName}.${this.ctx.elementName} count ${neg ? 'not ' : ''}to be less than ${n}, got ${s.count}`,
+            (s, neg) => describeFailure(this.ctx, 'count', 'to be less than', n, s.count, neg),
         );
     }
 
     async toBeGreaterThanOrEqual(n: number): Promise<void> {
         await this.assertSnapshot(
             s => s.count >= n,
-            (s, neg) =>
-                `expected ${this.ctx.pageName}.${this.ctx.elementName} count ${neg ? 'not ' : ''}to be greater than or equal to ${n}, got ${s.count}`,
+            (s, neg) => describeFailure(this.ctx, 'count', 'to be greater than or equal to', n, s.count, neg),
         );
     }
 
     async toBeLessThanOrEqual(n: number): Promise<void> {
         await this.assertSnapshot(
             s => s.count <= n,
-            (s, neg) =>
-                `expected ${this.ctx.pageName}.${this.ctx.elementName} count ${neg ? 'not ' : ''}to be less than or equal to ${n}, got ${s.count}`,
+            (s, neg) => describeFailure(this.ctx, 'count', 'to be less than or equal to', n, s.count, neg),
         );
     }
 }
@@ -262,52 +246,12 @@ export class BooleanMatcher extends BaseMatcher {
     async toBe(expected: boolean): Promise<void> {
         await this.assertSnapshot(
             s => s[this.field] === expected,
-            (s, n) =>
-                `expected ${this.ctx.pageName}.${this.ctx.elementName} ${this.field} ${n ? 'not ' : ''}to be ${expected}, got ${s[this.field]}`,
+            (s, n) => describeFailure(this.ctx, this.field, 'to be', expected, s[this.field], n),
         );
     }
 
-    async toBeTrue(): Promise<void> {
-        await this.toBe(true);
-    }
-
-    async toBeFalse(): Promise<void> {
-        await this.toBe(false);
-    }
-}
-
-export class AttributeMatcher extends BaseMatcher {
-    constructor(ctx: ExpectContext, private attrName: string, negated: boolean = false) {
-        super(ctx, negated);
-    }
-
-    get not(): AttributeMatcher {
-        return new AttributeMatcher(this.ctx, this.attrName, !this.negated);
-    }
-
-    async toBe(expected: string): Promise<void> {
-        await this.assertSnapshot(
-            s => s.attributes[this.attrName] === expected,
-            (s, n) =>
-                `expected ${this.ctx.pageName}.${this.ctx.elementName} attribute "${this.attrName}" ${n ? 'not ' : ''}to be "${expected}", got "${s.attributes[this.attrName] ?? '<missing>'}"`,
-        );
-    }
-
-    async toContain(expected: string): Promise<void> {
-        await this.assertSnapshot(
-            s => (s.attributes[this.attrName] ?? '').includes(expected),
-            (s, n) =>
-                `expected ${this.ctx.pageName}.${this.ctx.elementName} attribute "${this.attrName}" ${n ? 'not ' : ''}to contain "${expected}", got "${s.attributes[this.attrName] ?? '<missing>'}"`,
-        );
-    }
-
-    async toMatch(re: RegExp): Promise<void> {
-        await this.assertSnapshot(
-            s => re.test(s.attributes[this.attrName] ?? ''),
-            (s, n) =>
-                `expected ${this.ctx.pageName}.${this.ctx.elementName} attribute "${this.attrName}" ${n ? 'not ' : ''}to match ${re}, got "${s.attributes[this.attrName] ?? '<missing>'}"`,
-        );
-    }
+    async toBeTrue(): Promise<void> { await this.toBe(true); }
+    async toBeFalse(): Promise<void> { await this.toBe(false); }
 }
 
 export class AttributesMatcher extends BaseMatcher {
@@ -337,43 +281,93 @@ export class CssMatcher extends BaseMatcher {
         return new CssMatcher(this.ctx, this.property, !this.negated);
     }
 
-    async toBe(expected: string): Promise<void> {
+    private async runCss(
+        test: (value: string) => boolean,
+        verb: string,
+        expected: unknown,
+    ): Promise<void> {
         let lastValue = '';
         await this.assertCustom(
             async () => {
                 const locator = await this.ctx.resolveLocator();
                 lastValue = await readCssProperty(locator, this.property);
-                return lastValue === expected;
+                return test(lastValue);
             },
-            n =>
-                `expected ${this.ctx.pageName}.${this.ctx.elementName} css "${this.property}" ${n ? 'not ' : ''}to be "${expected}", got "${lastValue}"`,
+            n => describeFailure(this.ctx, `css "${this.property}"`, verb, expected, lastValue, n),
         );
+    }
+
+    async toBe(expected: string): Promise<void> {
+        await this.runCss(v => v === expected, 'to be', expected);
     }
 
     async toContain(expected: string): Promise<void> {
-        let lastValue = '';
-        await this.assertCustom(
-            async () => {
-                const locator = await this.ctx.resolveLocator();
-                lastValue = await readCssProperty(locator, this.property);
-                return lastValue.includes(expected);
-            },
-            n =>
-                `expected ${this.ctx.pageName}.${this.ctx.elementName} css "${this.property}" ${n ? 'not ' : ''}to contain "${expected}", got "${lastValue}"`,
-        );
+        await this.runCss(v => v.includes(expected), 'to contain', expected);
     }
 
     async toMatch(re: RegExp): Promise<void> {
-        let lastValue = '';
-        await this.assertCustom(
-            async () => {
+        await this.runCss(v => re.test(v), 'to match', re);
+    }
+}
+
+/**
+ * A chainable, awaitable predicate assertion. Built by `.toBe(predicate)` at
+ * the builder or fluent level. Use `.throws(message)` to override the failure
+ * message; `await` the result (or any `.then`-compatible context) to execute.
+ */
+export class PredicateAssertion implements PromiseLike<void> {
+    constructor(
+        private ctx: ExpectContext,
+        private predicate: (el: ElementSnapshot) => boolean,
+        private negated: boolean = false,
+        private message?: string,
+    ) {}
+
+    /** Override the error message shown when the predicate fails. */
+    throws(message: string): PredicateAssertion {
+        return new PredicateAssertion(this.ctx, this.predicate, this.negated, message);
+    }
+
+    then<TResult1 = void, TResult2 = never>(
+        onfulfilled?: ((value: void) => TResult1 | PromiseLike<TResult1>) | null | undefined,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null | undefined,
+    ): PromiseLike<TResult1 | TResult2> {
+        return this.execute().then(onfulfilled, onrejected);
+    }
+
+    private async execute(): Promise<void> {
+        if (this.ctx.conditionalVisible) {
+            try {
                 const locator = await this.ctx.resolveLocator();
-                lastValue = await readCssProperty(locator, this.property);
-                return re.test(lastValue);
-            },
-            n =>
-                `expected ${this.ctx.pageName}.${this.ctx.elementName} css "${this.property}" ${n ? 'not ' : ''}to match ${re}, got "${lastValue}"`,
-        );
+                await locator.waitFor({ state: 'visible', timeout: this.ctx.visibilityTimeout });
+            } catch {
+                return;
+            }
+        }
+
+        const deadline = Date.now() + this.ctx.timeout;
+        const pollMs = 100;
+        let lastSnapshot: ElementSnapshot | null = null;
+        let lastError: unknown = null;
+
+        while (Date.now() < deadline) {
+            try {
+                lastSnapshot = await this.ctx.captureSnapshot();
+                if (this.predicate(lastSnapshot) !== this.negated) return;
+            } catch (err) {
+                lastError = err;
+            }
+            await new Promise(resolve => setTimeout(resolve, pollMs));
+        }
+
+        const header = this.message
+            ?? `expect().toBe(predicate) failed on ${this.ctx.pageName}.${this.ctx.elementName} after ${this.ctx.timeout}ms`;
+        if (!lastSnapshot) {
+            const reason = lastError instanceof Error ? lastError.message : String(lastError ?? 'unknown');
+            throw new Error(`${header}\n  element could not be resolved: ${reason}`);
+        }
+        const snapshotJson = JSON.stringify(lastSnapshot, null, 2).replace(/^/gm, '    ');
+        throw new Error(`${header}\n  snapshot at timeout:\n${snapshotJson}`);
     }
 }
 
@@ -389,31 +383,25 @@ export class ExpectBuilder {
         return new ExpectBuilder(this.ctx, !this.negated);
     }
 
-    get text(): TextMatcher {
-        return new TextMatcher(this.ctx, this.negated);
-    }
+    get text(): TextMatcher { return new TextMatcher(this.ctx, this.negated); }
+    get value(): ValueMatcher { return new ValueMatcher(this.ctx, this.negated); }
+    get count(): CountMatcher { return new CountMatcher(this.ctx, this.negated); }
+    get visible(): BooleanMatcher { return new BooleanMatcher(this.ctx, 'visible', this.negated); }
+    get enabled(): BooleanMatcher { return new BooleanMatcher(this.ctx, 'enabled', this.negated); }
+    get attributes(): AttributesMatcher { return new AttributesMatcher(this.ctx, this.negated); }
+    css(property: string): CssMatcher { return new CssMatcher(this.ctx, property, this.negated); }
 
-    get value(): ValueMatcher {
-        return new ValueMatcher(this.ctx, this.negated);
-    }
-
-    get count(): CountMatcher {
-        return new CountMatcher(this.ctx, this.negated);
-    }
-
-    get visible(): BooleanMatcher {
-        return new BooleanMatcher(this.ctx, 'visible', this.negated);
-    }
-
-    get enabled(): BooleanMatcher {
-        return new BooleanMatcher(this.ctx, 'enabled', this.negated);
-    }
-
-    get attributes(): AttributesMatcher {
-        return new AttributesMatcher(this.ctx, this.negated);
-    }
-
-    css(property: string): CssMatcher {
-        return new CssMatcher(this.ctx, property, this.negated);
+    /**
+     * Predicate escape hatch. Returns a chainable, awaitable assertion that
+     * passes when the predicate returns `true` (or `false` if the builder is
+     * negated). Use `.throws(message)` to override the failure message.
+     *
+     * @example
+     * await steps.expect('price', 'ProductPage').toBe(el => parseFloat(el.text.slice(1)) > 10);
+     * await steps.expect('price', 'ProductPage').toBe(el => el.visible && el.enabled)
+     *   .throws('price must be visible and enabled');
+     */
+    toBe(predicate: (el: ElementSnapshot) => boolean): PredicateAssertion {
+        return new PredicateAssertion(this.ctx, predicate, this.negated);
     }
 }

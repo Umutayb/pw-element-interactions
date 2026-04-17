@@ -3,15 +3,10 @@ import { ElementRepository, Element, WebElement, ElementResolutionOptions, Selec
 import { ElementInteractions } from '../interactions/facade/ElementInteractions';
 import { DropdownSelectOptions, TextVerifyOptions, CountVerifyOptions, DragAndDropOptions, ScreenshotOptions, IsVisibleOptions } from '../enum/Options';
 import {
-    AttributesMatcher,
-    BooleanMatcher,
-    CountMatcher,
-    CssMatcher,
     ElementSnapshot,
     ExpectBuilder,
     ExpectContext,
-    TextMatcher,
-    ValueMatcher,
+    PredicateAssertion,
 } from './ExpectMatchers';
 
 /** DOM Element alias — disambiguates from the repository's `Element` wrapper in callbacks that run inside Playwright's browser context. */
@@ -431,35 +426,23 @@ export class ElementAction {
         };
     }
 
-    /** Matcher entry for text content. */
-    get text(): TextMatcher {
-        return new TextMatcher(this.buildExpectContext());
+    /**
+     * Matcher tree rooted at this element. All field matchers (`text`, `value`,
+     * `count`, `visible`, `enabled`, `attributes`, `css(...)`) and the
+     * predicate form (`toBe(pred)`) are exposed via an internal `ExpectBuilder`
+     * so the surface stays consistent between `steps.on()` and `steps.expect()`.
+     */
+    private expectBuilder(negated: boolean = false): ExpectBuilder {
+        return new ExpectBuilder(this.buildExpectContext(), negated);
     }
 
-    /** Matcher entry for input value. */
-    get value(): ValueMatcher {
-        return new ValueMatcher(this.buildExpectContext());
-    }
-
-    /** Matcher entry for the count of matching elements. */
-    get count(): CountMatcher {
-        return new CountMatcher(this.buildExpectContext());
-    }
-
-    /** Matcher entry for visibility. */
-    get visible(): BooleanMatcher {
-        return new BooleanMatcher(this.buildExpectContext(), 'visible');
-    }
-
-    /** Matcher entry for enabled state. */
-    get enabled(): BooleanMatcher {
-        return new BooleanMatcher(this.buildExpectContext(), 'enabled');
-    }
-
-    /** Matcher entry for DOM attributes. */
-    get attributes(): AttributesMatcher {
-        return new AttributesMatcher(this.buildExpectContext());
-    }
+    get text() { return this.expectBuilder().text; }
+    get value() { return this.expectBuilder().value; }
+    get count() { return this.expectBuilder().count; }
+    get visible() { return this.expectBuilder().visible; }
+    get enabled() { return this.expectBuilder().enabled; }
+    get attributes() { return this.expectBuilder().attributes; }
+    css(property: string) { return this.expectBuilder().css(property); }
 
     /**
      * Returns a negated matcher tree. Flip the expected outcome of any matcher
@@ -470,65 +453,20 @@ export class ElementAction {
      * await steps.on('submitBtn', 'Page').not.enabled.toBe(false);
      */
     get not(): ExpectBuilder {
-        return new ExpectBuilder(this.buildExpectContext(), true);
-    }
-
-    /** Matcher entry for a specific computed CSS property. */
-    css(property: string): CssMatcher {
-        return new CssMatcher(this.buildExpectContext(), property);
+        return this.expectBuilder(true);
     }
 
     /**
-     * Predicate escape hatch for custom assertions the matcher tree doesn't
-     * cover. Runs the predicate against a fresh snapshot on every retry until
-     * the predicate returns `true` or the element timeout expires.
-     *
-     * @param predicate - Function receiving an `ElementSnapshot` that returns
-     *   `true` when the assertion holds.
-     * @param message - Optional custom error message shown on failure.
+     * Predicate escape hatch. Returns a chainable, awaitable assertion that
+     * passes when the predicate returns `true`. Use `.throws(message)` to
+     * override the failure message.
      *
      * @example
-     * await steps.on('price', 'ProductPage').expect(
-     *   el => parseFloat(el.text.slice(1)) > 10,
-     *   'price must be above $10'
-     * );
+     * await steps.on('price', 'ProductPage').toBe(el => parseFloat(el.text.slice(1)) > 10)
+     *   .throws('price must be above $10');
      */
-    async expect(
-        predicate: (el: ElementSnapshot) => boolean,
-        message?: string,
-    ): Promise<void> {
-        if (this.conditionalVisible) {
-            try {
-                const locator = await this.resolveLocator();
-                await locator.waitFor({ state: 'visible', timeout: this.visibilityTimeout });
-            } catch {
-                return;
-            }
-        }
-
-        const deadline = Date.now() + this.timeout;
-        const pollMs = 100;
-        let lastSnapshot: ElementSnapshot | null = null;
-        let lastError: unknown = null;
-
-        while (Date.now() < deadline) {
-            try {
-                lastSnapshot = await this.captureSnapshot();
-                if (predicate(lastSnapshot)) return;
-            } catch (err) {
-                lastError = err;
-            }
-            await new Promise(resolve => setTimeout(resolve, pollMs));
-        }
-
-        const header = message
-            ?? `expect() predicate failed on ${this.pageName}.${this.elementName} after ${this.timeout}ms`;
-        if (!lastSnapshot) {
-            const reason = lastError instanceof Error ? lastError.message : String(lastError ?? 'unknown');
-            throw new Error(`${header}\n  element could not be resolved: ${reason}`);
-        }
-        const snapshotJson = JSON.stringify(lastSnapshot, null, 2).replace(/^/gm, '    ');
-        throw new Error(`${header}\n  snapshot at timeout:\n${snapshotJson}`);
+    toBe(predicate: (el: ElementSnapshot) => boolean): PredicateAssertion {
+        return this.expectBuilder().toBe(predicate);
     }
 
     // -- Terminal actions: waiting --

@@ -275,8 +275,15 @@ test.describe('TC_087: Steps - expect matcher tree (top-level)', () => {
       await steps.expect('primaryButton', 'ButtonsPage').not.text.toBe('Nope');
     });
 
-    await test.step('predicate form — positive case', async () => {
-      await steps.expect('primaryButton', 'ButtonsPage', el => el.text === 'Primary' && el.visible);
+    await test.step('.toBe(predicate) — positive case', async () => {
+      await steps.expect('primaryButton', 'ButtonsPage').toBe(el => el.text === 'Primary' && el.visible);
+    });
+
+    await test.step('.toBe(predicate).throws(message) — custom failure message', async () => {
+      // positive path: predicate passes, throws() never triggers
+      await steps.expect('primaryButton', 'ButtonsPage')
+        .toBe(el => el.enabled)
+        .throws('should be enabled');
     });
 
     log('TC_087 expect matcher tree — passed');

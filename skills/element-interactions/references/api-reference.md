@@ -286,24 +286,23 @@ await steps.on('link', 'Page').attributes.not.toHaveKey('disabled');
 await steps.on('link', 'Page').attributes.get('href').not.toBe('/wrong');
 ```
 
-**Predicate escape hatch** — for assertions the matcher tree doesn't cover (multi-field combinations, parsed numeric thresholds, JSON in `data-*`):
+**Predicate escape hatch** — for assertions the matcher tree doesn't cover (multi-field combinations, parsed numeric thresholds, JSON in `data-*`). Use `.toBe(predicate)` — returns a chainable, awaitable assertion. Add `.throws(message)` for a custom failure message.
 
 ```ts
-// Top-level — pass predicate as third argument
-await steps.expect(
-  'price', 'ProductPage',
-  el => parseFloat(el.text.slice(1)) > 10,
-  'price must be above $10',
-);
+// Top-level
+await steps.expect('price', 'ProductPage').toBe(el => parseFloat(el.text.slice(1)) > 10);
+await steps.expect('price', 'ProductPage')
+  .toBe(el => parseFloat(el.text.slice(1)) > 10)
+  .throws('price must be above $10');
 
-// Fluent — .expect(predicate, message?) on ElementAction
-await steps.on('price', 'ProductPage').expect(
-  el => parseFloat(el.text.slice(1)) > 10,
-);
-
-await steps.on('card', 'DashboardPage').expect(
+// Fluent
+await steps.on('price', 'ProductPage').toBe(el => parseFloat(el.text.slice(1)) > 10);
+await steps.on('card', 'DashboardPage').toBe(
   el => el.visible && el.attributes['data-status'] === 'ready' && el.count > 0,
 );
+
+// Negated — predicate's expected outcome is flipped
+await steps.on('error', 'Page').not.toBe(el => el.visible);
 ```
 
 Predicates receive an `ElementSnapshot` — plain data, no async methods:
@@ -322,7 +321,7 @@ interface ElementSnapshot {
 On predicate timeout, the error message includes the full snapshot pretty-printed so you can see exactly why the assertion failed:
 
 ```
-expect() predicate failed on ProductPage.price after 30000ms
+expect().toBe(predicate) failed on ProductPage.price after 30000ms
   snapshot at timeout:
     {
       "text": "12.99 USD",
@@ -333,6 +332,8 @@ expect() predicate failed on ProductPage.price after 30000ms
       "count": 1
     }
 ```
+
+When `.throws(message)` is chained, that message replaces the default header while the snapshot is still appended — so you get both the domain-specific explanation and the raw state.
 
 ### Visibility Probe
 

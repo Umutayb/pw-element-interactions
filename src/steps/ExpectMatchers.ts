@@ -55,6 +55,20 @@ function describeFailure(
 abstract class BaseMatcher {
     constructor(protected ctx: ExpectContext, protected negated: boolean = false) {}
 
+    /** Subclasses clone themselves with a new context (used by `timeout()`). */
+    protected abstract withCtx(ctx: ExpectContext): this;
+
+    /**
+     * Override the retry timeout for this matcher call. Returns a new matcher
+     * instance with the timeout replaced — does not mutate the original.
+     *
+     * @example
+     * await steps.expect('el', 'Page').text.timeout(5000).toBe('Ready');
+     */
+    timeout(ms: number): this {
+        return this.withCtx({ ...this.ctx, timeout: ms });
+    }
+
     protected async honorIfVisibleGate(): Promise<boolean> {
         if (!this.ctx.conditionalVisible) return true;
         try {
@@ -168,6 +182,9 @@ export class TextMatcher extends StringMatcher {
     get not(): TextMatcher {
         return new TextMatcher(this.ctx, !this.negated);
     }
+    protected withCtx(ctx: ExpectContext): this {
+        return new TextMatcher(ctx, this.negated) as this;
+    }
     protected fieldLabel(): string { return 'text'; }
     protected read(snap: ElementSnapshot): string { return snap.text; }
 }
@@ -175,6 +192,9 @@ export class TextMatcher extends StringMatcher {
 export class ValueMatcher extends StringMatcher {
     get not(): ValueMatcher {
         return new ValueMatcher(this.ctx, !this.negated);
+    }
+    protected withCtx(ctx: ExpectContext): this {
+        return new ValueMatcher(ctx, this.negated) as this;
     }
     protected fieldLabel(): string { return 'value'; }
     protected read(snap: ElementSnapshot): string { return snap.value; }
@@ -187,6 +207,9 @@ export class AttributeMatcher extends StringMatcher {
     get not(): AttributeMatcher {
         return new AttributeMatcher(this.ctx, this.attrName, !this.negated);
     }
+    protected withCtx(ctx: ExpectContext): this {
+        return new AttributeMatcher(ctx, this.attrName, this.negated) as this;
+    }
     protected fieldLabel(): string { return `attribute "${this.attrName}"`; }
     protected read(snap: ElementSnapshot): string { return snap.attributes[this.attrName] ?? ''; }
 }
@@ -194,6 +217,9 @@ export class AttributeMatcher extends StringMatcher {
 export class CountMatcher extends BaseMatcher {
     get not(): CountMatcher {
         return new CountMatcher(this.ctx, !this.negated);
+    }
+    protected withCtx(ctx: ExpectContext): this {
+        return new CountMatcher(ctx, this.negated) as this;
     }
 
     async toBe(expected: number): Promise<void> {
@@ -242,6 +268,9 @@ export class BooleanMatcher extends BaseMatcher {
     get not(): BooleanMatcher {
         return new BooleanMatcher(this.ctx, this.field, !this.negated);
     }
+    protected withCtx(ctx: ExpectContext): this {
+        return new BooleanMatcher(ctx, this.field, this.negated) as this;
+    }
 
     async toBe(expected: boolean): Promise<void> {
         await this.assertSnapshot(
@@ -257,6 +286,9 @@ export class BooleanMatcher extends BaseMatcher {
 export class AttributesMatcher extends BaseMatcher {
     get not(): AttributesMatcher {
         return new AttributesMatcher(this.ctx, !this.negated);
+    }
+    protected withCtx(ctx: ExpectContext): this {
+        return new AttributesMatcher(ctx, this.negated) as this;
     }
 
     get(name: string): AttributeMatcher {
@@ -279,6 +311,9 @@ export class CssMatcher extends BaseMatcher {
 
     get not(): CssMatcher {
         return new CssMatcher(this.ctx, this.property, !this.negated);
+    }
+    protected withCtx(ctx: ExpectContext): this {
+        return new CssMatcher(ctx, this.property, this.negated) as this;
     }
 
     private async runCss(
@@ -326,6 +361,11 @@ export class PredicateAssertion implements PromiseLike<void> {
     /** Override the error message shown when the predicate fails. */
     throws(message: string): PredicateAssertion {
         return new PredicateAssertion(this.ctx, this.predicate, this.negated, message);
+    }
+
+    /** Override the retry timeout for this predicate assertion. */
+    timeout(ms: number): PredicateAssertion {
+        return new PredicateAssertion({ ...this.ctx, timeout: ms }, this.predicate, this.negated, this.message);
     }
 
     then<TResult1 = void, TResult2 = never>(
@@ -381,6 +421,19 @@ export class ExpectBuilder {
 
     get not(): ExpectBuilder {
         return new ExpectBuilder(this.ctx, !this.negated);
+    }
+
+    /**
+     * Override the retry timeout for the matchers reached from this builder.
+     * Composes anywhere in the chain — before `.not`, after `.not`, before any
+     * field matcher. Returns a new builder with the override.
+     *
+     * @example
+     * await steps.expect('slow', 'Page').timeout(5000).text.toBe('Ready');
+     * await steps.expect('slow', 'Page').not.timeout(1000).visible.toBeTrue();
+     */
+    timeout(ms: number): ExpectBuilder {
+        return new ExpectBuilder({ ...this.ctx, timeout: ms }, this.negated);
     }
 
     get text(): TextMatcher { return new TextMatcher(this.ctx, this.negated); }

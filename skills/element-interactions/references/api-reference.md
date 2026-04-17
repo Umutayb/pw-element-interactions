@@ -275,6 +275,33 @@ await steps.on('cards', 'ListPage').random().text.toMatch(/\$\d+/);
 await steps.on('banner', 'HomePage').ifVisible().text.toContain('Promo');
 ```
 
+**Per-call timeout override — `.timeout(ms)`:**
+
+Composes anywhere in the chain. Useful for slow widgets or fast-failing assertions without changing the fixture-level default.
+
+```ts
+// On ElementAction (fluent)
+await steps.on('slowWidget', 'Page').timeout(5000).text.toBe('Ready');
+
+// On ExpectBuilder (top-level)
+await steps.expect('slowWidget', 'Page').timeout(5000).text.toBe('Ready');
+
+// On a specific field matcher
+await steps.expect('el', 'Page').text.timeout(5000).toBe('x');
+await steps.expect('el', 'Page').count.timeout(2000).toBeGreaterThan(3);
+await steps.expect('el', 'Page').attributes.get('href').timeout(1000).toBe('/x');
+
+// On the predicate chain — order independent with .throws()
+await steps.expect('price', 'Page')
+  .toBe(el => parseFloat(el.text.slice(1)) > 10)
+  .timeout(2000)
+  .throws('price must be above $10');
+
+// Composes with .not and strategy selectors
+await steps.on('item', 'Page').nth(2).timeout(500).text.toBe('x');
+await steps.expect('error', 'Page').not.timeout(1000).visible.toBeTrue();
+```
+
 **Negation with `.not`:**
 
 ```ts

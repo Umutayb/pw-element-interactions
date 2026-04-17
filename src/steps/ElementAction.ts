@@ -28,7 +28,7 @@ function toLocator(element: Element): Locator {
  */
 export class ElementAction {
     private resolutionOptions: ElementResolutionOptions = {};
-    private timeout: number;
+    private _timeout: number;
     private conditionalVisible: boolean = false;
     private visibilityTimeout: number = 2000;
 
@@ -39,7 +39,21 @@ export class ElementAction {
         private interactions: ElementInteractions,
         private timeoutMs?: number,
     ) {
-        this.timeout = timeoutMs ?? 30000;
+        this._timeout = timeoutMs ?? 30000;
+    }
+
+    /**
+     * Override the retry timeout for any subsequent matcher or predicate call
+     * on this chain. Mutates self and returns `this` for fluent chaining —
+     * consistent with strategy selectors like `.first()` and `.nth()`.
+     *
+     * @example
+     * await steps.on('slowWidget', 'Page').timeout(5000).text.toBe('Ready');
+     * await steps.on('btn', 'Page').nth(2).timeout(1000).visible.toBeTrue();
+     */
+    timeout(ms: number): this {
+        this._timeout = ms;
+        return this;
     }
 
     // -- Strategy selectors --
@@ -149,21 +163,21 @@ export class ElementAction {
     async hover(): Promise<void> {
         if (!await this.shouldProceed()) return;
         const element = await this.resolve();
-        await element.action(this.timeout).hover();
+        await element.action(this._timeout).hover();
     }
 
     /** Clear and fill the resolved element with text. Skips silently if `ifVisible()` was set and element is hidden. */
     async fill(text: string): Promise<void> {
         if (!await this.shouldProceed()) return;
         const element = await this.resolve();
-        await element.action(this.timeout).fill(text);
+        await element.action(this._timeout).fill(text);
     }
 
     /** Scroll the resolved element into view. Skips silently if `ifVisible()` was set and element is hidden. */
     async scrollIntoView(): Promise<void> {
         if (!await this.shouldProceed()) return;
         const element = await this.resolve();
-        await element.action(this.timeout).scrollIntoView();
+        await element.action(this._timeout).scrollIntoView();
     }
 
     /** Select a dropdown option. */
@@ -176,20 +190,20 @@ export class ElementAction {
     async check(): Promise<void> {
         if (!await this.shouldProceed()) return;
         const element = await this.resolve();
-        await element.action(this.timeout).check();
+        await element.action(this._timeout).check();
     }
 
     /** Uncheck a checkbox. Skips silently if `ifVisible()` was set and element is hidden. */
     async uncheck(): Promise<void> {
         if (!await this.shouldProceed()) return;
         const element = await this.resolve();
-        await element.action(this.timeout).uncheck();
+        await element.action(this._timeout).uncheck();
     }
 
     /** Double-click the resolved element. */
     async doubleClick(): Promise<void> {
         const element = await this.resolve();
-        await element.action(this.timeout).doubleClick();
+        await element.action(this._timeout).doubleClick();
     }
 
     /** Right-click the resolved element. */
@@ -201,7 +215,7 @@ export class ElementAction {
     /** Type text character by character. */
     async typeSequentially(text: string, delay?: number): Promise<void> {
         const element = await this.resolve();
-        await element.action(this.timeout).pressSequentially(text, delay);
+        await element.action(this._timeout).pressSequentially(text, delay);
     }
 
     /** Upload a file to a file input. */
@@ -219,7 +233,7 @@ export class ElementAction {
     /** Clear the input value. */
     async clearInput(): Promise<void> {
         const element = await this.resolve();
-        await element.action(this.timeout).clear();
+        await element.action(this._timeout).clear();
     }
 
     /** Set slider value. */
@@ -239,13 +253,13 @@ export class ElementAction {
     /** Assert the element is visible. */
     async verifyPresence(): Promise<void> {
         const element = await this.resolve();
-        await element.action(this.timeout).verifyPresence();
+        await element.action(this._timeout).verifyPresence();
     }
 
     /** Assert the element is hidden or detached. */
     async verifyAbsence(): Promise<void> {
         const element = await this.resolve();
-        await element.action(this.timeout).verifyAbsence();
+        await element.action(this._timeout).verifyAbsence();
     }
 
     /** Assert the element's text content. If no expected text is given, asserts the element is not empty. */
@@ -258,20 +272,20 @@ export class ElementAction {
     /** Assert text contains a substring. */
     async verifyTextContains(expected: string): Promise<void> {
         const element = await this.resolve();
-        await element.action(this.timeout).verifyTextContains(expected);
+        await element.action(this._timeout).verifyTextContains(expected);
     }
 
     /** Assert the element count. */
     async verifyCount(options: CountVerifyOptions): Promise<void> {
         const element = await this.resolve();
-        await element.action(this.timeout).verifyCount(options);
+        await element.action(this._timeout).verifyCount(options);
     }
 
     /** Check if element is visible (boolean, no assertion). */
     async isPresent(): Promise<boolean> {
         try {
             const element = await this.resolve();
-            return await element.action(this.timeout).isPresent();
+            return await element.action(this._timeout).isPresent();
         } catch {
             return false;
         }
@@ -299,7 +313,7 @@ export class ElementAction {
     /** Assert an attribute value. */
     async verifyAttribute(attributeName: string, expectedValue: string): Promise<void> {
         const element = await this.resolve();
-        await element.action(this.timeout).verifyAttribute(attributeName, expectedValue);
+        await element.action(this._timeout).verifyAttribute(attributeName, expectedValue);
     }
 
     /** Assert input value. */
@@ -343,19 +357,19 @@ export class ElementAction {
     /** Get the text content of the resolved element. */
     async getText(): Promise<string | null> {
         const element = await this.resolve();
-        return element.action(this.timeout).getText();
+        return element.action(this._timeout).getText();
     }
 
     /** Get an attribute value. */
     async getAttribute(name: string): Promise<string | null> {
         const element = await this.resolve();
-        return element.action(this.timeout).getAttribute(name);
+        return element.action(this._timeout).getAttribute(name);
     }
 
     /** Get the count of matching elements. */
     async getCount(): Promise<number> {
         const element = await this.resolve();
-        return element.action(this.timeout).getCount();
+        return element.action(this._timeout).getCount();
     }
 
     /** Get all text contents from matching elements. */
@@ -367,7 +381,7 @@ export class ElementAction {
     /** Get input value. */
     async getInputValue(): Promise<string> {
         const element = await this.resolve();
-        return element.action(this.timeout).getInputValue();
+        return element.action(this._timeout).getInputValue();
     }
 
     /** Get computed CSS property value. */
@@ -418,7 +432,7 @@ export class ElementAction {
         return {
             elementName: this.elementName,
             pageName: this.pageName,
-            timeout: this.timeout,
+            timeout: this._timeout,
             conditionalVisible: this.conditionalVisible,
             visibilityTimeout: this.visibilityTimeout,
             resolveLocator: () => this.resolveLocator(),
@@ -474,6 +488,6 @@ export class ElementAction {
     /** Wait for the element to reach the specified state. */
     async waitForState(state: 'visible' | 'attached' | 'hidden' | 'detached' = 'visible'): Promise<void> {
         const element = await this.resolve();
-        await element.action(this.timeout).waitForState(state);
+        await element.action(this._timeout).waitForState(state);
     }
 }

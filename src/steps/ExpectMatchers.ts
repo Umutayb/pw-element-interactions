@@ -1,11 +1,11 @@
-import { Locator } from '@playwright/test';
+import { Element } from '@civitas-cerebrum/element-repository';
 
 /**
  * Snapshot of an element's state at a single point in time.
  *
- * Passed to predicates in `steps.expect(el, page).toBe(predicate)` and
- * `steps.on(el, page).toBe(predicate)`. All fields are primitives or plain
- * data — no async methods, no Playwright types.
+ * Passed to predicates in `steps.on(el, page).toBe(predicate)` and
+ * `steps.expect(el, page).toBe(predicate)`. All fields are primitives or
+ * plain data — no async methods, no Playwright types.
  */
 export interface ElementSnapshot {
     readonly text: string;
@@ -17,10 +17,9 @@ export interface ElementSnapshot {
 }
 
 /**
- * Minimal surface the matcher tree needs from its host (typically an
- * `ElementAction`). Decouples matchers from `ElementAction` so the matcher
- * tree can be constructed from either the fluent builder or a top-level
- * `Steps.expect()` call.
+ * Surface the matcher tree needs from its host (typically an `ElementAction`).
+ * Decouples matchers from `ElementAction` so the builder can be constructed
+ * from either the fluent entry or the top-level `Steps.expect()` call.
  */
 export interface ExpectContext {
     readonly elementName: string;
@@ -28,26 +27,23 @@ export interface ExpectContext {
     readonly timeout: number;
     readonly conditionalVisible: boolean;
     readonly visibilityTimeout: number;
-    resolveLocator(): Promise<Locator>;
+    resolveElement(): Promise<Element>;
     captureSnapshot(): Promise<ElementSnapshot>;
 }
 
 /** One assertion queued on an `ExpectBuilder`. Executes when the builder is awaited. */
 interface QueuedAssertion {
-    /** The ctx snapshot captured when this assertion was queued. */
+    /** Ctx captured when enqueued; mutable so `.timeout()` / `.throws()` can retroactively update it. */
     ctx: ExpectContext;
-    /** Executes the assertion; may throw on failure. */
+    /** Runs the assertion; may throw on failure. Replaced with a concrete executor at enqueue time. */
     run(): Promise<void>;
-    /** Optional message that replaces the default failure header. */
+    /** Optional custom message that replaces the default failure header. */
     messageOverride?: string;
 }
 
-async function readCssProperty(locator: Locator, property: string): Promise<string> {
-    return locator.evaluate(
-        (el, prop) => window.getComputedStyle(el as Element).getPropertyValue(prop),
-        property,
-    );
-}
+// ─── Shared helpers ──────────────────────────────────────────────────
+
+const POLL_MS = 100;
 
 function describeFailure(
     ctx: ExpectContext,
@@ -65,14 +61,15 @@ function describeFailure(
 async function honorIfVisibleGate(ctx: ExpectContext): Promise<boolean> {
     if (!ctx.conditionalVisible) return true;
     try {
-        const locator = await ctx.resolveLocator();
-        await locator.waitFor({ state: 'visible', timeout: ctx.visibilityTimeout });
+        const element = await ctx.resolveElement();
+        await element.waitFor({ state: 'visible', timeout: ctx.visibilityTimeout });
         return true;
     } catch {
         return false;
     }
 }
 
+/** Retry-and-assert against a captured snapshot. Honors `ifVisible` gate. */
 async function assertWithSnapshot(
     ctx: ExpectContext,
     negated: boolean,
@@ -83,7 +80,6 @@ async function assertWithSnapshot(
     if (!(await honorIfVisibleGate(ctx))) return;
 
     const deadline = Date.now() + ctx.timeout;
-    const pollMs = 100;
     let lastSnapshot: ElementSnapshot | null = null;
     let lastError: unknown = null;
 
@@ -94,7 +90,7 @@ async function assertWithSnapshot(
         } catch (err) {
             lastError = err;
         }
-        await new Promise(resolve => setTimeout(resolve, pollMs));
+        await new Promise(resolve => setTimeout(resolve, POLL_MS));
     }
 
     if (!lastSnapshot) {
@@ -106,6 +102,7 @@ async function assertWithSnapshot(
     throw new Error(messageOverride ?? describe(lastSnapshot, negated));
 }
 
+/** Retry-and-assert against a live-read boolean evaluation. Honors `ifVisible` gate. */
 async function assertWithLiveRead(
     ctx: ExpectContext,
     negated: boolean,
@@ -116,7 +113,6 @@ async function assertWithLiveRead(
     if (!(await honorIfVisibleGate(ctx))) return;
 
     const deadline = Date.now() + ctx.timeout;
-    const pollMs = 100;
 
     while (Date.now() < deadline) {
         try {
@@ -124,12 +120,13 @@ async function assertWithLiveRead(
         } catch {
             // swallow and retry
         }
-        await new Promise(resolve => setTimeout(resolve, pollMs));
+        await new Promise(resolve => setTimeout(resolve, POLL_MS));
     }
 
     throw new Error(messageOverride ?? describe(negated));
 }
 
+/** Predicate-specific failure path — prints the captured snapshot for debugging. */
 async function assertPredicate(
     ctx: ExpectContext,
     negated: boolean,
@@ -139,7 +136,6 @@ async function assertPredicate(
     if (!(await honorIfVisibleGate(ctx))) return;
 
     const deadline = Date.now() + ctx.timeout;
-    const pollMs = 100;
     let lastSnapshot: ElementSnapshot | null = null;
     let lastError: unknown = null;
 
@@ -150,7 +146,7 @@ async function assertPredicate(
         } catch (err) {
             lastError = err;
         }
-        await new Promise(resolve => setTimeout(resolve, pollMs));
+        await new Promise(resolve => setTimeout(resolve, POLL_MS));
     }
 
     const header = messageOverride
@@ -163,28 +159,39 @@ async function assertPredicate(
     throw new Error(`${header}\n  snapshot at timeout:\n${snapshotJson}`);
 }
 
-// ─── Matcher adapters ────────────────────────────────────────────────
-//
-// These are lightweight wrappers exposed via getters on `ExpectBuilder`.
-// Each terminal method captures the builder's context + negation at the time
-// of the call, enqueues the assertion onto the builder, and returns the
-// builder so the chain can continue.
+// ─── Matcher base class ──────────────────────────────────────────────
 
-abstract class StringMatcher {
+/**
+ * Shared shape for all field matchers. Concrete subclasses provide:
+ *   - `withCtx(ctx)`  → clone with replaced context (used by `timeout(ms)`)
+ *   - `withNegated(n)` → clone with flipped negation (used by `get not()`)
+ *
+ * `timeout(ms)` and `get not()` then live on this base, not duplicated across
+ * every concrete matcher.
+ */
+abstract class BaseMatcher {
     constructor(
         protected builder: ExpectBuilder,
         protected ctx: ExpectContext,
         protected negated: boolean,
     ) {}
 
+    protected abstract withCtx(ctx: ExpectContext): this;
+    protected abstract withNegated(negated: boolean): this;
+
     /** Override the retry timeout for this matcher only. */
     timeout(ms: number): this {
-        const cloned = Object.create(Object.getPrototypeOf(this)) as StringMatcher;
-        Object.assign(cloned, this);
-        cloned.ctx = { ...this.ctx, timeout: ms };
-        return cloned as this;
+        return this.withCtx({ ...this.ctx, timeout: ms });
     }
 
+    /** Flip the expected outcome of this matcher. */
+    get not(): this {
+        return this.withNegated(!this.negated);
+    }
+}
+
+/** Shared string-matcher surface: text / value / attribute / (css uses its own live-read). */
+abstract class StringMatcher extends BaseMatcher {
     protected abstract fieldLabel(): string;
     protected abstract read(snap: ElementSnapshot): string;
 
@@ -194,28 +201,24 @@ abstract class StringMatcher {
             (s, n) => describeFailure(this.ctx, this.fieldLabel(), 'to be', expected, this.read(s), n),
         );
     }
-
     toContain(expected: string): ExpectBuilder {
         return this.enqueue(
             s => this.read(s).includes(expected),
             (s, n) => describeFailure(this.ctx, this.fieldLabel(), 'to contain', expected, this.read(s), n),
         );
     }
-
     toMatch(re: RegExp): ExpectBuilder {
         return this.enqueue(
             s => re.test(this.read(s)),
             (s, n) => describeFailure(this.ctx, this.fieldLabel(), 'to match', re, this.read(s), n),
         );
     }
-
     toStartWith(prefix: string): ExpectBuilder {
         return this.enqueue(
             s => this.read(s).startsWith(prefix),
             (s, n) => describeFailure(this.ctx, this.fieldLabel(), 'to start with', prefix, this.read(s), n),
         );
     }
-
     toEndWith(suffix: string): ExpectBuilder {
         return this.enqueue(
             s => this.read(s).endsWith(suffix),
@@ -228,19 +231,24 @@ abstract class StringMatcher {
         describe: (snap: ElementSnapshot, negated: boolean) => string,
     ): ExpectBuilder {
         const negated = this.negated;
-        return this.builder.enqueue({ ctx: this.ctx, run: () => undefined as unknown as Promise<void> },
-            entry => assertWithSnapshot(entry.ctx, negated, predicate, describe, entry.messageOverride));
+        return this.builder.enqueue(this.ctx, (entry) =>
+            assertWithSnapshot(entry.ctx, negated, predicate, describe, entry.messageOverride),
+        );
     }
 }
 
+// ─── Concrete field matchers ─────────────────────────────────────────
+
 export class TextMatcher extends StringMatcher {
-    get not(): TextMatcher { return new TextMatcher(this.builder, this.ctx, !this.negated); }
+    protected withCtx(ctx: ExpectContext): this { return new TextMatcher(this.builder, ctx, this.negated) as this; }
+    protected withNegated(negated: boolean): this { return new TextMatcher(this.builder, this.ctx, negated) as this; }
     protected fieldLabel(): string { return 'text'; }
     protected read(snap: ElementSnapshot): string { return snap.text; }
 }
 
 export class ValueMatcher extends StringMatcher {
-    get not(): ValueMatcher { return new ValueMatcher(this.builder, this.ctx, !this.negated); }
+    protected withCtx(ctx: ExpectContext): this { return new ValueMatcher(this.builder, ctx, this.negated) as this; }
+    protected withNegated(negated: boolean): this { return new ValueMatcher(this.builder, this.ctx, negated) as this; }
     protected fieldLabel(): string { return 'value'; }
     protected read(snap: ElementSnapshot): string { return snap.value; }
 }
@@ -249,128 +257,80 @@ export class AttributeMatcher extends StringMatcher {
     constructor(builder: ExpectBuilder, ctx: ExpectContext, private attrName: string, negated: boolean) {
         super(builder, ctx, negated);
     }
-    get not(): AttributeMatcher { return new AttributeMatcher(this.builder, this.ctx, this.attrName, !this.negated); }
+    protected withCtx(ctx: ExpectContext): this { return new AttributeMatcher(this.builder, ctx, this.attrName, this.negated) as this; }
+    protected withNegated(negated: boolean): this { return new AttributeMatcher(this.builder, this.ctx, this.attrName, negated) as this; }
     protected fieldLabel(): string { return `attribute "${this.attrName}"`; }
     protected read(snap: ElementSnapshot): string { return snap.attributes[this.attrName] ?? ''; }
 }
 
-export class CountMatcher {
-    constructor(
-        private builder: ExpectBuilder,
-        private ctx: ExpectContext,
-        private negated: boolean,
-    ) {}
-
-    get not(): CountMatcher {
-        return new CountMatcher(this.builder, this.ctx, !this.negated);
-    }
-
-    timeout(ms: number): CountMatcher {
-        return new CountMatcher(this.builder, { ...this.ctx, timeout: ms }, this.negated);
-    }
+export class CountMatcher extends BaseMatcher {
+    protected withCtx(ctx: ExpectContext): this { return new CountMatcher(this.builder, ctx, this.negated) as this; }
+    protected withNegated(negated: boolean): this { return new CountMatcher(this.builder, this.ctx, negated) as this; }
 
     toBe(expected: number): ExpectBuilder {
-        return this.enqueue(
-            s => s.count === expected,
-            (s, n) => describeFailure(this.ctx, 'count', 'to be', expected, s.count, n),
-        );
+        return this.enqueue(s => s.count === expected, 'to be', expected);
     }
-
     toBeGreaterThan(n: number): ExpectBuilder {
-        return this.enqueue(
-            s => s.count > n,
-            (s, neg) => describeFailure(this.ctx, 'count', 'to be greater than', n, s.count, neg),
-        );
+        return this.enqueue(s => s.count > n, 'to be greater than', n);
     }
-
     toBeLessThan(n: number): ExpectBuilder {
-        return this.enqueue(
-            s => s.count < n,
-            (s, neg) => describeFailure(this.ctx, 'count', 'to be less than', n, s.count, neg),
-        );
+        return this.enqueue(s => s.count < n, 'to be less than', n);
     }
-
     toBeGreaterThanOrEqual(n: number): ExpectBuilder {
-        return this.enqueue(
-            s => s.count >= n,
-            (s, neg) => describeFailure(this.ctx, 'count', 'to be greater than or equal to', n, s.count, neg),
-        );
+        return this.enqueue(s => s.count >= n, 'to be greater than or equal to', n);
     }
-
     toBeLessThanOrEqual(n: number): ExpectBuilder {
-        return this.enqueue(
-            s => s.count <= n,
-            (s, neg) => describeFailure(this.ctx, 'count', 'to be less than or equal to', n, s.count, neg),
-        );
+        return this.enqueue(s => s.count <= n, 'to be less than or equal to', n);
     }
 
-    private enqueue(
-        predicate: (snap: ElementSnapshot) => boolean,
-        describe: (snap: ElementSnapshot, negated: boolean) => string,
-    ): ExpectBuilder {
+    private enqueue(predicate: (s: ElementSnapshot) => boolean, verb: string, expected: number): ExpectBuilder {
         const negated = this.negated;
-        return this.builder.enqueue({ ctx: this.ctx, run: () => undefined as unknown as Promise<void> },
-            entry => assertWithSnapshot(entry.ctx, negated, predicate, describe, entry.messageOverride));
+        return this.builder.enqueue(this.ctx, (entry) =>
+            assertWithSnapshot(
+                entry.ctx, negated, predicate,
+                (s, n) => describeFailure(entry.ctx, 'count', verb, expected, s.count, n),
+                entry.messageOverride,
+            ));
     }
 }
 
 type BooleanField = 'visible' | 'enabled';
 
-export class BooleanMatcher {
-    constructor(
-        private builder: ExpectBuilder,
-        private ctx: ExpectContext,
-        private field: BooleanField,
-        private negated: boolean,
-    ) {}
-
-    get not(): BooleanMatcher {
-        return new BooleanMatcher(this.builder, this.ctx, this.field, !this.negated);
+export class BooleanMatcher extends BaseMatcher {
+    constructor(builder: ExpectBuilder, ctx: ExpectContext, private field: BooleanField, negated: boolean) {
+        super(builder, ctx, negated);
     }
-
-    timeout(ms: number): BooleanMatcher {
-        return new BooleanMatcher(this.builder, { ...this.ctx, timeout: ms }, this.field, this.negated);
-    }
+    protected withCtx(ctx: ExpectContext): this { return new BooleanMatcher(this.builder, ctx, this.field, this.negated) as this; }
+    protected withNegated(negated: boolean): this { return new BooleanMatcher(this.builder, this.ctx, this.field, negated) as this; }
 
     toBe(expected: boolean): ExpectBuilder {
         const negated = this.negated;
         const field = this.field;
-        return this.builder.enqueue({ ctx: this.ctx, run: () => undefined as unknown as Promise<void> },
-            entry => assertWithSnapshot(
+        return this.builder.enqueue(this.ctx, (entry) =>
+            assertWithSnapshot(
                 entry.ctx, negated,
                 s => s[field] === expected,
                 (s, n) => describeFailure(entry.ctx, field, 'to be', expected, s[field], n),
                 entry.messageOverride,
             ));
     }
-
     toBeTrue(): ExpectBuilder { return this.toBe(true); }
     toBeFalse(): ExpectBuilder { return this.toBe(false); }
 }
 
-export class AttributesMatcher {
-    constructor(
-        private builder: ExpectBuilder,
-        private ctx: ExpectContext,
-        private negated: boolean,
-    ) {}
+export class AttributesMatcher extends BaseMatcher {
+    protected withCtx(ctx: ExpectContext): this { return new AttributesMatcher(this.builder, ctx, this.negated) as this; }
+    protected withNegated(negated: boolean): this { return new AttributesMatcher(this.builder, this.ctx, negated) as this; }
 
-    get not(): AttributesMatcher {
-        return new AttributesMatcher(this.builder, this.ctx, !this.negated);
-    }
-
-    timeout(ms: number): AttributesMatcher {
-        return new AttributesMatcher(this.builder, { ...this.ctx, timeout: ms }, this.negated);
-    }
-
+    /** Navigate into a specific attribute. The resulting matcher supports the full string-matcher surface. */
     get(name: string): AttributeMatcher {
         return new AttributeMatcher(this.builder, this.ctx, name, this.negated);
     }
 
     toHaveKey(name: string): ExpectBuilder {
         const negated = this.negated;
-        return this.builder.enqueue({ ctx: this.ctx, run: () => undefined as unknown as Promise<void> },
-            entry => assertWithSnapshot(
+        return this.builder.enqueue(this.ctx, (entry) =>
+            assertWithSnapshot(
                 entry.ctx, negated,
                 s => name in s.attributes,
                 (s, n) =>
@@ -380,21 +340,12 @@ export class AttributesMatcher {
     }
 }
 
-export class CssMatcher {
-    constructor(
-        private builder: ExpectBuilder,
-        private ctx: ExpectContext,
-        private property: string,
-        private negated: boolean,
-    ) {}
-
-    get not(): CssMatcher {
-        return new CssMatcher(this.builder, this.ctx, this.property, !this.negated);
+export class CssMatcher extends BaseMatcher {
+    constructor(builder: ExpectBuilder, ctx: ExpectContext, private property: string, negated: boolean) {
+        super(builder, ctx, negated);
     }
-
-    timeout(ms: number): CssMatcher {
-        return new CssMatcher(this.builder, { ...this.ctx, timeout: ms }, this.property, this.negated);
-    }
+    protected withCtx(ctx: ExpectContext): this { return new CssMatcher(this.builder, ctx, this.property, this.negated) as this; }
+    protected withNegated(negated: boolean): this { return new CssMatcher(this.builder, this.ctx, this.property, negated) as this; }
 
     toBe(expected: string): ExpectBuilder { return this.enqueue(v => v === expected, 'to be', expected); }
     toContain(expected: string): ExpectBuilder { return this.enqueue(v => v.includes(expected), 'to contain', expected); }
@@ -403,28 +354,29 @@ export class CssMatcher {
     private enqueue(test: (value: string) => boolean, verb: string, expected: unknown): ExpectBuilder {
         const negated = this.negated;
         const property = this.property;
-        return this.builder.enqueue({ ctx: this.ctx, run: () => undefined as unknown as Promise<void> },
-            entry => {
-                let lastValue = '';
-                return assertWithLiveRead(
-                    entry.ctx, negated,
-                    async () => {
-                        const locator = await entry.ctx.resolveLocator();
-                        lastValue = await readCssProperty(locator, property);
-                        return test(lastValue);
-                    },
-                    n => describeFailure(entry.ctx, `css "${property}"`, verb, expected, lastValue, n),
-                    entry.messageOverride,
-                );
-            });
+        return this.builder.enqueue(this.ctx, (entry) => {
+            let lastValue = '';
+            return assertWithLiveRead(
+                entry.ctx, negated,
+                async () => {
+                    const element = await entry.ctx.resolveElement();
+                    lastValue = await element.getCssProperty(property);
+                    return test(lastValue);
+                },
+                n => describeFailure(entry.ctx, `css "${property}"`, verb, expected, lastValue, n),
+                entry.messageOverride,
+            );
+        });
     }
 }
+
+// ─── The builder ─────────────────────────────────────────────────────
 
 /**
  * Root of the matcher tree and the queue-backed chain builder.
  *
- * Every matcher call enqueues an assertion and returns this builder, so you
- * can chain multiple verifications in one expression:
+ * Every matcher call enqueues an assertion and returns the builder so chains
+ * of multiple verifications are expressed in one await-able expression:
  *
  * ```ts
  * await steps.on('submitBtn', 'CheckoutPage')
@@ -434,15 +386,15 @@ export class CssMatcher {
  *   .visible.toBeTrue();
  * ```
  *
- * The builder is a `PromiseLike<void>` — awaiting it executes every queued
- * assertion in the order they were added, short-circuiting on the first
- * failure (the await throws, subsequent queued assertions do not run).
- *
- * - `.not` toggles negation for the *next* matcher only (one-shot).
- * - `.throws(message)` overrides the failure message of the most recently
- *   queued assertion.
- * - `.timeout(ms)` mutates the builder's ctx, affecting every matcher that
- *   runs after it. Per-matcher `.timeout(ms)` applies only to that matcher.
+ * Semantics:
+ *   - `.not` toggles negation for the *next* matcher only (one-shot).
+ *   - `.throws(message)` replaces the failure message of the most recently
+ *     queued assertion.
+ *   - `.timeout(ms)` mutates the forward context AND retroactively updates
+ *     the most recently queued assertion. Per-matcher `.timeout(ms)`
+ *     (e.g. `.text.timeout(500).toBe(...)`) scopes to that matcher only.
+ *   - Awaiting executes every queued assertion sequentially; the first
+ *     failure throws and subsequent assertions do not run.
  */
 export class ExpectBuilder implements PromiseLike<void> {
     private ctx: ExpectContext;
@@ -454,27 +406,17 @@ export class ExpectBuilder implements PromiseLike<void> {
         this.pendingNot = initialNegated;
     }
 
-    /** One-shot negation. Flips the expected outcome of the *next* matcher only. */
+    /** One-shot negation for the next matcher reached from this builder. */
     get not(): this {
         this.pendingNot = !this.pendingNot;
         return this;
     }
 
-    private consumeNegation(): boolean {
-        const n = this.pendingNot;
-        this.pendingNot = false;
-        return n;
-    }
-
     /**
-     * Override the retry timeout. Mutates the builder's context so every
-     * matcher queued after this point runs with the new timeout, and also
-     * updates the most recently queued assertion so positioning like
-     * `.toBe(pred).timeout(500)` still scopes to that predicate.
-     *
-     * Per-matcher `.timeout(ms)` (e.g. `.text.timeout(500).toBe(...)`) remains
-     * the right choice when you want the override to apply only to the next
-     * matcher without leaking to assertions queued after it.
+     * Override the retry timeout. Mutates the forward context so every matcher
+     * queued after this call uses the new timeout; retroactively updates the
+     * most recently queued assertion so trailing `.toBe(pred).timeout(ms)`
+     * scopes to that predicate.
      */
     timeout(ms: number): this {
         this.ctx = { ...this.ctx, timeout: ms };
@@ -483,25 +425,24 @@ export class ExpectBuilder implements PromiseLike<void> {
         return this;
     }
 
-    // Field matcher getters — each consumes a pending .not and carries it
-    // into the matcher that is about to be constructed.
-    get text(): TextMatcher { return new TextMatcher(this, this.ctx, this.consumeNegation()); }
-    get value(): ValueMatcher { return new ValueMatcher(this, this.ctx, this.consumeNegation()); }
-    get count(): CountMatcher { return new CountMatcher(this, this.ctx, this.consumeNegation()); }
-    get visible(): BooleanMatcher { return new BooleanMatcher(this, this.ctx, 'visible', this.consumeNegation()); }
-    get enabled(): BooleanMatcher { return new BooleanMatcher(this, this.ctx, 'enabled', this.consumeNegation()); }
-    get attributes(): AttributesMatcher { return new AttributesMatcher(this, this.ctx, this.consumeNegation()); }
-    css(property: string): CssMatcher { return new CssMatcher(this, this.ctx, property, this.consumeNegation()); }
+    get text(): TextMatcher { return new TextMatcher(this, this.ctx, this.consumeNot()); }
+    get value(): ValueMatcher { return new ValueMatcher(this, this.ctx, this.consumeNot()); }
+    get count(): CountMatcher { return new CountMatcher(this, this.ctx, this.consumeNot()); }
+    get visible(): BooleanMatcher { return new BooleanMatcher(this, this.ctx, 'visible', this.consumeNot()); }
+    get enabled(): BooleanMatcher { return new BooleanMatcher(this, this.ctx, 'enabled', this.consumeNot()); }
+    get attributes(): AttributesMatcher { return new AttributesMatcher(this, this.ctx, this.consumeNot()); }
+    css(property: string): CssMatcher { return new CssMatcher(this, this.ctx, property, this.consumeNot()); }
 
     /**
      * Predicate escape hatch. Queues a custom predicate assertion on this
-     * builder. Chain further matchers or end with `.throws(message)` to
+     * builder. Chain further matchers or finish with `.throws(message)` to
      * override the failure message.
      */
     toBe(predicate: (el: ElementSnapshot) => boolean): this {
-        const negated = this.consumeNegation();
-        this.enqueue({ ctx: this.ctx, run: () => undefined as unknown as Promise<void> },
-            entry => assertPredicate(entry.ctx, negated, predicate, entry.messageOverride));
+        const negated = this.consumeNot();
+        this.enqueue(this.ctx, (entry) =>
+            assertPredicate(entry.ctx, negated, predicate, entry.messageOverride),
+        );
         return this;
     }
 
@@ -512,23 +453,32 @@ export class ExpectBuilder implements PromiseLike<void> {
         return this;
     }
 
-    /**
-     * Add an assertion to the queue. Matchers call this to push their
-     * terminal check. The `run` field is patched in place with the matcher's
-     * executor so the matcher can reference `entry.messageOverride` (set later
-     * by `.throws()`) without capturing a stale value.
-     */
-    enqueue(entry: QueuedAssertion, runFactory: (entry: QueuedAssertion) => Promise<void>): this {
-        entry.run = () => runFactory(entry);
-        this.queue.push(entry);
-        return this;
-    }
-
     then<TResult1 = void, TResult2 = never>(
         onfulfilled?: ((value: void) => TResult1 | PromiseLike<TResult1>) | null | undefined,
         onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null | undefined,
     ): PromiseLike<TResult1 | TResult2> {
         return this.flush().then(onfulfilled, onrejected);
+    }
+
+    // ─── internals used by matchers ─────────────────────────────────
+
+    /**
+     * Enqueue an assertion. Matchers call this with the context they captured
+     * at matcher-creation time and a runner that reads `entry.ctx` and
+     * `entry.messageOverride` at run time so later modifications by
+     * `.timeout()` / `.throws()` flow through.
+     */
+    enqueue(ctx: ExpectContext, run: (entry: QueuedAssertion) => Promise<void>): this {
+        const entry: QueuedAssertion = { ctx, run: async () => {} };
+        entry.run = () => run(entry);
+        this.queue.push(entry);
+        return this;
+    }
+
+    private consumeNot(): boolean {
+        const n = this.pendingNot;
+        this.pendingNot = false;
+        return n;
     }
 
     private async flush(): Promise<void> {

@@ -623,11 +623,14 @@ export class Steps {
         const timeout = options?.timeout ?? 2000;
         log.verify('Probing visibility of "%s" in "%s" (timeout: %dms)', elementName, pageName, timeout);
         try {
+            // Use getSelector + construct a WebElement directly so the caller-supplied
+            // timeout is the only wait in play — repo.get() would block on its own
+            // repository resolution timeout (15s default) before our waitFor runs.
             const selector = this.repo.getSelector(elementName, pageName);
-            const locator = this.page.locator(selector).first();
-            await locator.waitFor({ state: 'visible', timeout });
+            const element = new WebElement(this.page.locator(selector).first());
+            await element.waitFor({ state: 'visible', timeout });
             if (options?.containsText) {
-                const text = await locator.textContent({ timeout }).catch(() => null);
+                const text = await element.textContent().catch(() => null);
                 return text !== null && text.includes(options.containsText);
             }
             return true;

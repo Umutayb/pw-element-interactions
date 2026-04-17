@@ -8,9 +8,6 @@ import {
     ExpectContext,
 } from './ExpectMatchers';
 
-/** DOM Element alias — disambiguates from the repository's `Element` wrapper in callbacks that run inside Playwright's browser context. */
-type DomElement = globalThis.Element;
-
 function toLocator(element: Element): Locator {
     return (element as WebElement).locator;
 }
@@ -115,8 +112,8 @@ export class ElementAction {
     private async shouldProceed(): Promise<boolean> {
         if (!this.conditionalVisible) return true;
         try {
-            const locator = await this.resolveLocator();
-            await locator.waitFor({ state: 'visible', timeout: this.visibilityTimeout });
+            const element = await this.resolve();
+            await element.waitFor({ state: 'visible', timeout: this.visibilityTimeout });
             return true;
         } catch {
             return false;
@@ -297,10 +294,10 @@ export class ElementAction {
     async isVisible(options?: IsVisibleOptions): Promise<boolean> {
         const timeout = options?.timeout ?? 2000;
         try {
-            const locator = await this.resolveLocator();
-            await locator.waitFor({ state: 'visible', timeout });
+            const element = await this.resolve();
+            await element.waitFor({ state: 'visible', timeout });
             if (options?.containsText) {
-                const text = await locator.textContent({ timeout }).catch(() => null);
+                const text = await element.textContent().catch(() => null);
                 return text !== null && text.includes(options.containsText);
             }
             return true;
@@ -405,25 +402,19 @@ export class ElementAction {
      * Snapshot fields are all primitives — no async access needed in predicates.
      */
     async captureSnapshot(): Promise<ElementSnapshot> {
-        const locator = await this.resolveLocator();
-        const first = locator.first();
+        const element = await this.resolve();
+        const first = element.first();
 
-        const [count, text, value, attributes, visible, enabled] = await Promise.all([
-            locator.count().catch(() => 0),
-            first.textContent().then(t => (t ?? '').trim()).catch(() => ''),
+        const [count, rawText, value, attributes, visible, enabled] = await Promise.all([
+            element.count().catch(() => 0),
+            first.textContent().catch(() => null),
             first.inputValue().catch(() => ''),
-            first.evaluate((el: DomElement) => {
-                const out: Record<string, string> = {};
-                for (const attr of Array.from(el.attributes)) {
-                    out[attr.name] = attr.value;
-                }
-                return out;
-            }).catch(() => ({} as Record<string, string>)),
+            first.getAllAttributes().catch(() => ({} as Record<string, string>)),
             first.isVisible().catch(() => false),
             first.isEnabled().catch(() => false),
         ]);
 
-        return { text, value, attributes, visible, enabled, count };
+        return { text: (rawText ?? '').trim(), value, attributes, visible, enabled, count };
     }
 
     /** Build the context object consumed by the matcher tree classes. */
@@ -434,7 +425,7 @@ export class ElementAction {
             timeout: this._timeout,
             conditionalVisible: this.conditionalVisible,
             visibilityTimeout: this.visibilityTimeout,
-            resolveLocator: () => this.resolveLocator(),
+            resolveElement: () => this.resolve(),
             captureSnapshot: () => this.captureSnapshot(),
         };
     }

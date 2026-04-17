@@ -1,5 +1,6 @@
 import { test, expect } from './fixture/StepFixture';
 import { ElementAction, ElementInteractions } from '../src';
+import { gotoButtons } from './fixture/pageHelpers';
 
 /**
  * Covers the expect matcher tree on both:
@@ -13,12 +14,6 @@ import { ElementAction, ElementInteractions } from '../src';
  */
 
 const FAST_TIMEOUT = 500;
-
-async function gotoButtons(steps: any) {
-    await steps.navigateTo('/');
-    await steps.click('buttonsLink', 'SidebarNav');
-    await steps.verifyUrlContains('/buttons');
-}
 
 test.describe('Expect matcher tree — text', () => {
     test.beforeEach(async ({ steps }) => {
@@ -233,6 +228,14 @@ test.describe('Expect matcher tree — predicate escape hatch', () => {
         // Build the assertion without awaiting, then await later — must succeed.
         const pending = steps.on('primaryButton', 'ButtonsPage').toBe(el => el.visible);
         await pending;
+    });
+
+    test('builder.then() is callable directly (PromiseLike contract)', async ({ steps }) => {
+        // Covers ExpectBuilder.then explicitly — this is what `await` triggers under the hood.
+        const builder = steps.on('primaryButton', 'ButtonsPage').text.toBe('Primary');
+        await new Promise<void>((resolve, reject) => {
+            builder.then(() => resolve(), reject);
+        });
     });
 });
 

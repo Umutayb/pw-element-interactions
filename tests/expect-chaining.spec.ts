@@ -197,6 +197,146 @@ test.describe('steps.on() chain — .not is one-shot', () => {
     });
 });
 
+test.describe('steps.on() chain — repeated .not behavior', () => {
+    test.beforeEach(async ({ steps }) => { await gotoButtons(steps); });
+
+    test('.not.not cancels out — builder level', async ({ steps }) => {
+        // Equivalent to .text.toBe('Primary') — double negation = no negation
+        await steps.on('primaryButton', 'ButtonsPage').not.not.text.toBe('Primary');
+    });
+
+    test('.not.not.not collapses to .not — builder level', async ({ steps }) => {
+        // Three toggles → true. Equivalent to .not.text.toBe('Wrong')
+        await steps.on('primaryButton', 'ButtonsPage').not.not.not.text.toBe('Wrong');
+    });
+
+    test('.not.not cancels out — matcher level', async ({ steps }) => {
+        // Matcher-level `.not` flips `negated` flag on the matcher
+        await steps.on('primaryButton', 'ButtonsPage').text.not.not.toBe('Primary');
+    });
+
+    test('.not.not.not collapses to .not — matcher level', async ({ steps }) => {
+        await steps.on('primaryButton', 'ButtonsPage').text.not.not.not.toBe('Wrong');
+    });
+
+    test('builder-level .not + matcher-level .not compose (both negate → cancel)', async ({ steps }) => {
+        // builder .not → pendingNot=true → consumed by .text → matcher negated=true
+        // matcher .not → negated=false → toBe runs NOT negated → must match 'Primary'
+        await steps.on('primaryButton', 'ButtonsPage').not.text.not.toBe('Primary');
+    });
+
+    test('builder-level .not cancels out, then matcher-level .not negates', async ({ steps }) => {
+        // .not.not → builder pendingNot=false → text gets negated=false
+        // .not → matcher negated=true → toBe runs negated → must NOT be 'Wrong'
+        await steps.on('primaryButton', 'ButtonsPage').not.not.text.not.toBe('Wrong');
+    });
+
+    test('.not consumed by one matcher does not re-apply to later matchers', async ({ steps }) => {
+        // .not → text negated=true → text.toBe('Wrong') negated = passes
+        // Next .text getter reads pendingNot=false (consumed) → NOT negated
+        await steps.on('primaryButton', 'ButtonsPage')
+            .not.text.toBe('Wrong')
+            .text.toBe('Primary');
+    });
+
+    test('alternating .not across several matchers in one chain', async ({ steps }) => {
+        await steps.on('primaryButton', 'ButtonsPage')
+            .not.text.toBe('Wrong')      // passes (negated, text IS 'Primary')
+            .count.toBe(1)                // passes (no negation)
+            .not.enabled.toBeFalse()      // passes (negated, enabled IS true)
+            .visible.toBeTrue()           // passes (no negation)
+            .not.not.attributes.toHaveKey('data-testid'); // no negation, passes
+    });
+
+    test('long chain — alternating not/normal/not across 12 verifications', async ({ steps }) => {
+        // Every line verifies something true about primaryButton.
+        // Negation states alternate to prove .not is reliably one-shot and
+        // the chain does not leak negation state between matchers.
+        await steps.on('primaryButton', 'ButtonsPage')
+            .text.toBe('Primary')                                      // normal
+            .not.text.toBe('Wrong')                                    // builder-level .not
+            .text.toContain('rim')                                     // normal
+            .text.not.toContain('Secondary')                           // matcher-level .not
+            .visible.toBeTrue()                                        // normal
+            .not.visible.toBeFalse()                                   // builder-level .not
+            .enabled.toBeTrue()                                        // normal
+            .enabled.not.toBe(false)                                   // matcher-level .not
+            .count.toBe(1)                                             // normal
+            .not.count.toBe(99)                                        // builder-level .not
+            .attributes.toHaveKey('data-testid')                       // normal
+            .attributes.not.toHaveKey('disabled')                      // matcher-level .not
+            .attributes.get('data-testid').toBe('btn-primary')         // normal
+            .attributes.get('data-testid').not.toBe('wrong-id')        // matcher-level .not
+            .css('cursor').toMatch(/pointer|default|auto/)             // normal
+            .css('cursor').not.toBe('not-a-real-cursor');              // matcher-level .not
+    });
+
+    test('long chain — mixed builder-level and matcher-level .not interleaved', async ({ steps }) => {
+        await steps.on('primaryButton', 'ButtonsPage')
+            .not.text.toBe('Wrong')                       // builder-.not
+            .text.not.toContain('xyz')                    // matcher-.not
+            .not.text.not.toBe('Primary')                 // builder-.not + matcher-.not → cancels, passes
+            .visible.toBeTrue()                           // normal
+            .not.visible.toBeFalse()                      // builder-.not
+            .not.not.enabled.toBeTrue()                   // double builder-.not cancels, normal
+            .attributes.not.toHaveKey('disabled')         // matcher-.not
+            .not.attributes.get('data-testid').toBe('no'); // builder-.not propagated into AttributeMatcher
+    });
+
+    test('long chain — predicate form alternated with matcher forms, all negated correctly', async ({ steps }) => {
+        await steps.on('primaryButton', 'ButtonsPage')
+            .text.toBe('Primary')                                         // normal field
+            .not.toBe(el => el.text === 'Wrong')                          // negated predicate
+            .count.toBe(1)                                                // normal field
+            .toBe(el => el.visible && el.enabled)                         // normal predicate
+            .not.attributes.toHaveKey('nonexistent')                      // negated field
+            .not.toBe(el => el.text === 'NotPrimary')                     // negated predicate
+            .visible.toBeTrue()                                           // normal field
+            .toBe(el => el.attributes['data-testid'] === 'btn-primary');  // normal predicate
+    });
+
+    test('long chain fails at a specific mid-chain negated assertion — short-circuits remaining', async ({ page, repo }) => {
+        const fast = new ElementInteractions(page, { timeout: FAST_TIMEOUT });
+        const action = new ElementAction(repo, 'primaryButton', 'ButtonsPage', fast, FAST_TIMEOUT);
+
+        await page.goto('/');
+        await page.click('[data-testid=\'nav-item-buttons\']');
+
+        // First three pass, fourth is a negated assertion that's actually true
+        // (so the negation fails), short-circuiting the remaining matchers.
+        let tailCalls = 0;
+        const chain = action
+            .text.toBe('Primary')                               // passes
+            .visible.toBeTrue()                                 // passes
+            .not.count.toBe(99)                                 // passes (count=1, not=99, so negated-against-99 passes)
+            .not.text.toBe('Primary')                           // FAILS — text IS 'Primary' and we assert NOT Primary
+            .text.toContain('rim')                              // must not run
+            .toBe(el => { tailCalls += 1; return true; })       // must not run
+            .count.toBe(1);                                     // must not run
+
+        await expect(chain).rejects.toThrow(/text not to be "Primary"/);
+        expect(tailCalls).toBe(0);
+    });
+
+    test('repeated .not toggles still honor short-circuit on failure', async ({ page, repo }) => {
+        const fast = new ElementInteractions(page, { timeout: FAST_TIMEOUT });
+        const action = new ElementAction(repo, 'primaryButton', 'ButtonsPage', fast, FAST_TIMEOUT);
+
+        await page.goto('/');
+        await page.click('[data-testid=\'nav-item-buttons\']');
+
+        // .not.not.text.toBe('WRONG') → no negation, text is 'Primary' not 'WRONG' → FAILS fast
+        // subsequent matcher must NOT run
+        let lateCalls = 0;
+        const chain = action
+            .not.not.text.toBe('WRONG')
+            .toBe(el => { lateCalls += 1; return true; });
+
+        await expect(chain).rejects.toThrow(/text to be "WRONG"/);
+        expect(lateCalls).toBe(0);
+    });
+});
+
 test.describe('steps.on() chain — short-circuit on first failure', () => {
     test('second assertion is not evaluated after first fails', async ({ page, repo }) => {
         const fast = new ElementInteractions(page, { timeout: FAST_TIMEOUT });

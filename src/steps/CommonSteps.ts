@@ -793,7 +793,7 @@ export class Steps {
      * @param actual - The actual value captured from the page.
      * @param expected - The expected value.
      */
-    expectEqual(actual: string | null, expected: string): void {
+    expectEqual(actual: string | null, expected: string | null): void {
         log.verify('Expecting values to be equal: "%s" === "%s"', actual, expected);
         this.verify.expectEqual(actual, expected);
     }
@@ -804,7 +804,7 @@ export class Steps {
      * @param actual - The actual value captured from the page.
      * @param notExpected - The value that actual must differ from.
      */
-    expectNotEqual(actual: string | null, notExpected: string): void {
+    expectNotEqual(actual: string | null, notExpected: string | null): void {
         log.verify('Expecting values to differ: "%s" !== "%s"', actual, notExpected);
         this.verify.expectNotEqual(actual, notExpected);
     }

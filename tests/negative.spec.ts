@@ -116,4 +116,17 @@ test.describe('Negative Tests', () => {
     }).rejects.toThrow('not found');
     log('TC_086 Negative getByText strict — passed');
   });
+
+  test('TC_088: expectEqual throws on mismatch, expectNotEqual throws on match', async ({ steps }) => {
+
+    expect(() => {
+      steps.expectEqual('hello', 'world');
+    }).toThrow();
+
+    expect(() => {
+      steps.expectNotEqual('hello', 'hello');
+    }).toThrow();
+
+    log('TC_088 Negative expectEqual/expectNotEqual — passed');
+  });
 });

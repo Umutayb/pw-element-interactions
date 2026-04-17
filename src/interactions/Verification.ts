@@ -235,7 +235,7 @@ export class Verifications {
      * @param actual - The actual value captured from the page.
      * @param expected - The expected value to compare against.
      */
-    expectEqual(actual: string | null, expected: string): void {
+    expectEqual(actual: string | null, expected: string | null): void {
         expect(actual, `Expected values to be equal.\n  Actual:   "${actual}"\n  Expected: "${expected}"`).toBe(expected);
     }
 
@@ -245,7 +245,7 @@ export class Verifications {
      * @param actual - The actual value captured from the page.
      * @param notExpected - The value that actual must differ from.
      */
-    expectNotEqual(actual: string | null, notExpected: string): void {
+    expectNotEqual(actual: string | null, notExpected: string | null): void {
         expect(actual, `Expected values to differ, but both were: "${actual}"`).not.toBe(notExpected);
     }
 

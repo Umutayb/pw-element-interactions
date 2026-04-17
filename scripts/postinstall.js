@@ -26,14 +26,17 @@ const destinations = [
   path.join(homeDir, '.claude', 'skills'),
 ];
 
-const skills = [
-  'element-interactions',
-  'test-composer',
-  'bug-discovery',
-  'agents-vs-agents',
-  'failure-diagnosis',
-  'work-summary-deck',
-];
+// Auto-discover every skill under skills/. A skill is any direct subdirectory
+// of skills/ that contains a SKILL.md at its root. This keeps installs in sync
+// with the repo automatically — add a new skill folder and it ships on the next
+// publish; no manifest edit required.
+function discoverSkills(root) {
+  if (!fs.existsSync(root)) return [];
+  return fs.readdirSync(root, { withFileTypes: true })
+    .filter(entry => entry.isDirectory())
+    .map(entry => entry.name)
+    .filter(name => fs.existsSync(path.join(root, name, 'SKILL.md')));
+}
 
 // Recursively copy one skill directory. Copies SKILL.md, contributing.md,
 // and the whole references/ tree — everything SKILL.md's instructions refer to.
@@ -50,6 +53,8 @@ function copyDirRecursive(src, dest) {
   }
 }
 
+const skills = discoverSkills(skillsDir);
+
 try {
   const installedSkills = new Set();
 
@@ -57,10 +62,6 @@ try {
     for (const skill of skills) {
       const srcDir = path.join(skillsDir, skill);
       const destDir = path.join(skillsDestBase, skill);
-
-      if (!fs.existsSync(srcDir)) {
-        continue;
-      }
 
       copyDirRecursive(srcDir, destDir);
       installedSkills.add(skill);

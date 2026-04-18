@@ -16,7 +16,7 @@ export { ElementInteractions } from './interactions/facade/ElementInteractions';
 
 // Re-exports from @civitas-cerebrum/element-repository
 export type { Element, ElementResolutionOptions, ElementActionOptions } from '@civitas-cerebrum/element-repository';
-export { ElementType, WebElement, PlatformElement, ElementChain, ElementAssertionError, isWeb, isPlatform, SelectionStrategy } from '@civitas-cerebrum/element-repository';
+export { ElementType, WebElement, PlatformElement, ElementChain, isWeb, isPlatform, SelectionStrategy } from '@civitas-cerebrum/element-repository';
 
 // Test Steps Facade
 export { Steps } from './steps/CommonSteps';

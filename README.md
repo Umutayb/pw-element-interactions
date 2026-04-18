@@ -106,8 +106,7 @@ Once loaded, Claude Code will:
 * **Flexible assertions** — Verify exact text, non-empty text, URL substrings, or dynamic element counts (greater than, less than, exact).
 * **Smart interactions** — Drag to other elements, type sequentially, wait for specific element state, verify images and more!
 * **Force click with auto-retry** — Clicks automatically retry with a native DOM event when pointer interception is detected. No configuration needed.
-* **Non-throwing visibility probes** — `isVisible()` returns a boolean with configurable timeout and text filtering, never throws.
-* **Conditional chaining** — `steps.on('banner', 'Page').ifVisible().click()` silently skips when the element isn't visible.
+* **Unified visibility API** — `isVisible()` is a dual-behavior chain. `await steps.isVisible('banner', 'Page')` resolves to a boolean (probe, never throws). `steps.isVisible('banner', 'Page').click()` silently skips the action when hidden (gate). Both forms accept `{ timeout, containsText }`. Replaces `ifVisible()` and the old boolean `isVisible()` probe.
 * **Chain-style expect matchers** — `steps.expect('price', 'Page').text.toMatch(/^\$/).count.toBe(1).attributes.get('data-status').toBe('ready')` chains as many verifications as you need on a single element; awaiting flushes the queue and short-circuits on the first failure. `.not` is one-shot, `.throws('msg')` overrides messages, `.timeout(ms)` scopes wait time per call.
 * **Predicate escape hatch** — `steps.expect('price', 'Page').satisfy(el => parseFloat(el.text.slice(1)) > 10).throws('price must be above $10')` for assertions the matcher tree doesn't cover. Predicates run against a snapshot of plain element data — no async access required inside the lambda.
 * **Role + accessible name selectors** — `{ "role": "button", "name": "Log in" }` resolves via `page.getByRole()` with regex support.
@@ -212,11 +211,14 @@ test('Fluent checkout flow', async ({ steps }) => {
   await steps.on('add-to-cart', 'ProductDetailsPage').click({ withoutScrolling: true });
   await steps.on('cart-count', 'Header').verifyText('1');
 
-  // Conditional — skip if not visible
-  await steps.on('promoBanner', 'ProductDetailsPage').ifVisible().click();
-  
-  // Visibility probe — returns boolean, never throws
+  // Gate — skip action if not visible (replaces deprecated ifVisible())
+  await steps.on('promoBanner', 'ProductDetailsPage').isVisible().click();
+
+  // Probe — returns boolean, never throws
   const hasDiscount = await steps.on('discountBadge', 'ProductDetailsPage').isVisible();
+
+  // Gate with text filter — only click when the banner shows "50% off"
+  await steps.isVisible('promo', 'ProductDetailsPage', { containsText: '50% off' }).click();
 });
 ```
 
@@ -484,10 +486,31 @@ Every method below automatically fetches the Playwright `Locator` using your `pa
 * **`verifyInputValue(pageName, elementName, expectedValue: string)`** — Asserts that an input, textarea, or select element has the expected value.
 * **`verifyTabCount(expectedCount: number)`** — Asserts the number of currently open tabs/pages in the browser context.
 
-### 🔍 Visibility Probe
+### 🔍 Visibility — Probe + Gate
 
-* **`isVisible(pageName, elementName, options?)`** — Non-throwing visibility check. Returns `true` if the element is visible within the timeout, `false` otherwise. Options: `{ timeout?: number (default 2000), containsText?: string }`.
-* **`isPresent(pageName, elementName)`** — Returns `true` if the element is currently visible, `false` otherwise. Uses the default element timeout.
+* **`isVisible(pageName, elementName, options?)`** — Dual-behavior entry point. Returns a `VisibleChain` that is both:
+  - **awaitable as `Promise<boolean>`** — the probe, never throws. `await steps.isVisible(...)` resolves to `true` / `false`.
+  - **chainable with action methods and the matcher tree** — the gate, silently skips when hidden.
+  Options: `{ timeout?: number (default 2000), containsText?: string }`.
+* **`isPresent(pageName, elementName)`** — Boolean presence check with the default element timeout. Equivalent to `await element.isVisible()` on the resolved element.
+
+```ts
+// Probe — boolean
+const ok = await steps.isVisible('banner', 'Page', { timeout: 500 });
+
+// Gate — click only if visible (no throw)
+await steps.isVisible('cookieBanner', 'Page').click();
+
+// Gate with text filter
+await steps.isVisible('promo', 'Page', { containsText: '50% off' }).click();
+
+// Matcher tree — silently skipped when hidden
+await steps.isVisible('banner', 'Page').text.toBe('Hello');
+```
+
+Every probe and gate decision is logged under the `tester:visible` debug channel with a `[probe]` or `[gate]` tag so silently-skipped actions stay debuggable.
+
+> **`ifVisible()` is deprecated** in favor of `isVisible()`. It remains available as a backwards-compatible alias on `ElementAction`.
 
 ### 📋 Listed Elements
 
@@ -529,6 +552,17 @@ const href = await steps.getListedElementData('UsersPage', 'tableRows', {
   text: 'John',
   child: 'a.profile-link',
   extractAttribute: 'href'
+});
+
+// Regex text match — pick any row whose text matches the pattern
+await steps.clickListedElement('Users', 'tableRows', {
+  text: { regex: 'Alice|Bob|Carol', flags: 'i' }
+});
+
+// withDescendant — match only rows that contain a specific descendant element
+await steps.clickListedElement('Users', 'tableRows', {
+  text: 'John',
+  withDescendant: { pageName: 'Users', elementName: 'activeBadge' }
 });
 ```
 

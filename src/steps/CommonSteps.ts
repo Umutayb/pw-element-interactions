@@ -1,5 +1,5 @@
 import { Page, Response } from '@playwright/test';
-import { ElementRepository, WebElement, ElementResolutionOptions, SelectionStrategy } from '@civitas-cerebrum/element-repository';
+import { ElementRepository, Element, WebElement, ElementResolutionOptions, SelectionStrategy } from '@civitas-cerebrum/element-repository';
 import { ElementInteractions } from '../interactions/facade/ElementInteractions';
 import { Utils } from '../utils/ElementUtilities';
 import { EmailClientConfig, EmailSendOptions, EmailReceiveOptions, ReceivedEmail, EmailMarkOptions, EmailMarkAction, EmailFilter } from '@civitas-cerebrum/email-client';
@@ -77,6 +77,26 @@ export class Steps {
             return this.toResolutionOptions(options) ?? { strategy: SelectionStrategy.ALL };
         }
         return { strategy: SelectionStrategy.ALL };
+    }
+
+    /**
+     * Resolves an element from the repository and narrows its type to
+     * `WebElement`. This package is Playwright-only, so every resolved element
+     * is in practice a `WebElement`. Calling this once at the repo boundary
+     * lets every downstream call use the richer `WebElement` type (with its
+     * `locator` / `rightClick` / `selectOption` / `getAllAttributes`) without
+     * per-call casts.
+     */
+    private async getWebElement(elementName: string, pageName: string, options?: StepOptions): Promise<WebElement> {
+        return (await this.repo.get(elementName, pageName, this.toResolutionOptions(options))) as WebElement;
+    }
+
+    /**
+     * Same as `getWebElement` but forces the ALL strategy. For collection-based
+     * methods (getCount, verifyOrder, verifyImages, etc.).
+     */
+    private async getAllWebElement(elementName: string, pageName: string, options?: StepOptions): Promise<WebElement> {
+        return (await this.repo.get(elementName, pageName, this.toAllResolutionOptions(options))) as WebElement;
     }
 
     /**
@@ -212,7 +232,7 @@ export class Steps {
      */
     async click(elementName: string, pageName: string, options?: StepOptions): Promise<boolean | void> {
         log.interact('Clicking on "%s" in "%s"', elementName, pageName);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const element = await this.getWebElement(elementName, pageName, options);
         return await this.interact.click(element, {
             withoutScrolling: options?.withoutScrolling,
             ifPresent: options?.ifPresent,
@@ -231,7 +251,7 @@ export class Steps {
         log.interact('Clicking a random element from "%s" in "%s"', elementName, pageName);
         const element = await this.repo.getRandom(elementName, pageName);
         if (!element) throw new Error(`No visible element found for "${elementName}" in "${pageName}"`);
-        await this.interact.click(element, {
+        await this.interact.click(element as WebElement, {
             withoutScrolling: options?.withoutScrolling,
         });
     }
@@ -246,7 +266,7 @@ export class Steps {
      */
     async clickIfPresent(elementName: string, pageName: string, options?: StepOptions): Promise<boolean> {
         log.interact('Clicking on "%s" in "%s" (if present)', elementName, pageName);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const element = await this.getWebElement(elementName, pageName, options);
         return await this.interact.click(element, { ifPresent: true }) as boolean;
     }
 
@@ -258,7 +278,7 @@ export class Steps {
      */
     async rightClick(elementName: string, pageName: string, options?: StepOptions): Promise<void> {
         log.interact('Right-clicking on "%s" in "%s"', elementName, pageName);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const element = await this.getWebElement(elementName, pageName, options);
         await this.interact.rightClick(element);
     }
 
@@ -270,7 +290,7 @@ export class Steps {
      */
     async doubleClick(elementName: string, pageName: string, options?: StepOptions): Promise<void> {
         log.interact('Double-clicking on "%s" in "%s"', elementName, pageName);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const element = await this.getWebElement(elementName, pageName, options);
         await this.interact.doubleClick(element);
     }
 
@@ -282,7 +302,7 @@ export class Steps {
      */
     async check(elementName: string, pageName: string, options?: StepOptions): Promise<void> {
         log.interact('Checking "%s" in "%s"', elementName, pageName);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const element = await this.getWebElement(elementName, pageName, options);
         await this.interact.check(element);
     }
 
@@ -294,7 +314,7 @@ export class Steps {
      */
     async uncheck(elementName: string, pageName: string, options?: StepOptions): Promise<void> {
         log.interact('Unchecking "%s" in "%s"', elementName, pageName);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const element = await this.getWebElement(elementName, pageName, options);
         await this.interact.uncheck(element);
     }
 
@@ -306,7 +326,7 @@ export class Steps {
      */
     async hover(elementName: string, pageName: string, options?: StepOptions): Promise<void> {
         log.interact('Hovering over "%s" in "%s"', elementName, pageName);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const element = await this.getWebElement(elementName, pageName, options);
         await this.interact.hover(element);
     }
 
@@ -318,7 +338,7 @@ export class Steps {
      */
     async scrollIntoView(elementName: string, pageName: string, options?: StepOptions): Promise<void> {
         log.interact('Scrolling "%s" in "%s" into view', elementName, pageName);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const element = await this.getWebElement(elementName, pageName, options);
         await this.interact.scrollIntoView(element);
     }
 
@@ -331,7 +351,7 @@ export class Steps {
      */
     async fill(elementName: string, pageName: string, text: string, options?: StepOptions): Promise<void> {
         log.interact('Filling "%s" in "%s" with text: "%s"', elementName, pageName, text);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const element = await this.getWebElement(elementName, pageName, options);
         await this.interact.fill(element, text);
     }
 
@@ -344,7 +364,7 @@ export class Steps {
      */
     async uploadFile(elementName: string, pageName: string, filePath: string, options?: StepOptions): Promise<void> {
         log.interact('Uploading file "%s" to "%s" in "%s"', filePath, elementName, pageName);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const element = await this.getWebElement(elementName, pageName, options);
         await this.interact.uploadFile(element, filePath);
     }
 
@@ -363,7 +383,7 @@ export class Steps {
         options?: StepOptions
     ): Promise<string> {
         log.interact('Selecting dropdown option for "%s" in "%s"', elementName, pageName);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const element = await this.getWebElement(elementName, pageName, options);
         return await this.interact.selectDropdown(element, dropdownOptions);
     }
 
@@ -376,7 +396,7 @@ export class Steps {
      */
     async dragAndDrop(elementName: string, pageName: string, dragOptions: DragAndDropOptions, options?: StepOptions): Promise<void> {
         log.interact('Dragging and dropping "%s" in "%s"', elementName, pageName);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const element = await this.getWebElement(elementName, pageName, options);
         await this.interact.dragAndDrop(element, dragOptions);
     }
 
@@ -393,7 +413,7 @@ export class Steps {
         log.interact('Dragging and dropping "%s" in "%s"', elementText, pageName);
         const element = await this.repo.getByText(elementName, pageName, elementText);
         if (!element) throw new Error(`No element with text "${elementText}" found for "${elementName}" in "${pageName}"`);
-        await this.interact.dragAndDrop(element, dragOptions);
+        await this.interact.dragAndDrop(element as WebElement, dragOptions);
     }
 
     /**
@@ -405,7 +425,7 @@ export class Steps {
      */
     async setSliderValue(elementName: string, pageName: string, value: number, options?: StepOptions): Promise<void> {
         log.interact('Setting slider "%s" in "%s" to value: %d', elementName, pageName, value);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const element = await this.getWebElement(elementName, pageName, options);
         await this.interact.setSliderValue(element, value);
     }
 
@@ -434,7 +454,7 @@ export class Steps {
         options?: StepOptions
     ): Promise<void> {
         log.interact('Typing "%s" sequentially into "%s" in "%s" (delay: %dms)', text, elementName, pageName, delay);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const element = await this.getWebElement(elementName, pageName, options);
         await this.interact.typeSequentially(element, text, delay);
     }
 
@@ -446,7 +466,7 @@ export class Steps {
      */
     async clearInput(elementName: string, pageName: string, options?: StepOptions): Promise<void> {
         log.interact('Clearing input "%s" in "%s"', elementName, pageName);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const element = await this.getWebElement(elementName, pageName, options);
         await this.interact.clearInput(element);
     }
 
@@ -460,7 +480,7 @@ export class Steps {
      */
     async selectMultiple(elementName: string, pageName: string, values: string[], options?: StepOptions): Promise<string[]> {
         log.interact('Selecting multiple values on "%s" in "%s": %O', elementName, pageName, values);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const element = await this.getWebElement(elementName, pageName, options);
         return await this.interact.selectMultiple(element, values);
     }
 
@@ -477,7 +497,7 @@ export class Steps {
      */
     async getText(elementName: string, pageName: string, options?: StepOptions): Promise<string | null> {
         log.extract('Getting text from "%s" in "%s"', elementName, pageName);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const element = await this.getWebElement(elementName, pageName, options);
         return await this.extract.getText(element);
     }
 
@@ -491,7 +511,7 @@ export class Steps {
      */
     async getAttribute(elementName: string, pageName: string, attributeName: string, options?: StepOptions): Promise<string | null> {
         log.extract('Getting attribute "%s" from "%s" in "%s"', attributeName, elementName, pageName);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const element = await this.getWebElement(elementName, pageName, options);
         return await this.extract.getAttribute(element, attributeName);
     }
 
@@ -504,7 +524,7 @@ export class Steps {
      */
     async getCount(elementName: string, pageName: string, options?: StepOptions): Promise<number> {
         log.extract('Getting count of "%s" in "%s"', elementName, pageName);
-        const element = await this.repo.get(elementName, pageName, this.toAllResolutionOptions(options));
+        const element = await this.getAllWebElement(elementName, pageName, options);
         return await this.extract.getCount(element);
     }
 
@@ -517,7 +537,7 @@ export class Steps {
      */
     async getInputValue(elementName: string, pageName: string, options?: StepOptions): Promise<string> {
         log.extract('Getting input value of "%s" in "%s"', elementName, pageName);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const element = await this.getWebElement(elementName, pageName, options);
         return await this.extract.getInputValue(element);
     }
 
@@ -531,7 +551,7 @@ export class Steps {
      */
     async getCssProperty(elementName: string, pageName: string, property: string, options?: StepOptions): Promise<string> {
         log.extract('Getting CSS "%s" from "%s" in "%s"', property, elementName, pageName);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const element = await this.getWebElement(elementName, pageName, options);
         return await this.extract.getCssProperty(element, property);
     }
 
@@ -545,7 +565,9 @@ export class Steps {
      */
     async getAll(elementName: string, pageName: string, getAllOptions?: GetAllOptions, options?: StepOptions): Promise<string[]> {
         log.extract('Extracting all from "%s" in "%s"', elementName, pageName);
-        let element = await this.repo.get(elementName, pageName, this.toAllResolutionOptions(options));
+        // `locateChild` widens the return type back to Element, so keep the
+        // local as Element and narrow at the extract boundary.
+        let element: Element = await this.getAllWebElement(elementName, pageName, options);
 
         if (getAllOptions?.child) {
             if (typeof getAllOptions.child === 'string') {
@@ -562,7 +584,7 @@ export class Steps {
             return values.filter((v): v is string => v !== null);
         }
 
-        return await this.extract.getAllTexts(element);
+        return await this.extract.getAllTexts(element as WebElement);
     }
 
     // ==========================================
@@ -596,7 +618,7 @@ export class Steps {
     async isPresent(elementName: string, pageName: string, options?: StepOptions): Promise<boolean> {
         log.verify('Checking presence of "%s" in "%s"', elementName, pageName);
         try {
-            const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+            const element = await this.getWebElement(elementName, pageName, options);
             return await element.isVisible();
         } catch {
             return false;
@@ -877,7 +899,7 @@ export class Steps {
      */
     async clickListedElement(elementName: string, pageName: string, options: ListedElementMatch): Promise<void> {
         log.interact('Clicking listed element in "%s" > "%s" with options: %O', pageName, elementName, options);
-        const baseElement = await this.repo.get(elementName, pageName, { strategy: SelectionStrategy.ALL });
+        const baseElement = await this.getAllWebElement(elementName, pageName);
         const target = await this.interact.getListedElement(baseElement, options, this.repo);
         await this.interact.click(target);
     }
@@ -890,7 +912,7 @@ export class Steps {
      */
     async verifyListedElement(elementName: string, pageName: string, options: VerifyListedOptions): Promise<void> {
         log.verify('Verifying listed element in "%s" > "%s" with options: %O', pageName, elementName, options);
-        const baseElement = await this.repo.get(elementName, pageName, { strategy: SelectionStrategy.ALL });
+        const baseElement = await this.getAllWebElement(elementName, pageName);
         const target = await this.interact.getListedElement(baseElement, options, this.repo);
 
         if (options.expectedText !== undefined) {
@@ -920,7 +942,7 @@ export class Steps {
      */
     async getListedElementData(elementName: string, pageName: string, options: GetListedDataOptions): Promise<string | null> {
         log.extract('Extracting data from listed element in "%s" > "%s" with options: %O', pageName, elementName, options);
-        const baseElement = await this.repo.get(elementName, pageName, { strategy: SelectionStrategy.ALL });
+        const baseElement = await this.getAllWebElement(elementName, pageName);
         const target = await this.interact.getListedElement(baseElement, options, this.repo);
 
         if (options.extractAttribute) {
@@ -948,7 +970,7 @@ export class Steps {
         options?: StepOptions
     ): Promise<void> {
         log.wait('Waiting for "%s" in "%s" to be "%s"', elementName, pageName, state);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const element = await this.getWebElement(elementName, pageName, options);
         try {
             await element.waitFor({ state, timeout: this.timeout });
         } catch {
@@ -970,7 +992,7 @@ export class Steps {
         options?: StepOptions
     ): Promise<void> {
         log.interact('Waiting for "%s" in "%s" to be "%s", then clicking', elementName, pageName, state);
-        const element = await this.repo.get(elementName, pageName, this.toResolutionOptions(options));
+        const element = await this.getWebElement(elementName, pageName, options);
         await this.utils.waitForState(element, state);
         await this.interact.click(element);
     }
@@ -986,7 +1008,7 @@ export class Steps {
         log.interact('Clicking element at index %d of "%s" in "%s"', index, elementName, pageName);
         const element = await this.repo.getByIndex(elementName, pageName, index);
         if (!element) throw new Error(`No element at index ${index} for "${elementName}" in "${pageName}"`);
-        await this.interact.click(element);
+        await this.interact.click(element as WebElement);
     }
 
     // ==========================================
@@ -1075,7 +1097,7 @@ export class Steps {
     async screenshot(elementNameOrOptions?: string | ScreenshotOptions, pageName?: string, options?: ScreenshotOptions): Promise<Buffer> {
         if (typeof elementNameOrOptions === 'string' && pageName) {
             log.extract('Taking screenshot of "%s" in "%s"', elementNameOrOptions, pageName);
-            const element = await this.repo.get(elementNameOrOptions, pageName);
+            const element = await this.getWebElement(elementNameOrOptions, pageName);
             return await this.extract.screenshot(element, options);
         }
 

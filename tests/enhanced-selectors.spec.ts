@@ -219,6 +219,59 @@ test.describe('Enhanced Selectors — Issue Fixes #61-#65', () => {
   });
 
   // ============================================================
+  // #70 — Unified isVisible() dual-behavior (probe + gate)
+  // ============================================================
+
+  test('#70: isVisible — probe mode via top-level Steps API (backwards compat with old boolean return)', async ({ steps }) => {
+    // `await steps.isVisible(...)` still resolves to boolean at runtime.
+    const ok: boolean = await steps.isVisible('promoBanner', 'EnhancedSelectorsPage');
+    expect(ok).toBe(true);
+
+    const hidden: boolean = await steps.isVisible('alwaysHidden', 'EnhancedSelectorsPage', { timeout: 500 });
+    expect(hidden).toBe(false);
+  });
+
+  test('#70: isVisible — probe via fluent API also resolves to boolean', async ({ steps }) => {
+    const ok: boolean = await steps.on('promoBanner', 'EnhancedSelectorsPage').isVisible();
+    expect(ok).toBe(true);
+  });
+
+  test('#70: isVisible — gate path skips click on hidden element silently', async ({ steps }) => {
+    await test.step('Gate on hidden element — click is skipped', async () => {
+      await steps.isVisible('alwaysHidden', 'EnhancedSelectorsPage', { timeout: 500 }).click();
+      // No error — click was gated.
+    });
+
+    await test.step('Gate on visible element — click executes', async () => {
+      await steps.isVisible('toggleBannerBtn', 'EnhancedSelectorsPage').click();
+    });
+
+    await test.step('Banner toggled off after the gate-passed click', async () => {
+      const stillVisible = await steps.isVisible('promoBanner', 'EnhancedSelectorsPage', { timeout: 500 });
+      expect(stillVisible).toBe(false);
+    });
+  });
+
+  test('#70: isVisible — containsText filter applies to both probe and action gate', async ({ steps }) => {
+    await test.step('Probe — containsText matches', async () => {
+      const match = await steps.isVisible('promoBanner', 'EnhancedSelectorsPage', { containsText: '50% off' });
+      expect(match).toBe(true);
+    });
+
+    await test.step('Probe — containsText does not match', async () => {
+      const noMatch = await steps.isVisible('promoBanner', 'EnhancedSelectorsPage', { containsText: 'nonexistent-copy' });
+      expect(noMatch).toBe(false);
+    });
+  });
+
+  test('#70: isVisible — matcher tree (fluent) silently skips when hidden', async ({ steps }) => {
+    // Hidden element — the matcher tree assertion should NOT throw because the
+    // visibility gate inherited from the chain makes the assertion skip.
+    await steps.on('alwaysHidden', 'EnhancedSelectorsPage').isVisible({ timeout: 500 }).text.toBe('anything');
+  });
+
+
+  // ============================================================
   // #62 — Iframe / Cross-Frame Scope
   // ============================================================
 

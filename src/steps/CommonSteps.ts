@@ -908,7 +908,12 @@ export class Steps {
         }
 
         if (options.expected) {
-            await this.verify.attribute(target, options.expected.name, options.expected.value);
+            const { name, value } = options.expected;
+            if (typeof value === 'string') {
+                await this.verify.attribute(target, name, value);
+            } else {
+                await this.verify.attributeMatches(target, name, new RegExp(value.regex, value.flags));
+            }
             return;
         }
 

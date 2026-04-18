@@ -81,15 +81,54 @@ export interface DragAndDropOptions {
 }
 
 /**
+ * A match value for listed-element filters.
+ *
+ * - A plain `string` matches as a substring (existing semantics — kept for
+ *   backwards compatibility with every pre-0.2.6 call site).
+ * - A `{ regex, flags? }` object is compiled into a `RegExp` and used to
+ *   match via Playwright's filter APIs. Use this for multi-language text
+ *   matching and any pattern-based narrowing (e.g. list items whose label
+ *   matches `/delivery fee|entrega|Liefergebühr/i`).
+ *
+ * @example
+ * { regex: 'Sandycove|Burgatia|Owenahincha', flags: 'i' }
+ */
+export type TextMatcher = string | { regex: string; flags?: string };
+
+/**
  * Core match criteria for locating a specific element within a list.
- * Provide either `text` (visible text match) or `attribute` (HTML attribute match).
- * Optionally drill into a child element with `child`.
+ *
+ * The listed element is identified by EITHER `text` (visible text match) OR
+ * `attribute` (HTML attribute name-value match). Both can be combined with
+ * `withDescendant` to additionally filter by the presence or text of a
+ * descendant element — useful when the list item itself doesn't carry the
+ * distinguishing signal but one of its children does.
+ *
+ * `child` drills into a descendant AFTER the item is matched (for assertion
+ * or extraction downstream), where `withDescendant` narrows WHICH item is
+ * matched in the first place.
  */
 export interface ListedElementMatch {
-    /** Match the listed element by its visible text content. */
-    text?: string;
-    /** Match the listed element by an HTML attribute name-value pair. */
-    attribute?: { name: string; value: string };
+    /** Match the listed element by its visible text content. String = substring, object = regex. */
+    text?: TextMatcher;
+    /** Match the listed element by an HTML attribute. String value = substring, object = regex. */
+    attribute?: { name: string; value: TextMatcher };
+    /**
+     * Filter list items that contain a descendant matching this criterion.
+     * Composes with `text` / `attribute` (AND logic — the item must satisfy
+     * both the top-level match and the descendant filter).
+     *
+     * @example
+     * // "find the orderSummaryRow whose `amount` child reads /delivery/i"
+     * { withDescendant: { child: { pageName: 'CheckoutPage', elementName: 'amount' },
+     *                     text: { regex: 'delivery', flags: 'i' } } }
+     */
+    withDescendant?: {
+        /** The descendant to look for — CSS selector or page-repository reference. */
+        child: string | { pageName: string; elementName: string };
+        /** Optional text match on the descendant. When omitted, only presence is required. */
+        text?: TextMatcher;
+    };
     /** Target a child within the matched element — a CSS selector or a page-repository reference. */
     child?: string | { pageName: string; elementName: string };
 }
@@ -104,8 +143,8 @@ export interface ListedElementMatch {
 export interface VerifyListedOptions extends ListedElementMatch {
     /** Assert that the resolved element's text matches this value. */
     expectedText?: string;
-    /** Assert that the resolved element has this attribute name-value pair. */
-    expected?: { name: string; value: string };
+    /** Assert that the resolved element has this attribute name-value pair. `value` can be a string (exact match) or regex. */
+    expected?: { name: string; value: TextMatcher };
 }
 
 /**

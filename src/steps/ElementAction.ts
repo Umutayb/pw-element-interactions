@@ -129,8 +129,12 @@ export class ElementAction {
         }
     }
 
-    private async resolve(): Promise<Element> {
-        return this.repo.get(this.elementName, this.pageName, this.resolutionOptions);
+    private async resolve(): Promise<WebElement> {
+        return (await this.repo.get(this.elementName, this.pageName, this.resolutionOptions)) as WebElement;
+    }
+
+    private async resolveAll(): Promise<WebElement> {
+        return (await this.repo.get(this.elementName, this.pageName, { strategy: SelectionStrategy.ALL })) as WebElement;
     }
 
     // -- Terminal actions: interactions --
@@ -372,7 +376,7 @@ export class ElementAction {
      * `SelectionStrategy.ALL` regardless of any strategy selector.
      */
     async verifyImages(scroll: boolean = true): Promise<void> {
-        const element = await this.repo.get(this.elementName, this.pageName, { strategy: SelectionStrategy.ALL });
+        const element = await this.resolveAll();
         await this.interactions.verify.images(element, scroll);
     }
 
@@ -395,7 +399,7 @@ export class ElementAction {
      * compared against `expectedTexts`.
      */
     async verifyOrder(expectedTexts: string[]): Promise<void> {
-        const element = await this.repo.get(this.elementName, this.pageName, { strategy: SelectionStrategy.ALL });
+        const element = await this.resolveAll();
         await this.interactions.verify.order(element, expectedTexts);
     }
 
@@ -406,7 +410,7 @@ export class ElementAction {
      * strategy selector on the chain.
      */
     async verifyListOrder(direction: 'asc' | 'desc'): Promise<void> {
-        const element = await this.repo.get(this.elementName, this.pageName, { strategy: SelectionStrategy.ALL });
+        const element = await this.resolveAll();
         await this.interactions.verify.listOrder(element, direction);
     }
 
@@ -470,7 +474,7 @@ export class ElementAction {
         // work even when the default `.first()` narrowing has been applied.
         // Other fields use the narrowed element so strategy selectors
         // (nth / byText / byAttribute) still scope to the chosen element.
-        const allElement = await this.repo.get(this.elementName, this.pageName, { strategy: SelectionStrategy.ALL });
+        const allElement = await this.resolveAll();
         // getAllAttributes is web-only (DOM iteration); narrow for that one read.
         const firstAsWeb = first as WebElement;
 
@@ -495,7 +499,7 @@ export class ElementAction {
             conditionalVisible: this.conditionalVisible,
             visibilityTimeout: this.visibilityTimeout,
             resolveElement: () => this.resolve(),
-            resolveAll: () => this.repo.get(this.elementName, this.pageName, { strategy: SelectionStrategy.ALL }),
+            resolveAll: () => this.resolveAll(),
             captureSnapshot: () => this.captureSnapshot(),
             verify: this.interactions.verify,
         };

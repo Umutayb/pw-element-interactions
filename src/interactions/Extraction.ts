@@ -1,7 +1,7 @@
 import { Page } from '@playwright/test';
 import { Utils } from '../utils/ElementUtilities';
 import { ScreenshotOptions } from '../enum/Options';
-import { Element } from '@civitas-cerebrum/element-repository';
+import { WebElement } from '@civitas-cerebrum/element-repository';
 
 /**
  * Read-only accessors for element data: text, attributes, CSS, counts, and
@@ -22,44 +22,44 @@ export class Extractions {
     }
 
     /** Safely retrieves and trims the text content of an element. */
-    async getText(target: Element): Promise<string | null> {
+    async getText(target: WebElement): Promise<string | null> {
         await this.utils.waitForState(target, 'attached');
         const text = await target.textContent();
         return text?.trim() ?? null;
     }
 
     /** Retrieves the value of a specified attribute. */
-    async getAttribute(target: Element, attributeName: string): Promise<string | null> {
+    async getAttribute(target: WebElement, attributeName: string): Promise<string | null> {
         await this.utils.waitForState(target, 'attached');
         return target.getAttribute(attributeName);
     }
 
     /** Retrieves the trimmed text content of every element matching the locator. */
-    async getAllTexts(target: Element): Promise<string[]> {
+    async getAllTexts(target: WebElement): Promise<string[]> {
         const all = await target.all();
         const texts = await Promise.all(all.map(e => e.textContent()));
         return texts.map(t => (t ?? '').trim());
     }
 
     /** Retrieves the current value of an input, textarea, or select element. */
-    async getInputValue(target: Element): Promise<string> {
+    async getInputValue(target: WebElement): Promise<string> {
         await this.utils.waitForState(target, 'attached');
         return target.inputValue();
     }
 
     /** Returns the number of DOM elements matching the target. */
-    async getCount(target: Element): Promise<number> {
+    async getCount(target: WebElement): Promise<number> {
         return target.count();
     }
 
     /** Retrieves a computed CSS property value from an element. */
-    async getCssProperty(target: Element, property: string): Promise<string> {
+    async getCssProperty(target: WebElement, property: string): Promise<string> {
         await this.utils.waitForState(target, 'attached');
         return target.getCssProperty(property);
     }
 
     /** Captures a screenshot of the full page or a specific element. */
-    async screenshot(target?: Element, options?: ScreenshotOptions): Promise<Buffer> {
+    async screenshot(target?: WebElement, options?: ScreenshotOptions): Promise<Buffer> {
         if (target) {
             return target.screenshot({ path: options?.path });
         }

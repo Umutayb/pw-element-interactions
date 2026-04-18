@@ -1,4 +1,4 @@
-import { Element } from '@civitas-cerebrum/element-repository';
+import { WebElement } from '@civitas-cerebrum/element-repository';
 import { log } from '../logger/Logger';
 
 /**
@@ -29,7 +29,7 @@ export class Utils {
      * @param timeout - Per-call timeout override. Falls back to the instance timeout when omitted.
      */
     async waitForState(
-        element: Element,
+        element: WebElement,
         state: 'visible' | 'attached' | 'hidden' | 'detached' = 'visible',
         timeout?: number,
     ): Promise<void> {

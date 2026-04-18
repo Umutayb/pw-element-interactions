@@ -93,7 +93,7 @@ test.describe('Negative Tests', () => {
     const rows = page.locator('[data-testid^="table-row-"]');
     await expect(async () => {
       await fast.interact.getListedElement(rows, {} as any);
-    }).rejects.toThrow('requires either "text" or "attribute"');
+    }).rejects.toThrow('requires "text", "attribute", or "withDescendant"');
     log('TC_084 Negative getListedElement missing criteria — passed');
   });
 

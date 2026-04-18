@@ -236,11 +236,122 @@ test.describe('TC_054: getListedElement (raw) — child variants and error cases
         await interactions.interact.getListedElement(baseElement(), {}, repo);
       } catch (e: unknown) {
         errorThrown = true;
-        expect((e as Error).message).toContain('requires either "text" or "attribute"');
+        expect((e as Error).message).toContain('requires "text", "attribute", or "withDescendant"');
       }
       expect(errorThrown).toBe(true);
     });
 
     log('TC_054 Raw getListedElement — passed');
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// TC_089: Listed-element regex + descendant filter (#69)
+// ──────────────────────────────────────────────────────────────────────────────
+
+test.describe('TC_089: ListedElementMatch — regex + withDescendant', () => {
+
+  test('regex text match picks any of several candidates', async ({ steps }) => {
+    await test.step('clickListedElement with regex alternation navigates to one of the matched categories', async () => {
+      // HomePage has Forms / Buttons / Text Inputs / etc. as category cards. Regex alternation
+      // must match ONE of them and click it, navigating away from home. If the regex didn't
+      // resolve to a real element, `verifyAbsence` below would fail (categories would still be
+      // visible on home).
+      await steps.navigateTo('/');
+      await steps.clickListedElement( 'categories','HomePage', {
+        text: { regex: 'Forms|Text Inputs|Buttons', flags: 'i' },
+      });
+      await steps.verifyAbsence( 'categories','HomePage');
+    });
+
+    await test.step('getListedElementData with regex text returns the matched row text', async () => {
+      // getListedElementData proves the regex path extracts the right element's text.
+      await steps.navigateTo('/');
+      await steps.click( 'tableLink','SidebarNav');
+      await steps.verifyUrlContains('/table');
+      const cellText = await steps.getListedElementData( 'rows','TablePage', {
+        text: { regex: 'Alice|Bob', flags: 'i' },
+        child: 'td:nth-child(2)',
+      });
+      expect(cellText).toMatch(/Alice|Bob/i);
+    });
+  });
+
+  test('regex attribute match narrows by attribute value pattern', async ({ steps }) => {
+    await test.step('Navigate to Table page', async () => {
+      await steps.navigateTo('/');
+      await steps.click( 'tableLink','SidebarNav');
+      await steps.verifyUrlContains('/table');
+    });
+
+    await test.step('verifyListedElement with regex attribute value', async () => {
+      // Table rows carry data-testid="table-row-N" — match any row by /^table-row-/.
+      await steps.verifyListedElement( 'rows','TablePage', {
+        attribute: { name: 'data-testid', value: { regex: '^table-row-\\d+$' } },
+      });
+    });
+  });
+
+  test('withDescendant filters items by a child repo reference', async ({ steps }) => {
+    await test.step('Navigate to Table page', async () => {
+      await steps.navigateTo('/');
+      await steps.click( 'tableLink','SidebarNav');
+      await steps.verifyUrlContains('/table');
+    });
+
+    await test.step('Pick the row whose nameCell text matches "Alice"', async () => {
+      // The outer listed element is `rows`; we want "the row whose nameCell descendant
+      // contains Alice". Previously this required a manual page.locator().filter() call.
+      const cellText = await steps.getListedElementData( 'rows','TablePage', {
+        withDescendant: {
+          child: { pageName: 'TablePage', elementName: 'nameCell' },
+          text: { regex: 'Alice', flags: 'i' },
+        },
+        child: 'td:nth-child(2)',
+      });
+      expect(cellText).toBe('Alice Martin');
+    });
+  });
+
+  test('withDescendant without `text` filters items that merely HAVE the descendant', async ({ steps }) => {
+    await test.step('Navigate to Table page', async () => {
+      await steps.navigateTo('/');
+      await steps.click( 'tableLink','SidebarNav');
+      await steps.verifyUrlContains('/table');
+    });
+
+    await test.step('verifyListedElement — rows that have a nameCell descendant', async () => {
+      await steps.verifyListedElement( 'rows','TablePage', {
+        withDescendant: { child: { pageName: 'TablePage', elementName: 'nameCell' } },
+      });
+    });
+  });
+
+  test('throws when no matching criterion is provided', async ({ page, repo, interactions }) => {
+    await interactions.navigate.toUrl('/table');
+    const base = new WebElement(page.locator(repo.getSelector('rows', 'TablePage')));
+    let errorThrown = false;
+    try {
+      await interactions.interact.getListedElement(base, {}, repo);
+    } catch (e: unknown) {
+      errorThrown = true;
+      expect((e as Error).message).toContain('requires "text", "attribute", or "withDescendant"');
+    }
+    expect(errorThrown).toBe(true);
+  });
+
+  test('regex attribute match throws when no candidate matches the pattern', async ({ page, repo, interactions }) => {
+    await interactions.navigate.toUrl('/table');
+    const base = new WebElement(page.locator(repo.getSelector('rows', 'TablePage')));
+    let errorThrown = false;
+    try {
+      await interactions.interact.getListedElement(base, {
+        attribute: { name: 'data-testid', value: { regex: '^nonexistent-row-pattern-' } },
+      }, repo);
+    } catch (e: unknown) {
+      errorThrown = true;
+      expect((e as Error).message).toContain('No listed element found with attribute');
+    }
+    expect(errorThrown).toBe(true);
   });
 });

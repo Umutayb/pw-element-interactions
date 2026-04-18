@@ -1,7 +1,30 @@
 import { Page } from '@playwright/test';
-import { ClickOptions, DropdownSelectOptions, DropdownSelectType, DragAndDropOptions, ListedElementMatch, ActionTimeoutOptions } from '../enum/Options';
+import { ClickOptions, DropdownSelectOptions, DropdownSelectType, DragAndDropOptions, ListedElementMatch, ActionTimeoutOptions, TextMatcher } from '../enum/Options';
 import { Utils } from '../utils/ElementUtilities';
 import { Element, WebElement } from '@civitas-cerebrum/element-repository';
+
+/**
+ * Normalizes a `TextMatcher` into a string (for substring matching) or
+ * RegExp (for pattern matching). `undefined` passes through so callers can
+ * easily check "was a matcher provided?".
+ */
+function compileTextMatcher(matcher: TextMatcher): string | RegExp;
+function compileTextMatcher(matcher: TextMatcher | undefined): string | RegExp | undefined;
+function compileTextMatcher(matcher: TextMatcher | undefined): string | RegExp | undefined {
+    if (matcher === undefined) return undefined;
+    if (typeof matcher === 'string') return matcher;
+    return new RegExp(matcher.regex, matcher.flags);
+}
+
+/**
+ * Escapes regex metacharacters in a string so it can be embedded as a literal
+ * pattern. Used for the case-insensitive fallback when a plain `text: string`
+ * matcher needs to be re-tried as a regex.
+ */
+function escapeRegex(input: string): string {
+    return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 
 /**
  * The `Interactions` class provides a robust set of methods for interacting
@@ -308,30 +331,83 @@ export class Interactions {
         options: ListedElementMatch,
         repo?: { getSelector(elementName: string, pageName: string): string },
     ): Promise<Element> {
-        let matched: Element;
-
-        if (options.text) {
-            const caseSensitive = base.filter({ hasText: options.text }).first();
-            if ((await caseSensitive.count()) > 0) {
-                matched = caseSensitive;
-            } else {
-                const escaped = options.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                matched = base.filter({ hasText: new RegExp(escaped, 'i') }).first();
-            }
-        } else if (options.attribute) {
-            // Locator.and() composition has no Element equivalent today — drop to Locator internally.
-            const baseLocator = (base as WebElement).locator;
-            matched = new WebElement(
-                baseLocator
-                    .and(this.page.locator(`[${options.attribute.name}="${options.attribute.value}"]`))
-                    .first(),
-            );
-        } else {
-            throw new Error('ListedElementOptions requires either "text" or "attribute" to identify the element.');
+        if (!options.text && !options.attribute && !options.withDescendant) {
+            throw new Error('ListedElementOptions requires "text", "attribute", or "withDescendant" to identify the element.');
         }
+
+        // Stage 1 — narrow by `text` OR `attribute` (whichever is provided).
+        // A regex `text` matches directly; a plain string retries case-insensitively
+        // if the exact substring misses (back-compat with v0.2.5 behavior).
+        let narrowed: Element = base;
+
+        if (options.text !== undefined) {
+            const compiled = compileTextMatcher(options.text);
+            if (compiled instanceof RegExp) {
+                narrowed = narrowed.filter({ hasText: compiled });
+            } else {
+                const caseSensitive = narrowed.filter({ hasText: compiled });
+                if ((await caseSensitive.count()) > 0) {
+                    narrowed = caseSensitive;
+                } else {
+                    narrowed = narrowed.filter({ hasText: new RegExp(escapeRegex(compiled), 'i') });
+                }
+            }
+        }
+
+        if (options.attribute !== undefined) {
+            const { name, value } = options.attribute;
+            // `locator.and()` composes attribute narrowing on the base locator.
+            // No Element equivalent today — drop to Locator internally.
+            const current = (narrowed as WebElement).locator;
+
+            if (typeof value === 'string') {
+                // Exact-string attribute match via CSS selector composition.
+                narrowed = new WebElement(current.and(this.page.locator(`[${name}="${value}"]`)));
+            } else {
+                // Regex attribute match — CSS attribute selectors don't express regex,
+                // so narrow to candidates with the attribute present, then test each
+                // attribute value against the pattern in JS.
+                const pattern = compileTextMatcher(value) as RegExp;
+                const candidates = current.and(this.page.locator(`[${name}]`));
+                const all = await candidates.all();
+                let picked: (typeof all)[number] | null = null;
+                for (const candidate of all) {
+                    const actual = await candidate.getAttribute(name);
+                    if (actual !== null && pattern.test(actual)) {
+                        picked = candidate;
+                        break;
+                    }
+                }
+                if (!picked) {
+                    throw new Error(`No listed element found with attribute "${name}" matching ${pattern}.`);
+                }
+                narrowed = new WebElement(picked);
+            }
+        }
+
+        // Stage 2 — optionally filter further by descendant presence / text.
+        if (options.withDescendant) {
+            const desc = options.withDescendant;
+            const childSelector = typeof desc.child === 'string'
+                ? desc.child
+                : (repo
+                    ? repo.getSelector(desc.child.elementName, desc.child.pageName)
+                    : (() => { throw new Error('An ElementRepository instance is required when `withDescendant.child` is a page-repository reference.'); })());
+            const current = (narrowed as WebElement).locator;
+            const descendantLocator = this.page.locator(childSelector);
+            const textMatcher = compileTextMatcher(desc.text);
+            const filterOpts = textMatcher !== undefined
+                ? { has: descendantLocator.filter({ hasText: textMatcher }) }
+                : { has: descendantLocator };
+            narrowed = new WebElement(current.filter(filterOpts));
+        }
+
+        // Always take the first match after all filters compose.
+        const matched: Element = narrowed.first();
 
         await this.utils.waitForState(matched, 'visible');
 
+        // Stage 3 — optionally drill into a child for the returned locator.
         if (!options.child) {
             return matched;
         }

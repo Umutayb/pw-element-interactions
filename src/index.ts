@@ -38,6 +38,10 @@ export type { ElementSnapshot, ExpectContext } from './steps/ExpectMatchers';
 // Test Fixture
 export { baseFixture, BaseFixtureOptions } from './fixture/BaseFixture';
 
+// Re-export Playwright's `expect` so consumers don't need a separate
+// `@playwright/test` import alongside the package's fluent expect API.
+export { expect } from '@playwright/test';
+
 // Re-exports from @civitas-cerebrum/email-client
 export { EmailClient } from '@civitas-cerebrum/email-client';
 export type {

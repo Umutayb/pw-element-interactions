@@ -48,7 +48,7 @@ Repeat until 100% coverage is reached — every page, every user flow, every int
 
 ## Step 1: Inventory & Prioritize
 
-List every test that currently exists. If a journey map exists (`tests/e2e/docs/journey-map.md`), use it as the source of truth for what needs coverage. If no journey map exists, invoke the `journey-mapping` skill first — test-composer must not proceed without one.
+List every test that currently exists. If a journey map exists (`tests/e2e/docs/journey-map.md`), verify the first line is the sentinel `<!-- journey-mapping:generated -->` before trusting it — only a sentinel-bearing file is considered a valid journey map produced by the `journey-mapping` skill. If no journey map exists, or the file is present but missing the sentinel, invoke the `journey-mapping` skill first and do not proceed until it returns a sentinel-bearing map. Test-composer must not parse or plan against a foreign `journey-map.md`.
 
 **How to inventory:**
 ```bash

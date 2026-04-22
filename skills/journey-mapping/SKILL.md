@@ -222,6 +222,36 @@ The flow list from Phase 2, now with priorities assigned:
 
 ---
 
+## Phase 3.5: Redundancy Revision
+
+Before writing the journey map, scan the prioritised journey list for redundancy. Overlap between journeys is expected — real users traverse shared pages — but unmanaged overlap bloats the map and makes downstream parallel test composition harder. Revision rebalances the list.
+
+### Checks
+
+1. **Shared-segment extraction.** Any two journeys that share three or more consecutive steps on the same pages: extract the shared segment as a named sub-journey (`sj-<slug>`) and reference it from both parent journeys.
+2. **Variant collapse.** Any two journeys that differ only in their final step or final page: consider merging as one journey with labelled variant exits.
+3. **Decomposition.** Any single journey that chains multiple distinct user goals (e.g., "browse → purchase → manage account"): split into smaller journeys and record the cross-journey entry points explicitly.
+4. **Explicit overlap annotation.** Where two journeys legitimately pass through the same page for different goals, annotate the page's role per journey on the journey blocks rather than silently.
+
+### Process
+
+1. Build a page × journey matrix from the Phase 2 flow list.
+2. Scan row-by-row and column-by-column for the patterns above.
+3. For each match, propose a revision and apply it to the journey list.
+4. Emit a one-line revision log entry per change (e.g., "extracted sj-login from j-book-demo and j-request-quote").
+
+### Output
+
+A revised journey list where:
+- Shared segments live as reusable sub-journeys (`sj-<slug>`).
+- Each remaining journey has a stable ID (`j-<slug>`).
+- Each journey's `Pages touched:` list is concrete.
+- Every overlap between journeys is either routed through a sub-journey or explicitly annotated.
+
+This revised list feeds Phase 4.
+
+---
+
 ## Phase 4: Journey Map Document
 
 Write the complete journey map to `tests/e2e/docs/journey-map.md`. This is the blueprint that test-composer uses to determine what to implement and in what order.

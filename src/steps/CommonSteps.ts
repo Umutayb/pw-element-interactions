@@ -685,8 +685,9 @@ export class Steps {
      * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
      * @param expectedText - The exact text to match against. Omit to assert "not empty".
-     * @param verifyOptions - Optional verification options.
-     *   @deprecated Passing `{ notEmpty: true }` is redundant — omit `expectedText` instead.
+     * @param verifyOptions - Optional verification options. Passing `{ notEmpty: true }`
+     *   is redundant — omit `expectedText` to get the same behavior. The `notEmpty`
+     *   flag on `TextVerifyOptions` is itself deprecated.
      * @param options - Optional step options for element resolution.
      */
     async verifyText(elementName: string, pageName: string, expectedText?: string, verifyOptions?: TextVerifyOptions, options?: StepOptions): Promise<void> {

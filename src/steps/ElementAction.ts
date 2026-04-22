@@ -289,8 +289,9 @@ export class ElementAction {
      * Assert the element's text content. Call with no argument to assert "not empty".
      *
      * @param expected - Expected exact text. Omit to assert the element has any non-empty text.
-     * @param options - Optional verification options.
-     *   @deprecated Passing `{ notEmpty: true }` is redundant — omit `expected` instead.
+     * @param options - Optional verification options. Passing `{ notEmpty: true }`
+     *   is redundant — omit `expected` to get the same behavior. The `notEmpty`
+     *   flag on `TextVerifyOptions` is itself deprecated.
      */
     async verifyText(expected?: string, options?: TextVerifyOptions): Promise<void> {
         if (options?.notEmpty !== undefined) {

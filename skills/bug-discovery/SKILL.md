@@ -356,3 +356,17 @@ After generating the report, ask:
 > "Bug discovery report written to `docs/e2e/bug-discovery-report.md`. Would you also like me to create GitHub issues for the confirmed bugs?"
 
 If the user agrees, create one issue per confirmed bug with the same structure as the report entry, labeled `bug` and `bug-discovery`.
+
+---
+
+## Invocation options
+
+bug-discovery accepts one optional parameter via `args`.
+
+| Mode | Behaviour |
+|---|---|
+| `phase: 'full'` (default) | Run Phase 1a (Element Probing), Phase 1b (Flow Probing), and everything downstream as documented above. |
+| `phase: '1a-element-probing'` | Run Phase 1a only. Write findings to `onboarding-report.md` (or the default bug report file). Do not run Phase 1b. |
+| `phase: '1b-flow-probing'` | Run Phase 1b only. Require that Phase 1a has already been run in a prior session (findings file exists). Use those findings to prioritise flow probes. |
+
+Parameter parsing: recognise the literal substrings `1a-element-probing`, `1b-flow-probing`, or `full` in `args`. Default to `full`.

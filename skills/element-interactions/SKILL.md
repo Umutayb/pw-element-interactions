@@ -287,6 +287,7 @@ When the skill activates, **read the user's message first**. If they have alread
 Only show the greeting menu if the user's message is vague or just says something like "help me with Playwright tests":
 
 > "How can I help you today? I can:
+> - **Onboard a fresh project** — detect what's missing and run the full pipeline autonomously (scaffold → happy path → journey mapping → coverage expansion → bug hunts → summary)
 > - **Automate a scenario** — describe what you want to test, or give me a link to the app
 > - **Scale an existing project** — add more scenarios to an existing test suite
 > - **Fix or edit a test** — debug a failing test or modify an existing one
@@ -294,11 +295,51 @@ Only show the greeting menu if the user's message is vague or just says somethin
 
 ### Routing
 
+- **Onboarding intent** — phrases like "onboard this project", "set up element-interactions", "start from scratch", "automate this app from zero", OR a vague message on a project whose cascade detector (see below) reports a non-onboarded state → invoke the `onboarding` companion skill. Do not run Stages 1–4 inline.
 - **User already described a scenario** — Skip the greeting. Go directly to Stage 1 (fast path if scenario is complete, full discovery if vague).
 - **API question** — Answer directly from the API Reference section below. No stages needed.
 - **Fix or edit a test** — Skip to Stage 3 (Fix/Edit Mode).
 - **Scale existing project** — Read existing test files and `page-repository.json` first to understand current coverage, then proceed to Stage 1 with that context.
-- **Vague or no context** — Show the greeting menu and wait for the user's response.
+- **Vague or no context** — Run the onboarding cascade detector (see the `onboarding` skill). If it returns Level A, B, or C, invoke `onboarding`. If everything is present, show the greeting menu and wait.
+
+#### Onboarding cascade detector (quick reference)
+
+| Signal | Level | Action |
+|---|---|---|
+| `@civitas-cerebrum/element-interactions` not in `package.json` | A | Invoke `onboarding` |
+| Package present but any of `playwright.config.ts`, `tests/fixtures/base.ts`, `page-repository.json` missing | B | Invoke `onboarding` |
+| Scaffold present but `tests/e2e/docs/journey-map.md` missing OR missing sentinel on line 1 | C | Invoke `onboarding` |
+| All present | None | No action — greet as normal |
+
+---
+
+## Autonomous mode
+
+When the `onboarding` skill (or any other companion) invokes this orchestrator with `args` containing `autonomousMode: true`, the hard gates are disabled and Stages 1–4 run sequentially without prompts.
+
+### Required companion inputs
+
+When `autonomousMode: true`, the caller MUST provide:
+
+- `happyPathDescription: "<one sentence>"` — replaces the Stage-1 discovery conversation. The orchestrator reformats this into Given/When/Then silently.
+
+### Gate suspension
+
+In autonomous mode:
+
+- Stage-1 scenario approval — skipped. Reformatted scenario is treated as approved.
+- Stage-2 page-repository approval — skipped. Proposed entries are written directly (this is the ONLY exception to Rule 2, and it applies only inside autonomous mode).
+- Stage-3 stage-advancement prompts — skipped.
+- Stage-4 API Compliance Review — still runs, still fixes misuse. A failed review does NOT prompt; it auto-corrects and re-runs.
+- Failure-diagnosis on any test failure — still runs, still classifies. App bugs halt the autonomous flow and surface to the caller.
+
+### Commit discipline
+
+Autonomous mode still commits after each passing + compliant test, same as interactive mode. The caller is responsible for the outer commit boundary (e.g. the `test: happy path — <name>` commit from onboarding).
+
+### Returning control
+
+When Stages 1–4 complete in autonomous mode, the orchestrator returns to the caller with a short summary: `{ status: 'passed' | 'failed', testsWritten: [paths], appBugs: [...] }`. It does NOT advance to Stage 5 or show the Onboarding Completion Gate on its own — the caller decides what happens next.
 
 ---
 

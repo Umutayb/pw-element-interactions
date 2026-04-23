@@ -35,6 +35,31 @@ Do NOT use this for:
 
 ---
 
+## No-skip contract
+
+This section closes the "scope-to-gap-journeys" loophole that a 2026-04-23 Pass 2 run exposed (Wave 1 dispatched test-composer for 3 of 44 journeys, the orchestrator declared the other 41 "no-op by scoping," and marked Pass 2 complete). It stacks on top of §"Non-negotiables for depth mode" — that section ensures all 5 passes + cleanup run; this section ensures every pass covers every journey. Both sets of rules are hard rules, not guidance.
+
+1. **Every journey in the map gets a dispatch every compositional pass.** Pass 2 and Pass 3's wording "re-attempt any journey where pass 1 deferred stabilization or returned coverage gaps" names ONE legitimate reason to prioritise; it does NOT authorise skipping un-gapped journeys. Scoping the dispatch to only "interesting" journeys is a shortcut and constitutes partial-pass-completion.
+2. **Every journey in the map gets a dispatch every adversarial pass.** Pass 4 and Pass 5 run bug-discovery per journey — 0 journeys × Pass 4 is not Pass 4. A journey whose adversarial subagent returns "no meaningful boundaries found" must still be recorded in the ledger section with that result — the dispatch happened.
+3. **Every dispatch returns a structured result.** Options are `new-tests-landed`, `no-new-tests (exhaustively covered)`, `blocked (reason)`, or `skipped (reason + who-authorized)`. The fourth option (`skipped`) is only valid when the orchestrator has the user's explicit in-conversation authorisation to skip that specific journey; an LLM orchestrator may not authorise itself.
+4. **Scope compression is a caller-facing decision.** If the orchestrator determines before dispatching that a journey's Pass-N work is likely no-op, it still dispatches; if it wants to formally skip, it RETURNS TO THE CALLER with a scope-compression proposal and waits for the caller to approve. Silent scope compression is a contract violation.
+5. **No-op dispatches are cheap by design.** A well-behaved test-composer subagent, given an already-exhaustive journey, returns `no-new-tests` in seconds with no test-run — there is no budget justification for scope-compression on that basis.
+
+```
+❌ WRONG: "Pass 2 Wave 1 covered the 3 journeys with Pass-1 gaps; the remaining 41 had no
+   map-growth so I skipped them."
+
+✅ RIGHT: "Pass 2 dispatched test-composer for all 44 journeys in 11 waves of 4 parallel.
+   38 returned `no-new-tests` (exhaustive), 3 returned `new-tests-landed`, 3 returned
+   `blocked (tenant data)`. Pass 2 complete."
+```
+
+### Per-pass completion criteria — no silent compression
+
+This subsection extends §"Per-pass completion criteria" (see below). A pass's completion criteria are NOT satisfied by covering the journeys the orchestrator judged interesting. The criteria are satisfied by covering every journey in the map, with each covered journey returning one of the four structured results above. An orchestrator that writes "41 journeys had no gaps — no-op dispatches not run" in a state file is not writing a state file, it is writing a rationalisation; the state file should say either "pass complete, N/N journeys dispatched" or "pass incomplete, N/M journeys dispatched, waiting to resume."
+
+---
+
 ## Prerequisites
 
 1. `tests/e2e/docs/journey-map.md` must exist with `<!-- journey-mapping:generated -->` on line 1. If missing, stop and invoke `journey-mapping` first.

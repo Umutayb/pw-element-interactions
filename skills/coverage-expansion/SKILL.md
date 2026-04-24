@@ -356,12 +356,12 @@ Template (values filled in per pass, from the map index, independence graph, and
 [coverage-expansion] Pass <N>/5 — dispatching <test-composer | adversarial probe> per journey
   Journeys: <count> (<delta-note, e.g., "3 newly promoted in pass <N-1>">)
   Independence graph: <G> groups, <K>-way parallel dispatch possible (cap <C>)
-  Model mix: <opus-count> opus (P0/P1/complex), <sonnet-count> sonnet (P2/P3/simple)
+  Model mix: opus default for every Stage A and Stage B dispatch; narrow cycle-1 Stage B sonnet-confirmation exception may apply to ~<sonnet-count> previously-greenlit journeys (see §"Model selection").
   Expected wall-clock: ~<H>h at <K>-parallel
   Contract: every journey, this pass. No skips. No batching beyond the explicit P3-batching allowance.
 ```
 
-The model mix numbers come from the existing sonnet/opus heuristic applied to the current roster — do not recompute or soften the rule inside the preview. The wall-clock estimate is a ballpark from the per-subagent run times observed so far this run (or a default of ~20 min per opus dispatch / ~10 min per sonnet dispatch if no prior data exists).
+The model-mix figures derive from §"Model selection" — opus is the default across A and B, so the `<sonnet-count>` reports only the narrow cycle-1 Stage B confirmation exception (previously-greenlit journeys with no map delta). The wall-clock estimate is a ballpark from the per-subagent run times observed so far this run (or a default of ~20 min per opus dispatch if no prior data exists — sonnet-confirmation cycles don't get their own ballpark because they're a fast-path variant of the normal Stage B dispatch).
 
 Completion check: if a pass starts with N journeys and ends with returns from fewer than N, the orchestrator must re-dispatch the missing journeys before claiming the pass is complete. The preview's journey count is the ground truth for the end-of-pass reconciliation.
 

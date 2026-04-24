@@ -79,10 +79,11 @@ I will then, autonomously and without further prompts:
   • 2 bug-hunt passes (element probing, then flow probing)
   • Work summary deck + onboarding-report.md
 
-Scope preview — based on the journey count discovered in Phase-1, this run will dispatch:
-  • Phase 5 depth mode: ~<N> subagent dispatches across 5 passes + cleanup
+Scope preview — projected (Phase-1 discovery has NOT yet run at gate time, so these are
+pre-discovery estimates; actuals land after Phase 1 and are reported via progress lines):
+  • Phase 5 depth mode: ~<N_low>–<N_high> subagent dispatches across 5 passes + cleanup
     (every journey, every pass — no skips)
-  • Phase 6 bug hunts: ~<M> dispatches
+  • Phase 6 bug hunts: ~<M_low>–<M_high> dispatches
   • Parallel peak: <P> agents depending on credential availability
   • Model mix: sonnet for P2/P3 journeys with ≤8 steps; opus for P0/P1 and
     complex journeys (per the skill's dispatch heuristic)
@@ -98,14 +99,19 @@ Proceed? (y / cancel)
 
 Wait for the user's reply. On `y` / `yes` / `proceed` / equivalent affirmative, move to the pipeline. On `cancel` or equivalent, stop without running any phase. Do not offer a "reduce scope" option and do not treat arbitrary replies as scope-change requests — the only valid responses are `y` (proceed with full coverage) or `cancel`.
 
-**Populating the scope preview.** Derive the numbers from Phase-1 discovery before rendering the gate:
+**Populating the scope preview — pre-Phase-1 estimation.** The gate renders BEFORE Phase-1 discovery, so the scope-preview numbers are projections based on signals available at gate time, not measurements. Derive each value as follows:
 
-- `<N>` = journey count from Phase-1 × 5 (passes) + cleanup-pass estimate.
-- `<M>` = ~1 dispatch per P0/P1 journey for bug-hunt passes 1a and 1b combined.
-- `<P>` = min(4, credential-count-per-role) unless the shared-resource audit (below) reports a parallelism cap.
-- `<H1>–<H2>` = wall-clock band derived from `<N>` at `<P>`-way parallel.
+- `<N_low>–<N_high>` = `journeys_low × 5 + cleanup` to `journeys_high × 5 + cleanup`, where `journeys_low`/`journeys_high` is a journey-count band estimated from:
+  - the user-provided happy-path description (≥1 journey per major flow named),
+  - the top-level nav/link count on the app's homepage (one MCP fetch before the gate, counted as discovery preamble), and
+  - a fallback band of 15–40 if neither signal is reliable.
+- `<M_low>–<M_high>` = `journeys_low × 0.5` to `journeys_high × 0.5` (bug hunts target ~half the journey set).
+- `<P>` = min(4, credential-count-per-role from Phase-0 pre-flight) unless the shared-resource audit (below) reports a parallelism cap.
+- `<H1>–<H2>` = wall-clock band derived from `<N_high>` and `<N_low>` at `<P>`-way parallel.
 
-These are projections, not commitments. The skill proceeds at full coverage regardless of whether the actuals land at the low or high end of the band.
+After Phase-1 discovery completes, the orchestrator emits a progress line of the form `[onboarding] scope update: <N_actual> journeys discovered — projection was <N_low>–<N_high>, proceeding with full coverage`. It does NOT re-prompt the user — the single-gate contract is preserved. If the actual lands outside the projected band, the progress line makes that visible; the run continues regardless.
+
+**Why projections, not measurements.** Running Phase-1 discovery before the gate would (a) violate the single-front-load-gate contract the skill promises, and (b) spend budget on an app the user may still cancel. The band acknowledges this: the user commits to full coverage within an estimated envelope, the orchestrator updates the actuals post-Phase-1, and nothing about the full-coverage contract changes if the actuals differ.
 
 ### Shared-resource audit
 
@@ -121,7 +127,7 @@ Run the checklist below and, for each row with a positive detection, emit a one-
 | Shared tenant/workspace state | Single-tenant app with no per-user partition | Throwaway tenant for the run, or mandatory teardown hooks |
 | No UI delete for created entities | Static scan for `Delete`/`Verwijder` action absence on add-* pages | API-backdoor cleanup helper |
 
-Rendered example of the audit block inside the gate:
+Rendered example of the audit block inside the gate (positive detections):
 
 ```
 Shared-resource audit:
@@ -129,6 +135,15 @@ Shared-resource audit:
   • CSRF tokens session-bound → mandatory `test.describe.configure({ mode: 'serial' })` on mutating specs.
   • No UI delete for caregivers/locations → tenant pollution expected; API-backdoor cleanup required.
 ```
+
+**If the audit finds zero constraints**, the block still renders — silently skipping it would let a user assume the audit was not attempted. Render:
+
+```
+Shared-resource audit:
+  • No shared-resource constraints detected. Parallelism cap: P = <P>.
+```
+
+The audit block is never omitted from the gate. Empty-findings runs still emit the block with the no-constraints line so the audit's execution is always visible to the user.
 
 The audit output has two downstream effects, both informational-to-the-user but load-bearing for the pipeline:
 
@@ -200,6 +215,8 @@ Do **not** add, remove, or upgrade any other dependencies. Do **not** modify the
 > All screenshot artifacts write to `screenshots/<descriptive-name>.png`. Never bare basenames. This applies to MCP `browser_take_screenshot({ filename: ... })`, Playwright `page.screenshot({ path: ... })`, and any ledger reference citing a screenshot as evidence. Playwright failure screenshots write to `screenshots/failures/<test-name>-<timestamp>.png` (gitignored).
 
 This is a pure-hygiene rule enforced at the skill-brief level — bare-basename screenshots litter the repo root and break ledger references whose resolution depends on Node's CWD.
+
+**Brief-validation check before dispatch.** Before the orchestrator sends any Phase-3/5/6 subagent brief, it must grep the brief for `screenshots/` and for the bare-basename ban string above. A brief that omits the rule is malformed — the orchestrator regenerates it before dispatching rather than sending a brief that lets the subagent pick its own path convention. This is a one-line self-check, not a new review stage.
 
 **Commit:** `chore: scaffold element-interactions framework`.
 
@@ -320,6 +337,16 @@ Skill-level guidance, included verbatim in every subagent brief that uses MCP:
 > When the MCP has not produced output for ~120s, emit a heartbeat step — a trivial `browser_snapshot` or `browser_evaluate(() => Date.now())` — before continuing the main probe. This keeps the watchdog awake and prevents the silent 600s kill. The heartbeat is not a checkpoint and is not persisted to the ledger; its only purpose is to reset the watchdog clock.
 
 This is skill-level guidance, not a config knob. No flag to toggle, no threshold to tune — subagents emit the heartbeat when they notice the 120s window closing, and the orchestrator does not need to track it.
+
+**Rationalizations to reject:**
+
+| Excuse | Reality |
+|--------|---------|
+| "My current tool call is already in flight, no need for a heartbeat" | A tool call that's been in flight for 120s has already burned the window. The heartbeat is not for when the MCP is actively producing — it is for the gap *between* your own tool calls and for any single call whose server-side work exceeds the window. |
+| "I'll heartbeat every 30s to be safe" | Over-heartbeating wastes MCP round-trips and clutters subagent transcripts. 120s is the floor; heartbeat when the window is closing, not preemptively. |
+| "The watchdog is 600s, I have plenty of margin" | You have 600s of *total* silence. Each prior tool's analysis and reasoning eats into it. By the time you notice, you have seconds left. Heartbeat at ~120s gives you four safe resets. |
+| "Skipping the heartbeat saves a tool call" | Losing the session and re-dispatching with a narrower brief costs 10–100× more than one heartbeat. |
+| "The subagent will figure it out" | This is the orchestrator-brief-level rule. If the brief doesn't include the heartbeat instruction verbatim, the subagent won't know to emit it — so the orchestrator must include it, every dispatch, no exceptions. |
 
 ---
 

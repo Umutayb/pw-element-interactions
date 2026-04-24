@@ -1,12 +1,11 @@
 ---
 name: test-catalogue
 description: >
-  Produce a client-ready scenario catalogue PDF from a project's Playwright spec files and journey map.
-  Use this skill when asked to "produce a test catalogue", "generate a scenario report", "catalogue the suite",
-  "client-ready catalogue", "export the scenario inventory", or any request to produce a stakeholder-facing
-  inventory of what scenarios the suite runs and why. Optional and opt-in — it never activates during test
-  writing, coverage expansion, or debugging workflows. Runs only after a sentinel-bearing `journey-map.md`
-  exists and spec files are in place.
+  Use when asked to "produce a test catalogue", "generate a scenario report", "catalogue the suite",
+  "client-ready catalogue", "export the scenario inventory", or any request for a stakeholder-facing
+  list answering "what scenarios are we running, and why?". Opt-in and on-demand only: never activates
+  during test writing, coverage expansion, repair, or debugging. Requires a sentinel-bearing
+  `tests/e2e/docs/journey-map.md` and at least one spec file to be present.
 ---
 
 # Test Catalogue — Client-Ready Scenario Inventory PDF
@@ -258,6 +257,18 @@ This skill is a **single-run** skill. No parallel subagents. No orchestration. N
 
 If spec parsing produces an Unmapped bucket with > 10 tests, **warn the user** that the journey map is stale — do not try to auto-repair it. Repair belongs to the `journey-mapping` skill.
 
+This skill does not read `autonomousMode: true`. It is never invoked by another skill's pipeline; it is only invoked directly by the user on demand.
+
+## Registry
+
+When PR #110 (canonical skill registry) lands, add this row to `skills/element-interactions/references/skill-registry.md`:
+
+```
+| `test-catalogue` | `test-catalogue` | — (user-invoked, on-demand) | "produce a test catalogue", "generate a scenario report", "catalogue the suite", "client-ready catalogue", "export the scenario inventory"; never auto-invoked by any other skill. |
+```
+
+The registry row is a hard dependency of this skill's discoverability — if the registry exists and this skill isn't in it, agents will reconstruct the name from memory and the case-exact invocation string will drift.
+
 ---
 
 ## Do Not
@@ -267,6 +278,17 @@ If spec parsing produces an Unmapped bucket with > 10 tests, **warn the user** t
 - Duplicate the `work-summary-deck` narrative. This is an inventory, not a story.
 - Fabricate journey metadata. If a spec's journey is unknown, list it in Unmapped.
 - Introduce screenshots without path-qualification.
+
+### Rationalizations to reject
+
+| Excuse | Reality |
+|--------|---------|
+| "The client asked how long it took, so I'll add a runtime/velocity section" | Answer the client directly in chat or in the deck narrative — the catalogue is an inventory document, not an engagement report. Velocity language in the catalogue signals "we're selling effort, not coverage" to the client's procurement team. |
+| "The journey map is missing but I can infer from specs" | Stop and ask the user to run `journey-mapping` first. An inferred map makes up priority / portal / purpose data — the catalogue then ships with authoritative-looking but fabricated metadata. |
+| "I'll combine the deck and the catalogue to save effort" | They are deliberately paired but distinct: deck = narrative, catalogue = inventory. Merging them produces a document that is too long to present and too abstract to audit. |
+| "Light-mode for clients who print B&W" | Dark-mode is the skill's contract; adding a light-mode toggle doubles the rendering surface and the brand-palette matrix without the client having asked. If a specific engagement needs light-mode, land a branded-override row in the skill's palette table — not an ad-hoc fork at render time. |
+| "PDF verification is slow / fails on corner cases — comment it out to ship" | Verification is non-negotiable. A catalogue that ships with a silently-truncated PDF is a broken deliverable to a stakeholder who cannot verify it themselves; the verification IS the guarantee. Fix the root cause (usually an HTML slide without a `data-slide-id`) rather than removing the check. |
+| "The Unmapped bucket has 15 entries — I'll quietly drop them" | The Unmapped bucket is the honest signal that journey-mapping is stale. Dropping entries hides the drift from the next onboarding run and the next client. Surface it. |
 
 ---
 

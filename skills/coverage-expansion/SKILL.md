@@ -72,6 +72,10 @@ State file shape (minimum fields):
 
 The state file is rewritten after every per-pass commit (and whenever auto-compaction triggers — see §"Auto-compaction between passes" below).
 
+**Journey-roster mutability.** The roster for a given pass is frozen at the start of that pass — it is a snapshot of the journey IDs the orchestrator intends to dispatch *this pass*. If a compositional pass discovers and promotes a new journey or sub-journey mid-pass, the new entry is appended to the **next** pass's roster, not retroactively to the current pass's. This prevents the "did I cover everything?" ambiguity where `journeyRoster` and `completedJourneys` diverge because the roster keeps growing. Reconciliation commits (Pass 2/3) write the new roster to the state file at the same commit that appends the new map blocks, so the post-compact resume reads a consistent roster-to-map alignment.
+
+**Corrupted or stale state file.** If the state file is present but references journeys that no longer appear in `journey-map.md`, or if `currentPass` is set but `completedJourneys` is a superset of `journeyRoster`, the orchestrator stops and reports the mismatch to the caller rather than guessing. Self-repair is out of scope — a corrupted state file is a manual-triage signal, not a silent reset.
+
 ---
 
 ## Modes
@@ -176,6 +180,16 @@ If the orchestrator's context is **>70% consumed**:
 
 Framing: this is a platform-aware seam for long runs. It is not a cost-reduction mechanism. The optimisation target remains complete coverage; auto-compaction exists so complete coverage doesn't get halved by a context ceiling.
 
+**Rationalizations to reject:**
+
+| Excuse | Reality |
+|--------|---------|
+| "Context is at 75% but I can push one more pass before compacting" | 70% is the floor, not a guideline. Every pass adds subagent-return summaries that grow the state file and the running adversarial totals. One more pass from 75% often lands at 95%+ and forces an in-pass compact that loses roster state not yet committed. |
+| "I'll compact at 50% to be safe" | Preemptive compaction destroys the prompt cache unnecessarily. 70% is the threshold because below it the seam costs more than it saves. |
+| "The state file is small, there's nothing to save before compacting" | The state file is not the point — the orchestrator's own context (subagent returns, map index, reconciliation scratch) is. State is written *so* compaction is safe. Skipping the write because "state is small" is the bug. |
+| "I'll run Pass 4 to finish the compositional-to-adversarial boundary, then compact" | The compositional-to-adversarial boundary is inside the pass loop, not at 70%. If the threshold was crossed before Pass 4, compact before Pass 4. |
+| "Auto-compact failed once so I'll skip it this time" | The fallback is the manual-compaction safe-seam message, not silent progression. If `/compact` errors, emit the safe-compact line and stop; the user compacts and re-invokes. Never continue past 70% without either auto- or manual-compaction. |
+
 ### Re-pass mode for compositional passes 2–3
 
 Passes 2 and 3 dispatch `test-composer` with an explicit `mode: re-pass` argument. Pass 1 already composed the journey's full variant set; re-pass work is valuable only as a disciplined audit against three specific triggers.
@@ -195,6 +209,18 @@ Passes 2 and 3 dispatch `test-composer` with an explicit `mode: re-pass` argumen
 > **No tool-use budget. No tool-use cap.** Cost is not the optimisation target; signal quality is. The value of a re-pass is disciplined evidence that Pass 1 was exhaustive. An undisciplined cheap no-op is worse than a thorough no-op.
 
 The re-pass mode's contribution is **disciplined justification**, not speed. Every return becomes an auditable artifact — either new tests with their rationale, or `covered-exhaustively` with the full mapping table and the three-trigger check. The orchestrator rejects any pass-2 / pass-3 return that does not include the per-expectation mapping and the three-trigger check, and re-dispatches that journey.
+
+**Rationalizations to reject (subagent side):**
+
+| Excuse | Reality |
+|--------|---------|
+| "Obvious no-op — I'll mark `covered-exhaustively` without reading Pass-1 returns" | The three-trigger check requires evidence. Fabricating "Pass-1 reported no gaps" without reading the return is the exact failure the orchestrator's rejection-and-redispatch step is designed to catch; the redispatch wastes more time than reading the return would have. |
+| "The mapping table is obvious, I'll shorthand it" | Shorthand fails the orchestrator's check. The mapping table enumerates each expectation with the specific test covering it — not "all covered by existing tests". One-line-per-expectation or redispatch. |
+| "Sibling-bug ledger is probably empty for this journey, skip it" | The check is "I read the ledger and found no regression candidates for this journey", not "I assumed there are none". Skipping the read is skipping the trigger. |
+| "No tool-use budget means I can spam tool calls freely" | "No budget" is a signal that signal quality matters more than cost; it is NOT an invitation to over-probe. Use the tools needed to satisfy the three triggers and no more. |
+| "Pass 1 was thorough so Pass 2/3 is always `covered-exhaustively`" | The three triggers explicitly include "map delta since Pass 1" and "sibling-bug regression candidate" — conditions that can only be evaluated at Pass 2/3 time, not inherited from Pass 1's confidence. The returning-it-without-inspection shortcut voids the pass. |
+
+**Orchestrator-side rejection check.** When a pass-2 or pass-3 return arrives, the orchestrator greps the return for (a) the literal string "trigger 1", "trigger 2", "trigger 3", (b) a mapping-table header row, and (c) per-expectation entries. If any is missing the orchestrator re-dispatches the journey with a brief explicitly quoting the rejected parts. The orchestrator does NOT accept partial returns as a concession to save re-dispatch cost — the discipline holds on both sides.
 
 ### Batched dispatch for P3 peripheral journeys
 
@@ -224,6 +250,16 @@ Adjacent low-impact journeys (typically P3 smoke tests or admin-portal siblings 
 - Eight P3 journeys in one brief → must be split into two briefs (e.g., 5 + 3), never one brief past the cap.
 
 Batching cuts dispatches for peripheral work by roughly half without touching per-journey fidelity. The per-expectation mapping, the three-trigger check (for passes 2–3), and the probe/regression contract (for passes 4–5) still apply to every journey in the batch. The return must include one clearly-labelled section per journey — no merged summaries.
+
+**Rationalizations to reject:**
+
+| Excuse | Reality |
+|--------|---------|
+| "This 8th journey is almost identical to the 7 in the batch, I'll include it" | Cap 7 is not negotiable. Split the batch (5 + 3, 4 + 4, etc). The cap bounds brief size and per-journey attention — "one more" compounds across batches and dilutes discipline. |
+| "All these journeys are P3 and share a project, and this admin journey *could* be grouped — skip the P1 carve-out" | P0 / P1 always dispatch individually. Priority is load-bearing; a journey at P1 deserves its own brief even if it happens to share pages with P3 siblings. |
+| "The journeys share most pages, same project, roughly P3 — skip the 'shared Playwright project' check" | Different Playwright projects require different MCP instances; batching across projects introduces browser-swap complexity that defeats the dispatch optimisation. |
+| "Batching is faster so I'll batch everything that isn't explicitly forbidden" | Batching is allowed, not preferred. P0/P1 individual dispatch is the default; batching is specifically for P3 peripheral sweeps. Defaulting to batch on P2 quietly compresses scope. |
+| "One journey in the batch has a coverage-gap flag from Pass 1, but the gap is trivial" | Any flag in the three re-pass triggers kicks the journey out of the batch into individual dispatch. "Trivial" is the subagent's judgement after reading Pass-1 returns — which cannot happen inside a batched brief. |
 
 ---
 

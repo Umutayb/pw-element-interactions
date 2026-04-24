@@ -23,7 +23,7 @@ Every subagent dispatched by `coverage-expansion`, `test-composer`, or `bug-disc
 
 | Field | Rule |
 |---|---|
-| `FINDING-ID` | `<journey-slug>-<pass>-<nn>` (inside a numbered pass) or `<journey-slug>-<nn>` (outside pass numbering). `<nn>` is a two-digit integer, zero-padded. No alternative ID schemes (`AF-XX-NN`, `P4-XX-BUG-NN`, `REG-XX-NN`) are accepted. |
+| `FINDING-ID` | `<journey-slug>-<pass>-<nn>` (inside a numbered pass, Stage A findings) or `<journey-slug>-<nn>` (outside pass numbering). `<nn>` is a two-digit integer, zero-padded. Reviewer findings (Stage B) use the extended subformat `<journey-slug>-<pass>-<cycle>-R-<nn>` — see §2.4. No other alternative ID schemes (`AF-XX-NN`, `P4-XX-BUG-NN`, `REG-XX-NN`) are accepted. |
 | `severity` | One of `critical`, `high`, `medium`, `low`, `info`. No other values. Do not invent new severities (no `no-impact`, `blocker`, `p0`). Map DOM-only / no-impact items to `info`. |
 | `title` | One line. No trailing period. Describes the finding, not the test. |
 | `scope` | One sentence naming the probe surface — page, endpoint, element, flow step. |
@@ -89,6 +89,74 @@ Legacy skills that previously used `status: no-new-tests` MUST rename to `covere
 ### 2.3 Malformed-input escape hatch
 
 If the subagent cannot produce the mapping table because the input itself is unusable — the journey block is missing, `Test expectations:` is blank or unreadable, the referenced `sj-<slug>` sub-journey blocks cannot be located, etc. — the subagent MUST return `blocked (malformed-input: <reason>)`, **not** `covered-exhaustively` and **not** `no-new-tests-by-rationalisation`. The orchestrator treats `blocked (malformed-input: …)` as actionable: it fixes the input (usually by re-running `journey-mapping` for that journey) and re-dispatches. This prevents the failure mode where a subagent with no input conspires with the schema to return "covered" — the schema requires evidence that doesn't exist.
+
+### 2.4 Reviewer-return (Stage B of the dual-stage pipeline)
+
+This subsection defines the Reviewer-return (Stage B) shape. Stage B reviewer subagents — dispatched by `coverage-expansion` per journey per pass after a Stage A return — use a different top-level status vocabulary than compositional or adversarial subagents:
+
+| Status | Meaning | Blocks pass completion? |
+|---|---|---|
+| `greenlight` | Stage A's output is complete for this journey in this pass. No findings. | No. Orchestrator accepts. |
+| `greenlight-with-notes` | Stage A's output is accepted; reviewer found only `nice-to-have` findings. | No. Notes logged to state file. |
+| `improvements-needed` | Reviewer has at least one `must-fix` finding. Stage A must retry. | Only if retry cycle reaches the cap or the finding list is repeated. |
+
+Return body for `improvements-needed`:
+
+````
+status: improvements-needed
+journey: j-<slug>
+pass: <N>
+cycle: <cycle-number>
+
+missing-scenarios:
+  - **<FINDING-ID>** [must-fix | nice-to-have] — <one-line title>
+    - why: <one sentence, staff-QA rationale>
+    - category: <mobile | error-state | edge-case | adversarial | accessibility | i18n | lifecycle | concurrency>
+    - suggested-test: <one-sentence description of the test to write>
+
+craft-issues:
+  - **<FINDING-ID>** [must-fix | nice-to-have] — <one-line title>
+    - file: <path>
+    - issue: <what's wrong>
+    - fix: <concrete remediation>
+
+verification-misses:
+  - **<FINDING-ID>** [must-fix | nice-to-have] — <one-line title>
+    - file: <path>
+    - test-name: <test(...) title>
+    - asserted: <what the test currently asserts>
+    - live-observed: <what the reviewer saw via MCP>
+    - suggested-fix: <concrete remediation>
+````
+
+Return body for `greenlight` (no findings):
+
+````
+status: greenlight
+journey: j-<slug>
+pass: <N>
+cycle: <cycle-number>
+````
+
+Return body for `greenlight-with-notes` (only `nice-to-have` findings):
+
+````
+status: greenlight-with-notes
+journey: j-<slug>
+pass: <N>
+cycle: <cycle-number>
+
+notes:
+  - **<FINDING-ID>** [nice-to-have] — <one-line title>
+    - category: <mobile | error-state | edge-case | adversarial | accessibility | i18n | lifecycle | concurrency>
+    - suggested-test: <one-sentence description>
+````
+
+Every finding carries `must-fix` or `nice-to-have`. Only `must-fix` blocks greenlight.
+
+**Reviewer finding-ID subformat:** `<journey-slug>-<pass>-<cycle>-R-<nn>` where `<cycle>` is a two-digit zero-padded integer (`01`..`07`) and `R` tags the finding as reviewer-sourced (distinguishes it from Stage A's `<journey-slug>-<pass>-<nn>` format). This subformat is an explicit addition to §1's finding-ID rules; Stage B subagents MUST use it, Stage A subagents MUST NOT.
+
+**Caller contract addition:** Callers dispatching reviewer subagents (currently `coverage-expansion` only) must accept `greenlight`, `greenlight-with-notes`, and `improvements-needed` as valid return statuses and MUST NOT treat `improvements-needed` as a schema violation. The retry loop for `improvements-needed` is documented in `skills/coverage-expansion/SKILL.md` §"Retry loop".
 
 ---
 
@@ -220,7 +288,7 @@ Callers do not run a parser — they grep the return for a short, fixed list of 
 
 - **Finding blocks:** one or more lines matching `^- \*\*[a-z0-9-]+-\d+-\d+\*\* \[(?:critical|high|medium|low|info)\]` (for in-pass findings) or the analogous out-of-pass form, followed by the four sub-bullets `scope:` / `expected:` / `observed:` / `coverage:`.
 - **`covered-exhaustively` returns:** the literal string `status: covered-exhaustively`, a table header row `| Expectation | Covering spec | Test name |`, and at least one data row per `Test expectations:` entry in the journey block.
-- **Banned tokens:** the literal strings `no-new-tests-by-rationalisation`, `no-new-tests` (unqualified), `AF-`, `P4-`, `REG-` (legacy finding-ID prefixes), and any `[p0]` / `[blocker]` / `[no-impact]` severity bracket.
+- **Banned tokens:** the literal strings `no-new-tests-by-rationalisation`, `no-new-tests` (unqualified), `AF-`, `P4-`, `REG-` (legacy finding-ID prefixes — note: the `-R-` infix in reviewer IDs is NOT a prefix and is allowed), and any `[p0]` / `[blocker]` / `[no-impact]` severity bracket.
 - **Ledger append:** the `**Pass <N> — <kind> (YYYY-MM-DD)**` header line, the `Scope:` line, and the closing `**Pass <N> summary:** probes=…, boundaries=…, suspected-bugs=…` line, in that order, bracketing the finding blocks.
 
 If any of the above is missing or a banned token is present, the caller re-dispatches with a brief that quotes the specific violation. The grep-based check is sufficient — no AST, no JSON, no parser.

@@ -303,13 +303,36 @@ A pass is complete only when **every** criterion for that pass is met. "Ran some
 
 Only when **all** of the above are true may the orchestrator report depth-mode coverage-expansion complete to its caller. Anything less is a partial run and must be reported as such (see the resume-state contract).
 
-### Journey independence graph
+### Parallelism
 
-Two journeys are **dependent** if they touch an overlapping set of non-universal pages. Universal pages (e.g., `/login`, homepage, global top-nav) are ignored when computing overlap — otherwise every journey would appear dependent on every other.
+The parallelism model has three layers:
 
-- Compute the graph from each journey's `Pages touched:` list minus universal pages.
-- Independent journeys run in parallel — there is no fixed cap. Dispatch as many concurrent subagents as the independence graph allows (every node with no remaining unresolved dependency in the current pass). Narrow only if the Rule 11 prerequisite check forces serialization.
-- Dependent journeys run sequentially; the later journey inherits the earlier's `page-repository.json` updates.
+#### Independence graph (unchanged semantics)
+
+Two journeys are **dependent** if they touch a non-universal page in common. Universal pages (login, homepage, global nav) are ignored. Independent journeys can run in parallel; dependent ones must serialize to avoid tab-sharing corruption.
+
+Co-residence on pages is the only dependency signal. Two journeys that both touch `/admin/users` are dependent even if one only reads and one mutates — tab sharing is the bug, not data-layer contention.
+
+#### Intra-group pipelining (dual-stage)
+
+Within an independence group:
+- All journeys in the group start Stage A concurrently (subject to the parallel cap — see below).
+- Each journey's Stage B fires **as soon as that journey's Stage A returns** and the parallel cap has a slot — not after the whole group's Stage A completes.
+- Each journey's Stage A retry fires **as soon as that journey's Stage B returns with `improvements-needed`** and the cap has a slot.
+- Journeys in the same group ride their own A↔B pipelines in parallel. A journey on cycle 3 and a sibling on cycle 1 coexist.
+
+Across independence groups: groups run in priority order, each group exhausting parallelism before the next group starts.
+
+#### Parallel cap — lifted and jointly applied
+
+Previous: `min(4, credentials-per-role)` with batching for P3.
+New: **`host max`** — the orchestrator uses whatever parallel width the dispatch primitive allows. An explicit user override is accepted (`args: "parallel-cap: 8"`), otherwise no artificial ceiling beyond the shared-resource audit's credential-contention findings (PR #106).
+
+**The cap counts Stage A and Stage B dispatches jointly.** There is one pool of in-flight subagent slots; A and B compete for the same slots within a group. A journey's own A and B never overlap (sequential within a journey), but across journeys any A/B interleaving is possible. When the cap is saturated, new dispatches — whether A, B, or A-retry — queue until a slot frees. Queue order is FIFO; the orchestrator does not prioritise A over B or vice versa.
+
+#### Shared-resource audit interaction
+
+The Phase-0 shared-resource audit (PR #106) still caps parallelism where the app genuinely can't tolerate more (single credential per role, rate limits, CSRF serialization). Those caps override the cost-blind default. The audit's constraint tags apply to Stage A AND Stage B equally — reviewers compete for the same credentials.
 
 ### Model selection heuristic
 

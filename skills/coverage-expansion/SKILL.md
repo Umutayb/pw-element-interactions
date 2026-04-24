@@ -400,10 +400,11 @@ Passes 2 and 3 dispatch `test-composer` with an explicit `mode: re-pass` argumen
 > - The journey map was materially enriched since Pass 1 (look for delta markers against the pre-pass journey block).
 > - The journey's Pass-1 return reported `coverage-gaps: [...]` or `stabilization: deferred`.
 > - A sibling journey surfaced a bug that should be regressed here too.
+> - The prior pass's Stage B reviewer flagged `must-fix` items that Stage A did not resolve (the journey's `review_status` was `blocked-cycle-stalled` or `blocked-cycle-exhausted` last pass). Those unresolved findings are embedded in your brief — address them.
 >
 > You must perform the full inspection regardless — read the current journey block, read the Pass-1 return, read any sibling-bug ledger entries. Only *after* inspection may you return `status: covered-exhaustively` with:
 > - a per-expectation mapping table showing which test covers which Pass-1 expectation,
-> - an explicit check against each of the three triggers above ("trigger 1: no delta markers since Pass 1", "trigger 2: Pass-1 return reported no gaps or deferred stabilization", "trigger 3: sibling-bug ledger contains no regression candidates for this journey"),
+> - an explicit check against each of the four triggers above ("trigger 1: no delta markers since Pass 1", "trigger 2: Pass-1 return reported no gaps or deferred stabilization", "trigger 3: sibling-bug ledger contains no regression candidates for this journey", "trigger 4: no unresolved review findings carried forward from the prior pass"),
 > - no unexplained shorthand.
 >
 > **No tool-use budget. No tool-use cap.** Cost is not the optimisation target; signal quality is. The value of a re-pass is disciplined evidence that Pass 1 was exhaustive. An undisciplined cheap no-op is worse than a thorough no-op.
@@ -420,7 +421,7 @@ The re-pass mode's contribution is **disciplined justification**, not speed. Eve
 | "No tool-use budget means I can spam tool calls freely" | "No budget" is a signal that signal quality matters more than cost; it is NOT an invitation to over-probe. Use the tools needed to satisfy the three triggers and no more. |
 | "Pass 1 was thorough so Pass 2/3 is always `covered-exhaustively`" | The three triggers explicitly include "map delta since Pass 1" and "sibling-bug regression candidate" — conditions that can only be evaluated at Pass 2/3 time, not inherited from Pass 1's confidence. The returning-it-without-inspection shortcut voids the pass. |
 
-**Orchestrator-side rejection check.** When a pass-2 or pass-3 return arrives, the orchestrator greps the return for (a) the literal string "trigger 1", "trigger 2", "trigger 3", (b) a mapping-table header row, and (c) per-expectation entries. If any is missing the orchestrator re-dispatches the journey with a brief explicitly quoting the rejected parts. The orchestrator does NOT accept partial returns as a concession to save re-dispatch cost — the discipline holds on both sides.
+**Orchestrator-side rejection check.** When a pass-2 or pass-3 return arrives, the orchestrator greps the return for (a) the literal strings "trigger 1", "trigger 2", "trigger 3", "trigger 4", (b) a mapping-table header row, and (c) per-expectation entries. If any is missing the orchestrator re-dispatches the journey with a brief explicitly quoting the rejected parts. The orchestrator does NOT accept partial returns as a concession to save re-dispatch cost — the discipline holds on both sides.
 
 ### Batched dispatch for P3 peripheral journeys
 

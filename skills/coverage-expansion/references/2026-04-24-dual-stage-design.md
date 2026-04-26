@@ -1,6 +1,8 @@
 # Dual-Stage Coverage Expansion — Design
 
-**Status:** approved (2026-04-24)
+> **Historical reference, not authoritative.** This file captures the design as approved on 2026-04-24 and is committed for traceability. **`coverage-expansion/SKILL.md` is the authoritative current contract.** If this file disagrees with the SKILL.md, the SKILL.md wins. Refinements after the initial implementation (e.g., new terminal `review_status` values, mid-cycle compaction details, scratch-file persistence) live in the SKILL.md only — not all of them have been backported here. Do not modify behaviour based on this file alone; consult the SKILL.md first.
+
+**Status:** approved (2026-04-24); not maintained post-merge.
 **Target skill:** `coverage-expansion` (+ adjacent contracts in `test-composer`, `bug-discovery`, `onboarding`, and the canonical subagent-return-schema).
 **Prior art:** builds on PRs #102 (5-pass count alignment), #103 (parallel-MCP dispatch discipline), #104 (non-negotiables for depth mode), #105 (no-skip contract), #108 (scope preview / auto-compaction / re-pass discipline / batched dispatch / state-file contract), #109 (canonical subagent return + ledger schema).
 **Posture:** cost-blind. Quality and speed are the optimisation targets. Dispatch count, opus usage, and parallel width are not.

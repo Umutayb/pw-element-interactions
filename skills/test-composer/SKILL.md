@@ -262,7 +262,10 @@ When invoked by `coverage-expansion` as a re-pass subagent (Pass 2 or 3), the ma
 - trigger 1 (map delta since Pass 1): <none|<delta description>>
 - trigger 2 (Pass-1 coverage gaps or deferred stabilization): <none|<gap>>
 - trigger 3 (sibling-bug regression required here): <none|<sibling finding ID>>
+- trigger 4 (unresolved review findings carried forward from prior pass): <none|<finding-ID list>>
 ```
+
+The four-trigger format is non-negotiable — the orchestrator's rejection check (§"Re-pass mode for compositional passes 2–3" in `coverage-expansion/SKILL.md`) greps for the literals "trigger 1" through "trigger 4" and re-dispatches any return missing one of them.
 
 ### Return block format
 

@@ -87,8 +87,9 @@ pre-discovery estimates; actuals land after Phase 1 and are reported via progres
     (every journey, every pass — no skips)
   • Phase 6 bug hunts: ~<M_low>–<M_high> dispatches
   • Parallel peak: <P> agents depending on credential availability
-  • Model mix: sonnet for P2/P3 journeys with ≤8 steps; opus for P0/P1 and
-    complex journeys (per the skill's dispatch heuristic)
+  • Model: opus default for every Stage A and Stage B dispatch (cost-blind);
+    narrow cycle-1 Stage B sonnet-confirmation exception may apply to ~<sonnet-count>
+    previously-greenlit journeys (per the skill's Model selection §)
   • Expected wall-clock: ~<H1>–<H2> h active
 
 The scope preview is informational only. The skill's contract is full coverage; the
@@ -179,8 +180,12 @@ Examples:
 [onboarding] Happy path test written, stabilizing…
 [onboarding] Happy path green — committed
 [onboarding] Coverage expansion starting (mode: depth, 5 passes)
-[onboarding] Coverage expansion pass 1/5 complete — 27 tests added, 3 branches discovered
-[onboarding] Coverage expansion pass 2/5 complete — 14 tests added, 1 sub-journey promoted
+[onboarding] Coverage expansion pass 1/5 starting — 44 journeys, dual-stage A↔B
+[coverage-expansion] Pass 1/5, journey j-checkout: cycle 1/7, review greenlight
+[coverage-expansion] Pass 1/5, journey j-account-mfa: cycle 2/7, review greenlight (1 retry — mobile variant added)
+[coverage-expansion] Pass 1/5, journey j-admin-roles: cycle 7/7, review blocked-cycle-exhausted
+[onboarding] Coverage expansion pass 1/5 complete — 27 tests added, 3 branches discovered, 1 journey blocked-cycle-exhausted
+[onboarding] Coverage expansion pass 2/5 complete — 14 tests added, 1 sub-journey promoted, all journeys greenlit
 [onboarding] Coverage expansion pass 3/5 complete — 8 tests added, cross-journey interactions covered
 [onboarding] Coverage expansion pass 4/5 complete — 6 adversarial tests added, 2 edge cases surfaced
 [onboarding] Coverage expansion pass 5/5 complete — 4 adversarial tests added, ledger dedup applied
@@ -257,7 +262,7 @@ The companion reads the existing sentinel-bearing Phase-1 map and fills in Phase
 
 **Delegate to:** `coverage-expansion` with `args: "mode: depth"`.
 
-That skill runs five journey-by-journey passes internally (3 compositional via test-composer + 2 adversarial via bug-discovery), parallelising subagent dispatch for independent journeys, picking a model per journey (sonnet/opus) by size and complexity, and reconciling map growth between passes. Onboarding's role here is simply to invoke it and relay `[coverage-expansion]` progress lines upstream — no per-pass orchestration at this layer.
+That skill runs five journey-by-journey passes internally (3 compositional via test-composer + 2 adversarial via bug-discovery), each pass split per-journey into Stage A (compose/probe) + Stage B (fresh staff-QA reviewer with isolated MCP) running an A↔B retry loop up to 7 cycles per journey per pass. Subagent dispatch is opus-default (cost-blind), parallelised for independent journeys, with map growth reconciled between passes. Onboarding's role here is simply to invoke it and relay `[coverage-expansion]` progress lines upstream — no per-pass or per-cycle orchestration at this layer.
 
 Between and after the five passes, `coverage-expansion` itself refreshes its view of `app-context.md` and `journey-map.md`; onboarding does not need its own refresh step at this phase. When the skill returns, append a "Coverage expansion — new knowledge" section to `onboarding-report.md` summarising total tests added, new journeys discovered, and any sub-journeys promoted.
 

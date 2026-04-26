@@ -556,22 +556,28 @@ The orchestrator does not paste any probe transcripts, DOM snapshots, test sourc
 Emit one line per significant event, prefixed `[coverage-expansion]`:
 
 ```
-[coverage-expansion] Pass 1/5 starting — 14 journeys mapped (3 P0, 6 P1, 4 P2, 1 P3)
-[coverage-expansion] Pass 1/5 — dispatching 4 parallel subagents for j-book-demo, j-reset-password, j-browse-catalog, j-view-pricing
-[coverage-expansion] Pass 1/5 — j-book-demo returned: 6 tests added, 1 new branch, 0 new pages
-[coverage-expansion] Pass 1/5 complete — 27 tests added, 3 branches discovered, committed
-[coverage-expansion] Pass 2/5 starting — 15 journeys (1 sub-journey promoted)
+[coverage-expansion] Pass 1/5 starting — 14 journeys mapped (3 P0, 6 P1, 4 P2, 1 P3), dual-stage A↔B
+[coverage-expansion] Pass 1/5 — dispatching 4 parallel A↔B pipelines for j-book-demo, j-reset-password, j-browse-catalog, j-view-pricing
+[coverage-expansion] Pass 1/5, journey j-book-demo: cycle 1/7, review greenlight (6 tests added)
+[coverage-expansion] Pass 1/5, journey j-reset-password: cycle 2/7, review greenlight (1 retry — mobile variant added per Stage B)
+[coverage-expansion] Pass 1/5, journey j-browse-catalog: cycle 1/7, review greenlight-with-notes (3 nice-to-have)
+[coverage-expansion] Pass 1/5, journey j-view-pricing: cycle 7/7, review blocked-cycle-exhausted (2 must-fix unresolved — carries to Pass 2 trigger 4)
+[coverage-expansion] Pass 1/5 complete — 27 tests added, 3 branches discovered, 1 journey blocked-cycle-exhausted, committed
+[coverage-expansion] Pass 2/5 starting — 15 journeys (1 sub-journey promoted), dual-stage A↔B
 ...
-[coverage-expansion] Pass 3/5 complete — total 68 tests added across three compositional passes
-[coverage-expansion] Pass 4/5 starting — adversarial probing for 15 journeys
-[coverage-expansion] Pass 4/5 — j-returning-user-checkout returned: 12 probes, 8 boundaries, 1 high-severity suspected bug
+[coverage-expansion] Pass 3/5 complete — total 68 tests added across three compositional passes, all journeys greenlit or greenlit-with-notes
+[coverage-expansion] Pass 4/5 starting — adversarial probing for 15 journeys, dual-stage A↔B
+[coverage-expansion] Pass 4/5, journey j-returning-user-checkout: cycle 1/7, review improvements-needed (1 adversarial-missed)
+[coverage-expansion] Pass 4/5, journey j-returning-user-checkout: cycle 2/7, review greenlight (12 probes, 8 boundaries, 1 high-severity suspected bug)
 ...
-[coverage-expansion] Pass 4/5 complete — 216 probes, 147 boundaries verified, 9 suspected bugs (3 high, 5 medium, 1 low)
-[coverage-expansion] Pass 5/5 starting — adversarial consolidation + regression authoring
+[coverage-expansion] Pass 4/5 complete — 216 probes, 147 boundaries verified, 9 suspected bugs (3 high, 5 medium, 1 low), all journeys greenlit
+[coverage-expansion] Pass 5/5 starting — adversarial consolidation + regression authoring, dual-stage A↔B
 [coverage-expansion] Pass 5/5 complete — 54 regression tests added, 11 new findings, all committed
 [coverage-expansion] Cleanup — 7 cross-cutting findings consolidated across 18 journey sections
 [coverage-expansion] Depth run complete — 5 passes + cleanup, 122 tests + 54 regression tests, ledger at tests/e2e/docs/adversarial-findings.md
 ```
+
+The `Pass <N>/5, journey j-<slug>: cycle <c>/7, review <status>` per-cycle line is the user-facing visibility into the dual-stage retry loop. Emit one such line whenever a journey's A↔B cycle terminates (greenlight / greenlight-with-notes / blocked-cycle-stalled / blocked-cycle-exhausted). Skip per-cycle lines for cycles that complete with `improvements-needed` and trigger an immediate retry — only emit on terminal states or notable retries (cycle ≥ 2).
 
 ---
 

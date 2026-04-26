@@ -141,8 +141,11 @@ for cycle in 1..7:
     review_status = "greenlight-with-notes"
     break
 
-  if history and must_fix == history[-1].must_fix:
+  if b_return.stalled == true or (history and must_fix == history[-1].must_fix):
     # Stage A cannot address these — further cycles will not help
+    # b_return.stalled is the reviewer's self-flagged stall signal (per
+    # reviewer-subagent-contract.md step 7); the orchestrator-side list-equality
+    # check is a belt-and-suspenders fallback — both paths converge here.
     review_status = "blocked-cycle-stalled"
     break
 

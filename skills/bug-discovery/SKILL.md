@@ -14,6 +14,22 @@ Systematic, automated bug discovery that runs after all existing test stages are
 
 **Core principle — "First time effect":** Probe the live app BEFORE reading any context. Fresh eyes catch things that familiarity blinds you to. Context is used afterward to filter, classify, and derive additional findings.
 
+**Probing perspective — think like a QA engineer.** This skill is not just for hunting "interesting" bugs in unusual corners. It is the QA-coverage layer of the pipeline: every potential use case a QA engineer would design a test for, including negative cases. When you sit down to probe a page or a journey, your starting question is *"what are all the use cases a QA engineer assigned to this feature would write tests for, including the negative complement of every positive expectation?"* Bug-hunting categories (race conditions, cross-feature, cumulative state) extend above that floor — they do not replace it.
+
+---
+
+## Canonical return + ledger schema
+
+Every finding reported by this skill — whether returned directly to the user or appended to the adversarial-findings ledger by a `coverage-expansion` adversarial subagent — MUST conform to the canonical schema documented in [`../element-interactions/references/subagent-return-schema.md`](../element-interactions/references/subagent-return-schema.md).
+
+- **Finding-return format** — every finding uses `- **<FINDING-ID>** [<severity>] — <title>` with `scope`, `expected`, `observed`, `coverage` sub-bullets.
+- **FINDING-ID** — `<journey-slug>-<pass>-<nn>` when invoked by `coverage-expansion` as a Pass-4 or Pass-5 subagent; `<journey-slug>-<nn>` for standalone invocations. No `AF-*`, `BUG-*`, `P4-*-BUG-NN`, or other legacy schemes.
+- **Severity** — one of `critical`, `high`, `medium`, `low`, `info`. No other values. The "No impact (DOM-only)" classification in this skill's Phase 5 rubric maps to `info` when emitted in the canonical return shape.
+- **Return states** — `covered-exhaustively` requires evidence (per-expectation mapping); `no-new-tests-by-rationalisation` is **not a valid return** from any adversarial pass.
+- **Ledger schema** — when an adversarial subagent appends to `tests/e2e/docs/adversarial-findings.md`, the append MUST validate against the schema in §3 of the reference file (header, `### j-<slug>`, `**Pass <N> — <kind> (YYYY-MM-DD)**`, `Scope:`, `#### <FINDING-ID>` blocks with `expected` / `observed` / `ledger-only` / `coverage` lines, and a `**Pass <N> summary:**` footer). Validate in-memory before releasing the lock.
+
+Do not re-paste the schema when dispatching sub-flows of this skill — point at the reference file instead.
+
 ---
 
 ## Prerequisites
@@ -53,6 +69,17 @@ Phase 7:  Report & Triage         ─── generate report
 - 7 requires 6 complete
 
 You MUST create a task for each phase and complete them in order.
+
+---
+
+## Invocation scope — standalone vs journey-scoped
+
+This skill runs in two scopes. The probing categories below apply to both, but the journey-scoped invocation has an additional deterministic input.
+
+- **Standalone** — user asked to bug-hunt the whole app. Probe every page using the open-ended categories in Phase 1a / 1b.
+- **Journey-scoped** (dispatched by `coverage-expansion` as a Pass-4 or Pass-5 adversarial subagent) — the dispatch brief includes the journey's map block, page-repo slice, AND a **negative-case matrix** derived per the contract in [`../coverage-expansion/references/adversarial-subagent-contract.md`](../coverage-expansion/references/adversarial-subagent-contract.md) §"Negative-case matrix — full QA scope". Every matrix entry MUST be probed; the open-ended categories below extend above that floor. A journey-scoped invocation that probes only the open-ended categories without covering the matrix is a contract violation — re-dispatch with the matrix and probe again.
+
+When standalone, derive an analogous per-page negative-case list on the fly: for every primary positive flow you observe on a page (the "QA happy-path" interpretation), enumerate at least one negative complement (missing required field, malformed input, unauthorised access, replay / idempotency, session boundary) before moving on. The matrix concept does not vanish in standalone mode — it is built ad-hoc from observation rather than supplied in a brief.
 
 ---
 

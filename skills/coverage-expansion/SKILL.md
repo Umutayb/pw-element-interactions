@@ -19,6 +19,12 @@ The orchestrator for coverage growth. Iterates the user journey map, dispatches 
 
 **Context discipline:** this skill holds only the map index (IDs, names, priorities, `Pages touched`), the independence graph, and the pass counter. All journey-level reasoning happens inside dispatched subagents with isolated context windows.
 
+**Canonical return + ledger schema:** every subagent dispatched by this skill — compositional (`test-composer`) or adversarial — returns findings and writes ledger entries against the canonical schema in [`../element-interactions/references/subagent-return-schema.md`](../element-interactions/references/subagent-return-schema.md). Dispatch briefs include a pointer to that file; the schema is never re-pasted. Key points:
+
+- Finding-IDs use `<journey-slug>-<pass>-<nn>` inside Passes 1–5. Severities are `critical | high | medium | low | info`.
+- `status: covered-exhaustively` requires a per-expectation mapping table. `status: no-new-tests-by-rationalisation` is **not a valid return** from any pass and is treated as a contract violation — the orchestrator re-dispatches with a stricter brief.
+- Adversarial ledger appends (`tests/e2e/docs/adversarial-findings.md`) MUST validate against the ledger schema in §3 of the reference file before releasing the lockfile.
+
 ---
 
 ## When to Use
@@ -183,8 +189,8 @@ Every pass in depth mode runs this pipeline; steps 4 and 7 differ between compos
 | 1 — initial perception | compositional | Cover the map as produced by `journey-mapping`. Priorities as written. Each journey gets its full variant set (per `Test expectations:`). Map grows with whatever surfaces. Dispatches `test-composer` per journey. |
 | 2 — map-growth widening | compositional | Re-read the enriched map. Promote newly-discovered branches and sub-journeys to first-class journeys where they warrant it. Re-evaluate priorities. Re-attempt any journey where pass 1 deferred stabilization or returned coverage gaps. Dispatches `test-composer` per journey. |
 | 3 — consolidation | compositional | Final sweep on the refined map. Focus on cross-journey interactions, residual gaps, data-lifecycle variants that require wiring multiple journeys together, and any journey whose map block was materially refined in pass 2. Dispatches `test-composer` per journey. |
-| 4 — adversarial probing | adversarial | One adversarial turn per journey. Dispatches a probe subagent (see `references/adversarial-subagent-contract.md`) that invokes `bug-discovery` scoped to the journey. Findings are appended to `tests/e2e/docs/adversarial-findings.md` — no tests are written in pass 4. |
-| 5 — adversarial consolidation | adversarial + regression | Second adversarial turn. Each subagent reads its journey's pass-4 ledger section, attempts complementary/compound probes, and writes **passing** regression tests for every verified boundary (pass 4 + pass 5 combined) into `j-<slug>-regression.spec.ts`. Suspected bugs remain ledger-only — never committed as `test.fail()`. |
+| 4 — adversarial probing | adversarial | One adversarial turn per journey. Dispatches a probe subagent (see `references/adversarial-subagent-contract.md`) that invokes `bug-discovery` scoped to the journey. The probe covers the full QA-engineer test matrix for the journey — a deterministic negative-case complement for every positive `Test expectations:` entry plus cross-cutting negatives (auth tamper, tenant isolation, idempotency, session boundary, input boundaries) — in addition to `bug-discovery`'s open-ended categories. Findings are appended to `tests/e2e/docs/adversarial-findings.md` — no tests are written in pass 4. |
+| 5 — adversarial consolidation | adversarial + regression | Second adversarial turn. Each subagent reads its journey's pass-4 ledger section, re-probes any negative-case-matrix entries that returned `Ambiguous`, attempts compound probes that combine matrix entries (e.g., auth-tamper × idempotency, tenant-isolation × session-boundary), and writes **passing** regression tests for every verified boundary (pass 4 + pass 5 combined) into `j-<slug>-regression.spec.ts`. Suspected bugs remain ledger-only — never committed as `test.fail()`. |
 
 After pass 5: one single-dispatch cleanup subagent dedupes the ledger. See §"Ledger dedup" below.
 
@@ -386,17 +392,18 @@ Every `test-composer` subagent dispatched by this skill must:
 2. Receive only: its assigned journey block + any `sj-<slug>` sub-journey blocks it references + the current `page-repository.json` slice for the pages that journey touches.
 3. Have access to an **isolated Playwright MCP browser instance**. Before dispatching, the orchestrating agent must confirm per-subagent isolation is achievable — either because the subagent-dispatch primitive runs each subagent in its own agent session with its own MCP connection (default; name the `mcp__plugin_playwright_playwright__*` tools in each subagent's prompt) or because the agent has provisioned a dedicated Playwright MCP process per subagent. See the `element-interactions` orchestrator's "Isolated MCP instances for parallel subagents" rule for the full prerequisite check and tier list. Parallel subagents never share one browser, and if neither prerequisite holds the agent must fall back to serial with a `[mcp-isolation: serializing]` log line rather than dispatch.
 4. Not return until stabilization green, API compliance review clean, and coverage verified exhaustive (enforced inside `test-composer`).
-5. Return a structured discovery report only — no pasted test source, no DOM snapshots, no MCP transcripts.
+5. Return a structured discovery report only — no pasted test source, no DOM snapshots, no MCP transcripts. Returns follow the canonical return schema in [`../element-interactions/references/subagent-return-schema.md`](../element-interactions/references/subagent-return-schema.md); the dispatch brief includes a pointer to the file rather than re-pasting the schema.
 
 ### Adversarial passes (4–5)
 
 Every adversarial probe subagent dispatched by this skill must:
 
 1. Receive the same isolated context window and isolated Playwright MCP browser as compositional-pass subagents.
-2. Additionally receive: the pass number (4 or 5), the ledger file path (`tests/e2e/docs/adversarial-findings.md`), and the lockfile path (`tests/e2e/docs/.adversarial-findings.lock`).
-3. For pass 5 specifically: also receive the journey's pass-4 ledger section (read from the ledger file before dispatch and passed along — the orchestrator's single exception to the "never hold findings content" rule, bounded to one journey's section for one subagent).
-4. Follow the adversarial subagent contract in `references/adversarial-subagent-contract.md` exactly.
-5. Return a structured summary only, matching the return shape in that contract. No probe transcripts, no DOM snapshots, no test source.
+2. Additionally receive: the pass number (4 or 5), the ledger file path (`tests/e2e/docs/adversarial-findings.md`), the lockfile path (`tests/e2e/docs/.adversarial-findings.lock`), and a pointer to the canonical schema at `skills/element-interactions/references/subagent-return-schema.md`.
+3. Receive a pre-built **negative-case matrix** for the journey — one negative-case complement per `Test expectations:` entry, plus the standard cross-cutting negatives (auth tamper, tenant isolation, idempotency, session boundary, input boundaries) — derived per `references/adversarial-subagent-contract.md` §"Negative-case matrix — full QA scope". The matrix is the deterministic floor for the probe; `bug-discovery`'s open-ended categories extend above it. The orchestrator builds the matrix from the journey block before dispatch and includes it verbatim in the brief — the subagent does not re-derive it.
+4. For pass 5 specifically: also receive the journey's pass-4 ledger section (read from the ledger file before dispatch and passed along — the orchestrator's single exception to the "never hold findings content" rule, bounded to one journey's section for one subagent), so the subagent can re-probe matrix entries that returned `Ambiguous` in pass 4 and run compound probes across matrix entries.
+5. Follow the adversarial subagent contract in `references/adversarial-subagent-contract.md` exactly, which mandates conformance to the canonical return + ledger schema.
+6. Return a structured summary only, matching the return shape in that contract. No probe transcripts, no DOM snapshots, no test source. Any per-finding detail inside the return follows the canonical finding-return format.
 
 ### Cleanup subagent (post-pass-5)
 

@@ -78,6 +78,6 @@ Procedure:
 3. Navigate the live app via MCP. Inspect each page the tests claim to exercise. For passes 4–5, additionally attempt 2–3 adversarial probes Stage A did not try this cycle — pick categories under-represented in Stage A's probe list.
 4. Classify findings per §2.4 of the canonical return schema.
 5. Apply must-fix calibration per the reviewer contract.
-6. Detect stalled loops — if your must-fix list matches the prior cycle, flag stalled:true.
+6. Detect stalled loops — if your must-fix list matches BOTH the prior-1 AND prior-2 cycles' lists (three identical lists in a row), flag stalled:true. Never flag from cycles 1–2 (the three-cycle condition cannot hold). See full rule in step 7 of this contract.
 7. Return using the canonical schema. Do NOT commit, do NOT modify files, do NOT append to the ledger.
 ~~~

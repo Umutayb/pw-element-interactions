@@ -2,11 +2,7 @@
 
 [![NPM Version](https://img.shields.io/npm/v/@civitas-cerebrum/element-interactions?color=rgb(88%2C%20171%2C%2070))](https://www.npmjs.com/package/@civitas-cerebrum/element-interactions)
 
-A Playwright test-authoring framework wrapped in an agentic QA harness.
-
-`@civitas-cerebrum/element-interactions` ships two halves. The framework half pairs with `@civitas-cerebrum/element-repository` to keep raw selectors out of test code — element acquisition is decoupled from element interaction, and the unified `Steps` API flattens both into plain-English calls. The harness half is a set of agent skills, bundled with the npm package, that turn an LLM (Claude Code, primarily) into a self-driving QA engineer: onboarding a project from zero, mapping its journeys, expanding coverage, hunting bugs adversarially, repairing rotted suites, producing evidence bundles for daily QA tasks, and shipping stakeholder reports.
-
-This is harness engineering, not autocomplete. Each skill carries narrow triggers, a return contract, and a finding-ledger schema. Orchestrators dispatch isolated subagents per journey so long autonomous runs do not blow the context window — agentic quality assurance shipped as durable artifacts (specs, journey maps, ledgers, decks), not transient chat output.
+A new medium of quality assurance, powered by Playwright and harness engineering. The framework comprises two components: a Steps API that streamlines UI interactions, and a QA methodology that drives the agentic process around them.
 
 ---
 

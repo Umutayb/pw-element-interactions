@@ -148,7 +148,7 @@ This subsection extends §"Per-pass completion criteria" (see below). A pass's c
 Every one of the 5 passes runs **per journey** as two sequential stages:
 
 - **Stage A — Compose / Probe.** The existing `test-composer` (passes 1–3) or adversarial probe subagent (passes 4–5). Dispatch contract unchanged from the single-stage era.
-- **Stage B — Adversarial Review.** A fresh staff-level-QA reviewer subagent, per journey, with its own isolated context and its own isolated Playwright MCP browser. Reads Stage A's output and the live app; returns `greenlight`, `greenlight-with-notes`, or `improvements-needed`. Never writes tests, never appends to the ledger, never modifies files.
+- **Stage B — Adversarial Review.** A fresh staff-level-QA reviewer subagent, per journey, with its own isolated context and its own isolated Playwright MCP browser. Reads Stage A's output and the live app; returns `greenlight` or `improvements-needed`. Never writes tests, never appends to the ledger, never modifies files.
 
 The dual-stage design addresses a concrete failure mode: a single subagent that both does the work AND self-certifies it misses scenarios a fresh independent reviewer would catch. Stage B is that independent reviewer. It exists to catch what Stage A missed.
 
@@ -157,7 +157,7 @@ The dual-stage design addresses a concrete failure mode: a single subagent that 
 **Contracts:**
 - Stage A: unchanged from its skill (see `test-composer` for compositional passes, `references/adversarial-subagent-contract.md` for adversarial passes).
 - Stage B: see `references/reviewer-subagent-contract.md` for the full contract and dispatch-brief template.
-- Return shape: both stages use the canonical subagent-return-schema. Stage B's return states (`greenlight`, `greenlight-with-notes`, `improvements-needed`) are additions; Stage A's existing states are unchanged.
+- Return shape: both stages use the canonical subagent-return-schema. Stage B's return states (`greenlight`, `improvements-needed`) are additions; Stage A's existing states are unchanged.
 
 **Cost posture.** This skill is **cost-blind**. The optimisation targets are completeness and speed, not dispatch cost. Default opus for every dispatch in every stage. The sonnet-for-P2/P3 heuristic from the prior design is removed; a narrow sonnet exception for cycle-1 Stage B confirmation on previously-greenlit journeys is documented in §"Model selection".
 
@@ -198,13 +198,9 @@ for cycle in 1..7:
     review_status = "greenlight"
     break
 
-  must_fix = [f for f in b_return.findings if f.priority == "must-fix"]
-  has_notes = any(f for f in b_return.findings if f.priority == "nice-to-have")
+  must_fix = b_return.findings  # every reviewer finding is must-fix; no other priority exists
 
-  if must_fix is empty and has_notes:                  # only nice-to-have findings
-    review_status = "greenlight-with-notes"
-    break
-  if must_fix is empty and not has_notes:             # status was "improvements-needed" but findings empty
+  if must_fix is empty:                               # status was "improvements-needed" but findings empty
     re-dispatch reviewer once with stricter brief; if same shape returns:
       coerce to "greenlight" (no findings = no changes needed)
       review_status = "greenlight"
@@ -251,8 +247,7 @@ record journey review_status + cycle count + final must_fix list in state file
 | Condition | `review_status` | Action |
 |---|---|---|
 | Reviewer returns `greenlight` | `greenlight` | Accept, commit this journey's work this pass. |
-| Reviewer returns `improvements-needed` but only `nice-to-have` findings | `greenlight-with-notes` | Accept, log notes to state file. |
-| Reviewer returns `improvements-needed` with **empty** must-fix and nice-to-have, twice in a row | `greenlight` (coerced) | Empty findings = no changes needed; the `improvements-needed` status was malformed. Coerce after one re-dispatch. |
+| Reviewer returns `improvements-needed` with **empty** findings, twice in a row | `greenlight` (coerced) | Empty findings = no changes needed; the `improvements-needed` status was malformed. Coerce after one re-dispatch. |
 | Reviewer's `must-fix` list identical for **3+ cycles in a row** (current == prior-1 == prior-2) OR reviewer sets `stalled: true` | `blocked-cycle-stalled` | Escalate — Stage A failed to address this list across two consecutive retries. Commit whatever Stage A landed; log the unresolved list. **Takes precedence over exhausted** when cycle 7's list satisfies the same condition. |
 | Cycle 7 reached without greenlight (and not stalled) | `blocked-cycle-exhausted` | Escalate — retry budget spent. Commit whatever Stage A landed; log the unresolved list. |
 | Stage A dispatch fails (transport / timeout / malformed schema), re-dispatch also fails | `blocked-dispatch-failure` | Escalate — infrastructure issue, not a discipline issue. Commit nothing for this journey this pass; carries to next pass with the failure noted in trigger-4 input. |
@@ -326,7 +321,7 @@ State file shape (minimum fields):
 - `journey` — the journey ID (`j-<slug>`).
 - `stage_a_cycles` — integer; number of Stage A dispatches for this journey in this pass (1..7).
 - `stage_b_cycles` — integer; number of Stage B dispatches for this journey in this pass (equal to or one less than stage_a_cycles depending on whether cycle 7 exhausted or greenlit early).
-- `review_status` — one of `greenlight | greenlight-with-notes | blocked-cycle-stalled | blocked-cycle-exhausted | blocked-dispatch-failure`.
+- `review_status` — one of `greenlight | blocked-cycle-stalled | blocked-cycle-exhausted | blocked-dispatch-failure`.
 - `final_must_fix` — array of finding-IDs. Empty for greenlight statuses; populated for blocked statuses with the list Stage A failed to resolve (carried to next pass's Stage A brief as trigger 4).
 - `result` — the no-skip contract enum value (`new-tests-landed | covered-exhaustively | blocked | skipped`). `result` describes Stage A's outcome alongside the no-skip enum; `review_status` describes Stage B's judgement; together they describe both stages' outcomes.
 - `authorizer` — only non-null for `skipped` (requires user authorisation).
@@ -417,7 +412,7 @@ A pass is complete only when **every** criterion for that pass is met. "Ran some
 
 Only when **all** of the above are true may the orchestrator report depth-mode coverage-expansion complete to its caller. Anything less is a partial run and must be reported as such (see the resume-state contract).
 
-**Dual-stage extension.** On top of the per-pass criteria above, a pass is complete only when **every journey has a terminal `review_status`** (`greenlight`, `greenlight-with-notes`, `blocked-cycle-stalled`, `blocked-cycle-exhausted`, or `blocked-dispatch-failure`) recorded in the state file's `dispatches[]` array. A pass where every journey's Stage A returned but some journeys have no `review_status` is **incomplete**, even if the per-pass criteria above appear satisfied. Stage B participation is part of the completion gate, not optional.
+**Dual-stage extension.** On top of the per-pass criteria above, a pass is complete only when **every journey has a terminal `review_status`** (`greenlight`, `blocked-cycle-stalled`, `blocked-cycle-exhausted`, or `blocked-dispatch-failure`) recorded in the state file's `dispatches[]` array. A pass where every journey's Stage A returned but some journeys have no `review_status` is **incomplete**, even if the per-pass criteria above appear satisfied. Stage B participation is part of the completion gate, not optional.
 
 ### Parallelism
 
@@ -466,7 +461,7 @@ The prior sonnet-for-P2/P3 heuristic is removed. The prior sonnet-for-small-jour
 
 | Excuse | Reality |
 |--------|---------|
-| "The journey was attempted last pass and ended at `blocked-cycle-stalled` / `blocked-cycle-exhausted` / `blocked-dispatch-failure` — that counts as 'previously-greenlit' for the sonnet exception" | A blocked journey is not greenlit. The narrow exception requires explicit `greenlight` (or `greenlight-with-notes`) in the previous pass, not "attempted." Any blocked-* terminal in the prior pass means opus on cycle 1 of the next pass. |
+| "The journey was attempted last pass and ended at `blocked-cycle-stalled` / `blocked-cycle-exhausted` / `blocked-dispatch-failure` — that counts as 'previously-greenlit' for the sonnet exception" | A blocked journey is not greenlit. The narrow exception requires explicit `greenlight` in the previous pass, not "attempted." Any blocked-* terminal in the prior pass means opus on cycle 1 of the next pass. |
 | "Pass 4 is just probing, sonnet is good enough for cycle-1 of small journeys" | Pass 4 and Pass 5 are always opus, both stages, full stop. The model-selection cost-blind rule has no priority/size carve-outs. |
 | "I ran sonnet for Stage A and opus for Stage B — that's a hybrid we never explicitly forbade" | Stage A is opus for every dispatch in every pass. The narrow sonnet exception is for cycle-1 Stage B only on previously-greenlit journeys. Hybrid Stage A/Stage B model splits beyond that exception are not authorised. |
 
@@ -557,7 +552,7 @@ Adjacent low-impact journeys (typically P3 smoke or admin-portal siblings sharin
 - **Stage B is never batched.**
   Each journey in a batched Stage A still gets its own dedicated Stage B reviewer — never one reviewer judging 7 journeys at once.
   The reviewer reads only its assigned journey's slice of the batched Stage A return; the reviewer itself is never responsible for multiple journeys.
-- Batching is accepted ONLY when every journey in the batch's cycle-1 Stage B returns `greenlight`. `greenlight-with-notes` for any journey is also accepted-in-place.
+- Batching is accepted ONLY when every journey in the batch's cycle-1 Stage B returns `greenlight`.
 - If any journey's cycle-1 Stage B returns `improvements-needed`: split the batch. From cycle 2 onward, the affected journey breaks out and runs its own per-journey Stage A plus its own Stage B. The batched cycle-1 Stage A return is retained as history input to the broken-out cycle-2 Stage A brief. The remaining greenlit journeys in the batch stay accepted at cycle 1 and proceed.
 
 **Rationalizations to reject:**
@@ -656,12 +651,12 @@ Emit one line per significant event, prefixed `[coverage-expansion]`:
 [coverage-expansion] Pass 1/5 — dispatching 4 parallel A↔B pipelines for j-book-demo, j-reset-password, j-browse-catalog, j-view-pricing
 [coverage-expansion] Pass 1/5, journey j-book-demo: cycle 1/7, review greenlight (6 tests added)
 [coverage-expansion] Pass 1/5, journey j-reset-password: cycle 2/7, review greenlight (1 retry — mobile variant added per Stage B)
-[coverage-expansion] Pass 1/5, journey j-browse-catalog: cycle 1/7, review greenlight-with-notes (3 nice-to-have)
+[coverage-expansion] Pass 1/5, journey j-browse-catalog: cycle 1/7, review greenlight
 [coverage-expansion] Pass 1/5, journey j-view-pricing: cycle 7/7, review blocked-cycle-exhausted (2 must-fix unresolved — carries to Pass 2 trigger 4)
 [coverage-expansion] Pass 1/5 complete — 27 tests added, 3 branches discovered, 1 journey blocked-cycle-exhausted, committed
 [coverage-expansion] Pass 2/5 starting — 15 journeys (1 sub-journey promoted), dual-stage A↔B
 ...
-[coverage-expansion] Pass 3/5 complete — total 68 tests added across three compositional passes, all journeys greenlit or greenlit-with-notes
+[coverage-expansion] Pass 3/5 complete — total 68 tests added across three compositional passes, all journeys greenlit
 [coverage-expansion] Pass 4/5 starting — adversarial probing for 15 journeys, dual-stage A↔B
 [coverage-expansion] Pass 4/5, journey j-returning-user-checkout: cycle 1/7, review improvements-needed (1 adversarial-missed)
 [coverage-expansion] Pass 4/5, journey j-returning-user-checkout: cycle 2/7, review greenlight (12 probes, 8 boundaries, 1 high-severity suspected bug)
@@ -673,7 +668,7 @@ Emit one line per significant event, prefixed `[coverage-expansion]`:
 [coverage-expansion] Depth run complete — 5 passes + cleanup, 122 tests + 54 regression tests, ledger at tests/e2e/docs/adversarial-findings.md
 ```
 
-The `Pass <N>/5, journey j-<slug>: cycle <c>/7, review <status>` per-cycle line is the user-facing visibility into the dual-stage retry loop. Emit one such line whenever a journey's A↔B cycle terminates (greenlight / greenlight-with-notes / blocked-cycle-stalled / blocked-cycle-exhausted). Skip per-cycle lines for cycles that complete with `improvements-needed` and trigger an immediate retry — only emit on terminal states or notable retries (cycle ≥ 2).
+The `Pass <N>/5, journey j-<slug>: cycle <c>/7, review <status>` per-cycle line is the user-facing visibility into the dual-stage retry loop. Emit one such line whenever a journey's A↔B cycle terminates (greenlight / blocked-cycle-stalled / blocked-cycle-exhausted / blocked-dispatch-failure). Skip per-cycle lines for cycles that complete with `improvements-needed` and trigger an immediate retry — only emit on terminal states or notable retries (cycle ≥ 2).
 
 ---
 

@@ -24,7 +24,7 @@ Every subagent dispatched by `coverage-expansion`, `test-composer`, or `bug-disc
 | Field | Rule |
 |---|---|
 | `FINDING-ID` | `<journey-slug>-<pass>-<nn>` (inside a numbered pass, Stage A findings) or `<journey-slug>-<nn>` (outside pass numbering). `<nn>` is a two-digit integer, zero-padded. Reviewer findings (Stage B) use the extended subformat `<journey-slug>-<pass>-<cycle>-R-<nn>` — see §2.4. No other alternative ID schemes (`AF-XX-NN`, `P4-XX-BUG-NN`, `REG-XX-NN`) are accepted. |
-| `severity` | One of `critical`, `high`, `medium`, `low`, `info`. No other values. Do not invent new severities (no `no-impact`, `blocker`, `p0`). Map DOM-only / no-impact items to `info`. **Applies to Stage A finding blocks only.** Stage B (reviewer) findings use a different bracket semantics — priority (`must-fix` / `nice-to-have`), not severity — per §2.4. The "no other values" rule is scoped to Stage A; §1's bracket position is not meaningful for reviewer returns. |
+| `severity` | One of `critical`, `high`, `medium`, `low`, `info`. No other values. Do not invent new severities (no `no-impact`, `blocker`, `p0`). Map DOM-only / no-impact items to `info`. **Applies to Stage A finding blocks only.** Stage B (reviewer) findings use a fixed `[must-fix]` priority bracket, not a severity bracket — per §2.4. The "no other values" rule is scoped to Stage A; §1's bracket position is not meaningful for reviewer returns. |
 | `title` | One line. No trailing period. Describes the finding, not the test. |
 | `scope` | One sentence naming the probe surface — page, endpoint, element, flow step. |
 | `expected` | One sentence describing correct behaviour. |
@@ -97,8 +97,9 @@ This subsection defines the Reviewer-return (Stage B) shape. Stage B reviewer su
 | Status | Meaning | Blocks pass completion? |
 |---|---|---|
 | `greenlight` | Stage A's output is complete for this journey in this pass. No findings. | No. Orchestrator accepts. |
-| `greenlight-with-notes` | Stage A's output is accepted; reviewer found only `nice-to-have` findings. | No. Notes logged to state file. |
 | `improvements-needed` | Reviewer has at least one `must-fix` finding. Stage A must retry. | Only if retry cycle reaches the cap or the finding list is repeated. |
+
+The reviewer's outcome vocabulary is binary: greenlight (no findings) or improvements-needed (≥1 finding). There is no third "soft" state. A reviewer that wants to surface an observation classifies it as `must-fix` per the calibration rules in `reviewer-subagent-contract.md` step 6, which forces an `improvements-needed` return; observations that don't meet must-fix calibration are not surfaced.
 
 Return body for `improvements-needed`:
 
@@ -109,19 +110,19 @@ pass: <N>
 cycle: <cycle-number>
 
 missing-scenarios:
-  - **<FINDING-ID>** [must-fix | nice-to-have] — <one-line title>
+  - **<FINDING-ID>** [must-fix] — <one-line title>
     - why: <one sentence, staff-QA rationale>
     - category: <mobile | error-state | edge-case | adversarial | accessibility | i18n | lifecycle | concurrency>
     - suggested-test: <one-sentence description of the test to write>
 
 craft-issues:
-  - **<FINDING-ID>** [must-fix | nice-to-have] — <one-line title>
+  - **<FINDING-ID>** [must-fix] — <one-line title>
     - file: <path>
     - issue: <what's wrong>
     - fix: <concrete remediation>
 
 verification-misses:
-  - **<FINDING-ID>** [must-fix | nice-to-have] — <one-line title>
+  - **<FINDING-ID>** [must-fix] — <one-line title>
     - file: <path>
     - test-name: <test(...) title>
     - asserted: <what the test currently asserts>
@@ -139,26 +140,11 @@ cycle: <cycle-number>
 summary: <one sentence — e.g., "All 8 test-expectations covered, craft clean, live DOM matches assertions.">
 ````
 
-Return body for `greenlight-with-notes` (only `nice-to-have` findings):
-
-````
-status: greenlight-with-notes
-journey: j-<slug>
-pass: <N>
-cycle: <cycle-number>
-summary: <one sentence naming both the greenlighted content and the nice-to-have notes — e.g., "All 8 test-expectations covered and craft clean; 2 nice-to-have adversarial scenarios logged as notes.">
-
-notes:
-  - **<FINDING-ID>** [nice-to-have] — <one-line title>
-    - category: <mobile | error-state | edge-case | adversarial | accessibility | i18n | lifecycle | concurrency>
-    - suggested-test: <one-sentence description>
-````
-
-Every finding carries `must-fix` or `nice-to-have`. Only `must-fix` blocks greenlight.
+Every reviewer finding carries `[must-fix]`. There is no nice-to-have bracket, no notes sub-list, no third return state. If the reviewer noticed it and recorded it, Stage A retries; if the reviewer chose not to record it, it is gone. The classification gate is the recording gate — see `reviewer-subagent-contract.md` step 6 for the must-fix calibration that determines which observations get recorded.
 
 **Reviewer finding-ID subformat:** `<journey-slug>-<pass>-<cycle>-R-<nn>` where `<cycle>` is a two-digit zero-padded integer (`01`..`07`) and `R` tags the finding as reviewer-sourced (distinguishes it from Stage A's `<journey-slug>-<pass>-<nn>` format). This subformat is an explicit addition to §1's finding-ID rules; Stage B subagents MUST use it, Stage A subagents MUST NOT.
 
-**Caller contract addition:** Callers dispatching reviewer subagents (currently `coverage-expansion` only) must accept `greenlight`, `greenlight-with-notes`, and `improvements-needed` as valid return statuses and MUST NOT treat `improvements-needed` as a schema violation. The retry loop for `improvements-needed` is documented in `skills/coverage-expansion/SKILL.md` §"Retry loop".
+**Caller contract addition:** Callers dispatching reviewer subagents (currently `coverage-expansion` only) must accept `greenlight` and `improvements-needed` as valid return statuses and MUST NOT treat `improvements-needed` as a schema violation. The retry loop for `improvements-needed` is documented in `skills/coverage-expansion/SKILL.md` §"Retry loop".
 
 ---
 
@@ -292,7 +278,7 @@ Callers do not run a parser — they grep the return for a short, fixed list of 
 - **`covered-exhaustively` returns:** the literal string `status: covered-exhaustively`, a table header row `| Expectation | Covering spec | Test name |`, and at least one data row per `Test expectations:` entry in the journey block.
 - **Banned tokens:** the literal strings `no-new-tests-by-rationalisation`, `no-new-tests` (unqualified), `AF-`, `P4-`, `REG-` (legacy finding-ID prefixes — note: the `-R-` infix in reviewer IDs is NOT a prefix and is allowed), and any `[p0]` / `[blocker]` / `[no-impact]` severity bracket.
 - **Ledger append:** the `**Pass <N> — <kind> (YYYY-MM-DD)**` header line, the `Scope:` line, and the closing `**Pass <N> summary:** probes=…, boundaries=…, suspected-bugs=…` line, in that order, bracketing the finding blocks.
-- **Reviewer returns (§2.4):** the top-level `status:` is one of `greenlight`, `greenlight-with-notes`, or `improvements-needed`. Finding blocks (when present under `missing-scenarios:`, `craft-issues:`, or `verification-misses:` sub-lists) match `^ {2}- \*\*[a-z0-9-]+-\d+-\d+-R-\d+\*\* \[(?:must-fix|nice-to-have)\]`. **A `summary:` line is REQUIRED on `greenlight` and `greenlight-with-notes` returns** — a status-line of either kind without a `summary:` is a contract violation; treat as `improvements-needed` and re-dispatch. `greenlight` carries `summary:` and no finding blocks; `greenlight-with-notes` carries `summary:` plus only `nice-to-have` findings under a `notes:` sub-list; `improvements-needed` has at least one `must-fix` finding and no `summary:` line. The Stage A regex in the previous bullet does NOT apply to reviewer returns.
+- **Reviewer returns (§2.4):** the top-level `status:` is one of `greenlight` or `improvements-needed`. Finding blocks (when present under `missing-scenarios:`, `craft-issues:`, or `verification-misses:` sub-lists) match `^ {2}- \*\*[a-z0-9-]+-\d+-\d+-R-\d+\*\* \[must-fix\]`. **A `summary:` line is REQUIRED on `greenlight` returns** — a `greenlight` status without a `summary:` is a contract violation; treat as `improvements-needed` and re-dispatch. `greenlight` carries `summary:` and no finding blocks; `improvements-needed` has at least one `must-fix` finding and no `summary:` line. Returns containing the literal tokens `nice-to-have`, `greenlight-with-notes`, or a `notes:` sub-list are contract violations from a prior schema revision; reject and re-dispatch with a brief that quotes the banned token. The Stage A regex in the previous bullet does NOT apply to reviewer returns.
 
 If any of the above is missing or a banned token is present, the caller re-dispatches with a brief that quotes the specific violation. The grep-based check is sufficient — no AST, no JSON, no parser.
 

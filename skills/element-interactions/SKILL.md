@@ -34,7 +34,7 @@ Companion skills (`onboarding`, `coverage-expansion`, `test-composer`, `companio
 | `companion-mode` Phase-6 graduation | `autonomousMode: true`, `entry: "stage3"`, `bundlePath: "<absolute-path>"` | — |
 | user direct | — (no autonomous flags) | — (full Stage 1–4 interactive flow) |
 
-`happyPathDescription` replaces the Stage-1 discovery conversation; `journey: "<j-id>"` references an entry in `tests/e2e/docs/journey-map.md`; `bundlePath` references a `tests/e2e/evidence/<slug>-<ts>/` directory whose `summary.md` carries the verbatim task description, pass criterion, and app URL, and whose `spec.ts` carries the already-discovered selectors. The orchestrator reads these from the bundle rather than re-discovering. `entry: "stage3"` jumps directly to Stage 3 (write the durable spec) — companion-mode has already done the equivalent of Stage 1 (scenario discovery) and Stage 2 (selector inspection) and the bundle holds those outputs. Full semantics in the **Autonomous mode** section further down.
+`happyPathDescription` replaces the Stage-1 discovery conversation; `journey: "<j-id>"` references an entry in `tests/e2e/docs/journey-map.md`; `bundlePath` references a `tests/e2e/evidence/<slug>-<ts>/` directory whose `summary.md` carries task description / pass criterion / app URL and whose `spec.ts` carries the already-discovered selectors. `entry: "stage3"` skips Stages 1 and 2 (companion-mode already did the equivalent). Full per-entry-point contracts, bundle-read schema, malformed-bundle handling, and return shape: [`references/autonomous-mode-callers.md`](references/autonomous-mode-callers.md).
 
 ## Companion Skills
 

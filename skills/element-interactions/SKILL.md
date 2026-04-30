@@ -244,13 +244,14 @@ You MUST create a task for each of these items and complete them in order (Stage
 5. **User approves selectors** — hard gate
 6. **Stage 3: Write Automation** — write the test using the Steps API and approved selectors
 7. **Run and validate** — execute the test, inspect failures visually, iterate until passing
-8. **Stage 4: API Compliance Review** — triggers automatically each time a test passes. Review that test's code against the API Reference before proceeding
-9. **Fix any issues found** — correct API misuse, re-run to confirm still passing
-10. **Commit** — commit after each passing + compliant test case
-11. **Repeat 6-10** for each additional scenario the user requests
-12. **Onboarding completion gate** — When the user signals they have no more individual scenarios, you MUST explicitly offer Stage 5 before ending the session. See the "Onboarding Completion Gate" section below. Do NOT silently stop.
-13. **Stage 5: Test Composer** (on user approval at gate) — invoke the `test-composer` skill for the iterative test composition workflow
-14. **Stage 6: Bug Discovery** (auto after Stage 5) — invoke the `bug-discovery` skill to actively probe for bugs
+8. **Stage 4a: Test Optimization** — triggers automatically each time a test passes. Load `references/test-optimization.md` and run its 6-check protocol on the new tests; apply auto-fixes; re-stabilize on regression
+9. **Stage 4b: API Compliance Review** — triggers automatically once Stage 4a returns clean. Review that test's code against the API Reference; fix any non-compliance
+10. **Fix any issues found** — correct misuse from either sub-stage, re-run to confirm still passing
+11. **Commit** — commit after each passing + optimized + compliant test case
+12. **Repeat 6-11** for each additional scenario the user requests
+13. **Onboarding completion gate** — When the user signals they have no more individual scenarios, you MUST explicitly offer Stage 5 before ending the session. See the "Onboarding Completion Gate" section below. Do NOT silently stop.
+14. **Stage 5: Test Composer** (on user approval at gate) — invoke the `test-composer` skill for the iterative test composition workflow
+15. **Stage 6: Bug Discovery** (auto after Stage 5) — invoke the `bug-discovery` skill to actively probe for bugs
 
 ### Process Flow
 
@@ -291,11 +292,16 @@ digraph element_interactions {
     "Mini-inspection:\ninspect DOM, propose,\nget approval" [shape=box];
     "Inspect screenshot, fix, re-run" [shape=box];
 
-    "STAGE 4: API Compliance Review" [shape=box, style=bold];
-    "Review all test code\nagainst API Reference" [shape=box];
-    "Issues found?" [shape=diamond];
+    "STAGE 4a: Test Optimization" [shape=box, style=bold];
+    "Run 6-check protocol\n(test-optimization.md)" [shape=box];
+    "Issues found in 4a?" [shape=diamond];
+    "Fix 4a misuse,\nre-run tests" [shape=box];
+    "Test still passes\nafter 4a fixes?" [shape=diamond];
+    "STAGE 4b: API Compliance Review" [shape=box, style=bold];
+    "Review test code\nagainst API Reference" [shape=box];
+    "Issues found in 4b?" [shape=diamond];
     "Fix API misuse,\nre-run tests" [shape=box];
-    "All scenarios pass\nafter fixes?" [shape=diamond];
+    "Test still passes\nafter 4b fixes?" [shape=diamond];
     "Commit" [shape=doublecircle];
 
     "Skill activated" -> "Read user message";
@@ -335,7 +341,7 @@ digraph element_interactions {
     "STAGE 3: Write Automation" -> "Write test using Steps API";
     "Write test using Steps API" -> "Run test";
     "Run test" -> "Test passes?";
-    "Test passes?" -> "STAGE 4: API Compliance Review" [label="yes"];
+    "Test passes?" -> "STAGE 4a: Test Optimization" [label="yes"];
     "Test passes?" -> "Classify failure\n(Rule 8)" [label="no"];
     "Classify failure\n(Rule 8)" -> "Report app bug to user\nand STOP" [label="application bug — do not modify test"];
     "Classify failure\n(Rule 8)" -> "New selector needed?" [label="test issue"];
@@ -344,13 +350,21 @@ digraph element_interactions {
     "Mini-inspection:\ninspect DOM, propose,\nget approval" -> "Inspect screenshot, fix, re-run";
     "Inspect screenshot, fix, re-run" -> "Run test";
 
-    "STAGE 4: API Compliance Review" -> "Review this test's code\nagainst API Reference";
-    "Review this test's code\nagainst API Reference" -> "Issues found?";
-    "Issues found?" -> "Commit this test" [label="no — compliant"];
-    "Issues found?" -> "Fix API misuse,\nre-run test" [label="yes"];
-    "Fix API misuse,\nre-run test" -> "Test still passes?" [label=""];
-    "Test still passes?" -> "Commit this test" [label="yes"];
-    "Test still passes?" -> "Inspect screenshot, fix, re-run" [label="no — regression"];
+    "STAGE 4a: Test Optimization" -> "Run 6-check protocol\n(test-optimization.md)";
+    "Run 6-check protocol\n(test-optimization.md)" -> "Issues found in 4a?" [label="emit structured return"];
+    "Issues found in 4a?" -> "STAGE 4b: API Compliance Review" [label="no — clean"];
+    "Issues found in 4a?" -> "Fix 4a misuse,\nre-run tests" [label="yes — auto-fix"];
+    "Fix 4a misuse,\nre-run tests" -> "Test still passes\nafter 4a fixes?";
+    "Test still passes\nafter 4a fixes?" -> "STAGE 4b: API Compliance Review" [label="yes"];
+    "Test still passes\nafter 4a fixes?" -> "Inspect screenshot, fix, re-run" [label="no — regression"];
+
+    "STAGE 4b: API Compliance Review" -> "Review test code\nagainst API Reference";
+    "Review test code\nagainst API Reference" -> "Issues found in 4b?";
+    "Issues found in 4b?" -> "Commit this test" [label="no — compliant"];
+    "Issues found in 4b?" -> "Fix API misuse,\nre-run tests" [label="yes"];
+    "Fix API misuse,\nre-run tests" -> "Test still passes\nafter 4b fixes?";
+    "Test still passes\nafter 4b fixes?" -> "Commit this test" [label="yes"];
+    "Test still passes\nafter 4b fixes?" -> "Inspect screenshot, fix, re-run" [label="no — regression"];
     "Commit this test" -> "More scenarios?" [label=""];
     "More scenarios?" -> "STAGE 3: Write Automation" [label="yes — next scenario"];
     "More scenarios?" -> "Offer Stage 5\n(Coverage Expansion)" [label="no"];

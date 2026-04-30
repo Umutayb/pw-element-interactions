@@ -201,9 +201,19 @@ Save to `docs/e2e-test-scenarios.md` (or a path the user specifies).
 
 ---
 
-## Step 6: API compliance review
+## Step 6: Post-stabilization review (split into 6a + 6b)
 
-Run the Stage 4 API review protocol on the freshly-written tests for this journey. The full protocol is documented in `skills/element-interactions/SKILL.md` under the API compliance review stage. Scope the review to the tests composed in this invocation, not the whole suite.
+**Step 6a runs first, Step 6b runs second.** Both run automatically after Step 4 (Stabilize) reports all new tests passing, before Step 7 (Coverage verification).
+
+### Step 6a: Test Optimization
+
+Load `../element-interactions/references/test-optimization.md` and run the 6-check protocol against the freshly-written tests for this journey. Apply auto-fixes per the protocol; re-stabilize (Step 4) if any auto-fix causes a regression (follow Rule 7 — failure-diagnosis).
+
+Emit the structured return per `../element-interactions/references/test-optimization.md` §8 as part of this skill's per-journey return block (under a new top-level `stage_4a` key — see Step 8's Canonical return schema for the addition).
+
+### Step 6b: API Compliance Review
+
+Run the Stage 4b API review protocol on the freshly-written tests for this journey. The full protocol is documented in `../element-interactions/SKILL.md` under "Stage 4b: API Compliance Review". Scope the review to the tests composed in this invocation, not the whole suite.
 
 If any non-compliance is found (wrong argument order, deprecated APIs, missing options, incorrect types, direct selector usage instead of the Steps API, inline selectors outside `page-repository.json`, fixture misuse), fix it and re-run Step 4 (Stabilize). Do not proceed to Step 7 until the tests are both green and API-compliant.
 
@@ -218,7 +228,7 @@ A lightweight self-review checklist for this journey only:
 
 ---
 
-## Step 7: Coverage verification
+## Step 7: Coverage verification + whole-suite gate
 
 Before returning, verify the journey is exhaustively covered. This is the coverage-ownership contract:
 
@@ -228,6 +238,14 @@ Before returning, verify the journey is exhaustively covered. This is the covera
 4. Only exit the loop when every item is covered or each remaining gap has an explicit justification (e.g., "branch X requires a seeded database row that cannot be created in tests — documented as external-setup gap").
 
 This skill owns the coverage outcome for its assigned journey. The orchestrator will not re-check.
+
+### Whole-suite re-run gate (Step 7 exit)
+
+After coverage verification confirms the journey is `covered-exhaustively`, run the whole-suite re-run gate documented in `../element-interactions/references/test-optimization.md` §7.
+
+**Procedure:** identical to coverage-expansion's per-pass gate (see `../coverage-expansion/SKILL.md`). On refusal, this skill returns `{ status: 'whole-suite-gate-failed', journey: <id>, failures: [...], skips: [...] }` to its caller and does NOT mark the journey as complete.
+
+**Why it runs here:** test-composer is the atomic unit of per-journey work. Other journeys may share fixtures, helpers, or backend state with this journey; an integration regression introduced by this journey's new tests must surface before this skill returns.
 
 ---
 

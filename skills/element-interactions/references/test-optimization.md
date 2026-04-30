@@ -13,10 +13,27 @@ Stage 4a runs after a test reaches passing state in stabilization, **before** St
 The protocol assumes:
 
 - `tests/e2e/docs/app-context.md` exists and contains a `## Test Infrastructure` section (produced by `journey-mapping`'s Phase 1 probe).
-- `tests/e2e/docs/journey-map.md` exists and is sentinel-bearing, with each journey block declaring a `UI-covers:` field.
+- `tests/e2e/docs/journey-map.md` exists and is sentinel-bearing.
 - `tests/fixtures/base.ts` exists and contains `HELPER SLOT` comment markers (produced by `onboarding`'s Phase 1 scaffold).
 
-Missing any of these → stop the protocol, return an error pointing the caller at the missing prerequisite. Do not synthesize the missing artifact.
+Missing either of those two → stop the protocol, return an error pointing the caller at the missing prerequisite. Do not synthesize the missing artifact.
+
+**Single-spec mode.** If `journey-map.md` exists and has the sentinel but no journey blocks are populated with `UI-covers:` fields yet (e.g. during onboarding's Phase 3 happy-path before Phase 4 produces the full map), Stage 4a runs in **single-spec mode**: §4 (API shortcuts) is skipped entirely — no UI-covers registry to consult, so all prerequisites stay UI-driven. Checks §1, §2, §3, §5, §6 still apply. The `next_stage` of the structured return notes `mode: single-spec`.
+
+## Placeholder convention
+
+Helper-code blocks below contain placeholders inside `«double-angle-brackets»`. These are app-specific values the agent MUST substitute before copying the template into `tests/fixtures/base.ts`. Substitutions come from the `## Test Infrastructure` section of `tests/e2e/docs/app-context.md`:
+
+| Placeholder | Source |
+|---|---|
+| `«BASE_URL»` | `playwright.config.ts` `baseURL` |
+| `«RESET_ENDPOINT»` | Test Infrastructure `Reset / seed endpoints` |
+| `«LOGIN_ENDPOINT»` | Test Infrastructure `Auth model → Login endpoint` |
+| `«COOKIE_NAME»` | Test Infrastructure `Auth model → Cookie name` |
+| `«CART_ADD_ENDPOINT»` | Test Infrastructure `Mutation endpoints` row matching cart-add |
+| `«BANNER_DISMISS_SELECTORS»` | Test Infrastructure `Persistent banners / modals` (each banner's dismissal selector, comma-separated) |
+
+A template with any unresolved `«…»` placeholder MUST NOT be written into `base.ts`. Stage 4a halts and returns `placeholder-unresolved` if it cannot find the substitution in app-context.
 
 ## The six checks
 
@@ -39,20 +56,18 @@ The detailed rules for each check are in §1 through §6 below.
 
 **Auto-fix:**
 
-1. If `tests/fixtures/base.ts`'s `resetState` HELPER SLOT is empty, populate it from the discovered reset endpoint:
+1. If `tests/fixtures/base.ts`'s `resetState` HELPER SLOT is empty, populate it from the discovered reset endpoint. Substitute the `«…»` placeholders per the placeholder-convention table above:
 
    ```typescript
    import { request } from '@playwright/test';
 
    export async function resetState() {
-     const ctx = await request.newContext({ baseURL: process.env.BASE_URL ?? 'http://localhost:7547' });
-     const res = await ctx.post('/api/reset');  // ← path comes from app-context Test Infrastructure
+     const ctx = await request.newContext({ baseURL: process.env.BASE_URL ?? '«BASE_URL»' });
+     const res = await ctx.post('«RESET_ENDPOINT»');
      if (!res.ok()) throw new Error(`resetState failed: ${res.status()} ${await res.text()}`);
      await ctx.dispose();
    }
    ```
-
-   Replace `/api/reset` with the exact path from `app-context.md`. Do not invent paths.
 
 2. Insert into the spec's top-level describe:
 
@@ -141,21 +156,27 @@ For values that participate in case-sensitivity tests, prefer `crypto.randomUUID
 
 ### Helper template — `setAuthCookie`
 
+Substitute the `«…»` placeholders per the placeholder-convention table above:
+
 ```typescript
 // In tests/fixtures/base.ts (HELPER SLOT: setAuthCookie)
 import { request, type Page } from '@playwright/test';
 
+const COOKIE_NAME = '«COOKIE_NAME»';
+const BASE_URL = process.env.BASE_URL ?? '«BASE_URL»';
+
 export async function setAuthCookie(page: Page, credentials: { email: string; password: string }) {
-  const ctx = await request.newContext({ baseURL: process.env.BASE_URL ?? 'http://localhost:7547' });
-  const res = await ctx.post('/api/auth/login', { data: credentials });  // ← path from Test Infrastructure
+  const ctx = await request.newContext({ baseURL: BASE_URL });
+  const res = await ctx.post('«LOGIN_ENDPOINT»', { data: credentials });
   if (!res.ok()) throw new Error(`setAuthCookie login failed: ${res.status()}`);
   const setCookie = res.headers()['set-cookie'] ?? '';
-  // Extract the auth cookie name from Test Infrastructure's `Auth model` section.
-  const match = setCookie.match(/(bookhive_token)=([^;]+)/);  // ← cookie name from Test Infrastructure
-  if (!match) throw new Error('setAuthCookie: cookie not found in response');
+  const re = new RegExp(`(${COOKIE_NAME})=([^;]+)`);
+  const match = setCookie.match(re);
+  if (!match) throw new Error(`setAuthCookie: ${COOKIE_NAME} cookie not found in response`);
   await page.context().addCookies([{
-    name: match[1], value: match[2],
-    url: process.env.BASE_URL ?? 'http://localhost:7547',
+    name: match[1],
+    value: match[2],
+    url: BASE_URL,
   }]);
   await ctx.dispose();
 }
@@ -169,7 +190,7 @@ import type { APIRequestContext } from '@playwright/test';
 
 export async function seedCart(authedCtx: APIRequestContext, items: { bookId: string; quantity: number }[]) {
   for (const item of items) {
-    const res = await authedCtx.post('/api/cart/items', { data: item });  // ← path from Test Infrastructure
+    const res = await authedCtx.post('«CART_ADD_ENDPOINT»', { data: item });
     if (!res.ok()) throw new Error(`seedCart failed for ${item.bookId}: ${res.status()}`);
   }
 }
@@ -208,18 +229,14 @@ The mechanical rule: **any `signupFresh` / `loginFresh` / `addToCartViaUI` call 
 
 **Auto-fix:**
 
-1. Populate `tests/fixtures/base.ts`'s `dismissBanners` slot from the selectors captured in app-context Test Infrastructure's `Persistent banners / modals` section:
+1. Populate `tests/fixtures/base.ts`'s `dismissBanners` slot. Substitute `«BANNER_DISMISS_SELECTORS»` with the comma-separated list from app-context Test Infrastructure's `Persistent banners / modals` section:
 
    ```typescript
    // In tests/fixtures/base.ts (HELPER SLOT: dismissBanners)
    import type { Page } from '@playwright/test';
 
    export async function dismissBanners(page: Page) {
-     // Each entry comes from app-context Test Infrastructure 'Persistent banners / modals'.
-     for (const sel of [
-       '[data-testid="cookie-accept"]',  // ← cookie-accept selector from Test Infrastructure
-       '[data-testid="welcome-close"]',  // ← welcome-modal close from Test Infrastructure
-     ]) {
+     for (const sel of [«BANNER_DISMISS_SELECTORS»]) {
        const el = page.locator(sel).first();
        if (await el.isVisible({ timeout: 250 }).catch(() => false)) {
          await el.click().catch(() => { /* ignore — banner already dismissed */ });
@@ -228,16 +245,18 @@ The mechanical rule: **any `signupFresh` / `loginFresh` / `addToCartViaUI` call 
    }
    ```
 
-2. Wire into the fixture's `beforeEach`:
+   Example substitution (BookHive): `'[data-testid="cookie-accept"]', '[data-testid="welcome-close"]'`.
+
+2. Populate the `HELPER SLOT: beforeEach` slot in `base.ts` (NOT a freeform region — the slot is the single contracted insertion point for fixture-level `beforeEach` hooks):
 
    ```typescript
-   // In tests/fixtures/base.ts
-   const test = baseFixture(base, 'tests/data/page-repository.json', { timeout: 60000 });
-
+   // In tests/fixtures/base.ts (HELPER SLOT: beforeEach)
    test.beforeEach(async ({ page }) => {
      await dismissBanners(page);
    });
    ```
+
+   If the slot already contains other `test.beforeEach` blocks (e.g., from a prior Stage 4a run that populated `resetState` here), append the new block to the slot — do NOT overwrite. The slot is additive across protocol runs.
 
 3. Strip duplicated `await steps.click('cookieAccept', …)` / `await page.locator(...)` dismiss calls from each spec body. The fixture handles it now.
 
@@ -296,13 +315,17 @@ This rule is enforced by **orchestrators**, not by Stage 4a itself. Stage 4a run
 **What it does:**
 
 1. Run `npx playwright test --reporter=json > .stage4a-suite.json` against the entire suite (no `--grep`, no `--shard`).
-2. Parse `.stage4a-suite.json`:
-   - `timedOut + failed + interrupted > 0` → refuse to advance.
-   - `skipped` count > count of `test.skip(` markers found via `grep -c '^\s*test\.skip\b' tests/e2e/**/*.spec.ts` → refuse to advance (this catches cascade-skips from §6 violations).
-3. On refusal, return `{ status: 'whole-suite-gate-failed', failures: [...], skips: [...] }` to the caller. The caller is responsible for deciding whether to halt the whole pipeline or continue with reduced scope.
+2. Parse `.stage4a-suite.json`. Playwright's JSON reporter shape is `{ stats: { expected, unexpected, flaky, skipped, ... }, suites: [...] }`. Apply both checks:
+   - `stats.unexpected > 0` (failures, including timed-out and interrupted) → refuse to advance.
+   - `stats.skipped` > count of explicit `test.skip(` markers across spec files → refuse to advance. This catches cascade-skips from §6 (`test.describe.configure({ mode: 'serial' })` blocks where the first test failed and Playwright skipped its siblings). Use the portable command:
+     ```bash
+     grep -rh '^\s*test\.skip\b' tests/e2e --include='*.spec.ts' | wc -l
+     ```
+     `grep -r` recurses; `--include` filters by glob without depending on shell `**` (which only works with `globstar` enabled in bash and is not portable).
+3. On refusal, return `{ status: 'whole-suite-gate-failed', stats: { unexpected, skipped, expected, flaky }, failures: [...], skips_unexplained: <skipped-stats minus marker-count> }` to the caller. The caller is responsible for deciding whether to halt the whole pipeline or continue with reduced scope; the gate itself does not decide.
 4. Delete `.stage4a-suite.json` after parsing — it does not get committed.
 
-**Why this exists:** per-pass `stabilize` confirms the just-written tests pass but does not guarantee the suite as a whole still passes after accumulated state. The NEW arm of the 2026-04-29 onboarding A/B run shipped 79/109 passing because integration-time pollution surfaced only at end-of-pipeline. The whole-suite gate catches this.
+**Why this exists:** per-pass `stabilize` confirms the just-written tests pass but does not guarantee the suite as a whole still passes after accumulated state. Cumulative state changes — DB pollution, port collisions, fixture drift, shared-resource depletion — only surface when the whole suite runs together. The whole-suite gate moves that surfacing forward from end-of-pipeline to per-pass-exit.
 
 ## §8 Output format
 

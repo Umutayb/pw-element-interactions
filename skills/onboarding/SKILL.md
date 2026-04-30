@@ -236,6 +236,12 @@ Do **not** add, remove, or upgrade any other dependencies. Do **not** modify the
   // HELPER SLOT: dismissBanners — populated when Phase 1 discovery flagged a
   //   persistent banner/modal in Test Infrastructure.
 
+  // HELPER SLOT: beforeEach — Stage 4a inserts test.beforeEach hooks here to
+  //   wire fixture-level helpers (dismissBanners, fixture-level resetState if
+  //   the project chooses fixture-level reset, etc.) into the test lifecycle.
+  //   The slot is additive across protocol runs — append, do not overwrite.
+  //   Per-test setup belongs in the spec, not in this slot.
+
   export { test, expect };
   ```
 

@@ -418,16 +418,16 @@ Only when **all** of the above are true may the orchestrator report depth-mode c
 
 After a pass's per-journey subagents return clean and per-pass completion criteria are satisfied, run the whole-suite re-run gate documented in `../element-interactions/references/test-optimization.md` §7.
 
-**Procedure:**
+**Procedure:** identical to the canonical procedure documented in `../element-interactions/references/test-optimization.md` §7. Summary:
 
 1. From the harness root: `npx playwright test --reporter=json > .stage4a-suite.json`.
-2. Parse the JSON. Refuse to advance to the next pass if:
-   - `timedOut + failed + interrupted > 0`, OR
-   - `skipped` count exceeds `grep -c '^\s*test\.skip\b' tests/e2e/**/*.spec.ts`.
-3. On refusal, return `{ status: 'whole-suite-gate-failed', pass: <N>, failures: [...], skips: [...] }` to the caller. Do not invoke the next pass.
+2. Parse the JSON. Playwright's reporter writes `{ stats: { expected, unexpected, flaky, skipped, ... }, suites: [...] }`. Refuse to advance to the next pass if:
+   - `stats.unexpected > 0` (includes timed-out, failed, interrupted), OR
+   - `stats.skipped` exceeds the count of explicit `test.skip(` markers across spec files (`grep -rh '^\s*test\.skip\b' tests/e2e --include='*.spec.ts' | wc -l`).
+3. On refusal, return `{ status: 'whole-suite-gate-failed', pass: <N>, stats: {...}, failures: [...], skips_unexplained: <delta> }` and DO NOT invoke the next pass. Resume on this pass once the caller resolves the failures.
 4. Delete `.stage4a-suite.json` after parsing.
 
-**Why it runs here:** per-journey subagent stabilization confirms each journey's tests pass in isolation, but cumulative state across the suite (DB pollution, port collisions, fixture drift) only surfaces when the whole suite runs together. Running this gate at every pass exit catches regressions at the earliest pass that introduces them — preventing the integration-time failure mode the 2026-04-29 onboarding A/B test surfaced (NEW arm: 79/109 passing because per-pass `stabilize` confirmed each batch but the cumulative suite was not re-run until end-of-pipeline).
+**Why it runs here:** per-journey subagent stabilization confirms each journey's tests pass in isolation, but cumulative state across the suite (DB pollution, port collisions, fixture drift, shared-resource depletion) only surfaces when the whole suite runs together. Running this gate at every pass exit catches integration-time regressions at the earliest pass that introduces them, rather than at end-of-pipeline.
 
 ### Parallelism
 

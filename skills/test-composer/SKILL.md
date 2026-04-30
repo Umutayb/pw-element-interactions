@@ -41,12 +41,13 @@ Do NOT use this for:
 
 ## Mandatory stages per invocation
 
-Every invocation performs these stages in order, inside this subagent's own context. Do not return to the caller until all four complete cleanly.
+Every invocation performs these stages in order, inside this subagent's own context. Do not return to the caller until all five complete cleanly.
 
 1. **Compose** (Steps 2–3 below) — write the full variant set for the journey, adding selectors to `page-repository.json` as needed.
 2. **Stabilize** (Step 4) — run, fix, re-run until 100% of new tests pass.
-3. **API compliance review** (Step 6) — run the Stage 4 API review protocol on the freshly-written tests. Fix any non-compliance and re-stabilize if needed.
-4. **Coverage verification** (Step 7) — check every step, branch, and applicable state variation from the journey's map block against the composed tests. Loop back to Compose for any missing coverage; only exit when coverage is exhaustive or each remaining gap has an explicit justification.
+3. **Test Optimization** (Step 6a) — load `../element-interactions/references/test-optimization.md` and run its 6-check protocol on the freshly-written tests. Apply auto-fixes; re-stabilize if any auto-fix regresses a test.
+4. **API compliance review** (Step 6b) — run the Stage 4b API review protocol on the freshly-written tests. Fix any non-compliance and re-stabilize if needed.
+5. **Coverage verification + whole-suite gate** (Step 7) — check every step, branch, and applicable state variation from the journey's map block against the composed tests. Loop back to Compose for any missing coverage. After coverage is exhaustive, run the whole-suite re-run gate (see Step 7); only return to the caller when the gate passes.
 
 The multi-journey iterative cycle (inventory, cross-app gap analysis, multi-pass decide) is documented in `coverage-expansion`. This skill owns the per-journey work items only.
 

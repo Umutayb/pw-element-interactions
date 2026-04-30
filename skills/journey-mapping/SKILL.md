@@ -166,6 +166,16 @@ Total: X pages discovered
 Gated: Y pages behind authentication
 ```
 
+### Test Infrastructure probe (parallel with crawl)
+
+Phase 1 also captures the application's test-infrastructure surface — auth model, reset endpoint, persistent banners, mutation endpoints, stable seed resources — for downstream consumption by Stage 4a of the test-composition pipeline.
+
+Load `references/test-infrastructure-probe.md` and run the protocol described there. The probe runs in parallel with the breadth-first page crawl: observations from network traffic and DOM snapshots accumulate during the crawl; the deliberate reset-endpoint probe runs once the crawl completes.
+
+**Output:** a `## Test Infrastructure` section appended to `tests/e2e/docs/app-context.md`, in the canonical format documented in `references/test-infrastructure-probe.md`.
+
+**Safety:** the reset-endpoint probe respects the host allowlist defined in the probe protocol. Hosts outside the allowlist short-circuit with `reset-endpoint: skipped`.
+
 ---
 
 ## Phase 2: Flow Identification
@@ -332,6 +342,7 @@ Each journey is a self-contained block so a downstream subagent can be handed **
 - Error state: [what if step N fails?]
 - Edge case: [unusual input, timing, etc.]
 - Mobile: [applicable? yes / no]
+**UI-covers:** [comma-separated canonical flow names this journey exercises through the UI in its happy-path]
 
 ### j-<slug>: <next journey>
 ...
@@ -348,6 +359,7 @@ Each journey is a self-contained block so a downstream subagent can be handed **
 - Every journey has a stable `j-<slug>` ID (`j-book-demo`, `j-reset-password`, etc.).
 - Every sub-journey has a stable `sj-<slug>` ID.
 - `Pages touched:` is a comma-separated list of concrete URL paths or page names matching the site map. `coverage-expansion` uses this field to build the journey independence graph.
+- `UI-covers:` is a comma-separated list of canonical flow names that this journey's happy-path exercises *through the UI* (no API shortcuts in the happy-path itself). Stage 4a §4 (API shortcuts for tested prerequisites) cross-references this registry: a flow listed here in any journey is eligible for API-shortcut replacement in *other* journeys. Canonical flow names — extend per app: `login`, `signup`, `logout`, `browse-catalog`, `view-detail`, `cart-add`, `cart-modify`, `cart-clear`, `checkout`, `order-view`, `order-return`, `listing-create`, `listing-buy`, `marketplace-browse`, `profile-edit`, `theme-toggle`.
 - Journey blocks appear in priority order (all P0 blocks, then all P1, etc.) — priority is carried in each block's `Priority:` field rather than in section headings, so the file is flat and every `j-<slug>` heading is addressable the same way.
 - No cross-journey shorthand: every reference to another journey uses its full ID.
 

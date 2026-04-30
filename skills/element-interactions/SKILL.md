@@ -534,11 +534,30 @@ When the user asks to fix or edit an existing test, skip Stages 1 and 2. Read `r
 
 ---
 
-## Stage 4: API Compliance Review
+## Stage 4: Post-Stabilization Review (split into 4a + 4b)
+
+**Stage 4a runs first, Stage 4b runs second.** Both run automatically after a test reaches passing state in Stage 3, before commit.
+
+### Stage 4a: Test Optimization
+
+**Goal:** enforce test-isolation, speed, and DRY best practices on freshly-written tests.
+
+**Process:**
+
+1. Read `references/test-optimization.md` — load the full protocol (8 sections).
+2. Read every test file written or modified in this session, plus `tests/fixtures/base.ts` and `tests/e2e/docs/app-context.md`'s `## Test Infrastructure` section.
+3. Run the 6 checks against each spec.
+4. Apply auto-fixes (per-test patterns, §1–§5 with auto-fix). Write proactive helpers into `base.ts` (cross-test patterns) only when both gates apply (UI-covered + API discovered, see §4). Re-run the affected tests; confirm they still pass.
+5. Emit the structured return per `references/test-optimization.md` §8.
+6. Proceed to Stage 4b.
+
+If Stage 4a's auto-fixes cause a previously-passing test to fail, follow Rule 7 (failure-diagnosis protocol) — inspect the screenshot, classify, fix or revert. Do not advance to Stage 4b until Stage 4a's tests are green again.
+
+### Stage 4b: API Compliance Review
 
 **Goal:** Review test code against the API Reference to ensure correct usage of the `@civitas-cerebrum/element-interactions` package.
 
-**This stage triggers automatically every time a test reaches passing state** in Stage 3. Do NOT batch — review each test case immediately after it passes, before moving on to the next scenario. Even if the tests pass, they may be using the API incorrectly (wrong argument order, deprecated methods, missing options, incorrect types). Catching issues early prevents the same mistake from propagating into subsequent test cases.
+**This stage triggers automatically every time Stage 4a returns clean.** Do NOT batch — review each test case immediately after Stage 4a clears, before moving on to the next scenario. Even if the tests pass, they may be using the API incorrectly (wrong argument order, deprecated methods, missing options, incorrect types). Catching issues early prevents the same mistake from propagating into subsequent test cases.
 
 ### Review Checklist
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.8 — 2026-07-28
 
 ### Added
 
@@ -106,6 +106,14 @@
     `{ x, y, width, height }` (CSS pixels, main-frame relative) or `null` when it
     is not rendered (short-circuits on zero matches rather than blocking on
     `boundingBox()`'s own auto-wait). Mirrored on `Extractions.getBoundingBox`.
+
+### Security
+
+- Clear the high-severity `npm audit` findings published since 0.3.7: in-range
+  lockfile bump for `linkify-it` (GHSA-v245-v573-v5vm, via `mailparser`), and a
+  scoped override lifting `@civitas-cerebrum/test-coverage`'s `glob` to `^13`,
+  clearing `brace-expansion` GHSA-mh99-v99m-4gvg (which has no in-range fix —
+  every `brace-expansion` ≤ 5.0.7 is affected).
 
 ## 0.3.7 — 2026-06-12
 

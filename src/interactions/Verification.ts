@@ -183,6 +183,48 @@ export class Verifications {
     }
 
     // ==========================================
+    // Page-level Assertions
+    // ==========================================
+    //
+    // Document-scoped mirrors of the element verification family. They target
+    // the whole page rather than a single repository element, so they live as
+    // direct Playwright `expect(page|locator)` assertions here (no Element
+    // resolution) — the single implementation behind `steps.verifyPage*`.
+
+    /**
+     * Asserts the document body contains the given text (substring or RegExp).
+     * Web-first: retries until the body text matches or the timeout expires.
+     * @param text - Substring or RegExp expected somewhere in the rendered body text.
+     */
+    async pageContainsText(text: string | RegExp, options?: VerifyOptions): Promise<void> {
+        const { matcher, timeout } = this.prepare(this.page.locator('body'), options);
+        await matcher.toContainText(text, { timeout });
+    }
+
+    /**
+     * Asserts the document body does NOT contain the given text — the negated
+     * companion to {@link pageContainsText}. Use for "not a 404" / no-error-copy
+     * checks. Text-level only: raw markup never appears in rendered text — for
+     * markup-level assertions use `pageHtmlContains` with `{ negated: true }`.
+     * @param text - Substring or RegExp expected to be absent from the body text.
+     */
+    async pageNotContainsText(text: string | RegExp, options?: VerifyOptions): Promise<void> {
+        await this.pageContainsText(text, { ...options, negated: !(options?.negated ?? false) });
+    }
+
+    /**
+     * Asserts the page `<title>` equals the given string or matches the RegExp.
+     * Wraps Playwright's `expect(page).toHaveTitle`.
+     * @param title - Exact title string or a RegExp the title must match.
+     */
+    async pageTitle(title: string | RegExp, options?: VerifyOptions): Promise<void> {
+        const timeout = options?.timeout ?? this.ELEMENT_TIMEOUT;
+        const base = options?.errorMessage ? expect(this.page, options.errorMessage) : expect(this.page);
+        const matcher = options?.negated ? base.not : base;
+        await matcher.toHaveTitle(title, { timeout });
+    }
+
+    // ==========================================
     // HTML Assertions
     // ==========================================
     //
@@ -503,6 +545,62 @@ export class Verifications {
             'to be present',
             'sessionStorage', key, options,
         );
+    }
+
+    // ==========================================
+    // Window property (window-level JS state)
+    // ==========================================
+    //
+    // Mirrors the storage poll: read the dotted-path window value on each tick,
+    // run the caller's predicate, and retry until it holds (or its negation) or
+    // the timeout expires. The matcher selection (equals/contains/.../lessThan)
+    // is resolved on the Steps side into a single predicate passed in here.
+
+    /**
+     * Polls a `window` value (read by dotted path) against a predicate until it
+     * holds (or its negation) or the timeout expires. The single source of
+     * truth behind `steps.verifyWindowProperty`. The `describe` string is the
+     * human-readable tail of the failure header (e.g. `to be greater than 0`).
+     */
+    async windowProperty(
+        path: string,
+        predicate: (value: unknown) => boolean,
+        describe: string,
+        options?: VerifyOptions,
+    ): Promise<void> {
+        const timeout = options?.timeout ?? this.ELEMENT_TIMEOUT;
+        const negated = options?.negated ?? false;
+        const neg = negated ? 'not ' : '';
+        const header = options?.errorMessage ?? `expected window.${path} ${neg}${describe}`;
+
+        let lastValue: unknown;
+        let captured = false;
+        try {
+            await expect.poll(async () => {
+                try {
+                    const value = await this.page.evaluate(
+                        (p) => {
+                            const v = p.split('.').reduce((o: unknown, k: string) => (o == null ? o : (o as Record<string, unknown>)[k]), window as unknown);
+                            // Functions/symbols serialize to undefined across the
+                            // evaluate boundary, which would false-negative
+                            // presence/truthiness checks — send a marker instead.
+                            return (typeof v === 'function' || typeof v === 'symbol') ? `[non-serializable: ${typeof v}]` : v;
+                        },
+                        path,
+                    );
+                    lastValue = value;
+                    captured = true;
+                    return predicate(value) !== negated;
+                } catch {
+                    return false;
+                }
+            }, { timeout, message: header }).toBe(true);
+        } catch {
+            const actual = !captured ? '<unavailable>' : (() => {
+                try { return JSON.stringify(lastValue); } catch { return String(lastValue); }
+            })();
+            throw new Error(`${header}\n  actual: ${actual}`);
+        }
     }
 
     /**

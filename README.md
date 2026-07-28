@@ -201,6 +201,28 @@ test('Fluent checkout flow', async ({ steps }) => {
 ```
 
 > **`.visible()` vs `.visible` vs `.isVisible()`.** `steps.on(el, page).visible()` (a **call**) is the *visible-selection strategy*: among duplicate matches it resolves the visible one via `repo.getVisible(...)` and **throws if none is visible** — use it to disambiguate responsive desktop/mobile duplicate elements. `steps.on(el, page).visible` (no call) is the *matcher-tree boolean field* (`.visible.toBeTrue()`). Both coexist on the same chain. Distinct again from `.ifVisible()` / `.isVisible()`, which *conditionally skip* when the element is hidden rather than selecting and proceeding.
+#### Scoped child queries: `findByRole` / `findByText` / `findBySelector`
+
+Query "X within a named element" without ever exposing the parent `Locator` to your test. Each resolves the parent (`steps.on(name, page)`) and returns a **scoped `ElementAction`** querying inside it — composing with every existing terminal (`.count`, `.verifyState`, `.click`, `.getText`, `.first()` / `.nth()`, the matcher tree, …). They mirror Playwright's `getByRole` / `getByText` / `locator`, but as an explicit within-parent sub-query distinguished from top-level repository resolution.
+
+* **`findByRole(role, options?: { name?: string | RegExp; exact?: boolean })`** — scopes `parent.getByRole(role, options)`.
+* **`findByText(text: string | RegExp, options?: { exact?: boolean })`** — scopes `parent.getByText(text, options)`.
+* **`findBySelector(css: string)`** — scopes `parent.locator(css)`.
+
+```ts
+// Count the buttons inside a named dialog — no parent selector in the test.
+await steps.on('cookieDialog', 'CookieBanner').findByRole('button').count.toBe(2);
+await steps.on('cookieDialog', 'CookieBanner').findByRole('button', { name: /voorkeuren|manage/i }).count.toBe(0);
+
+// Assert text that lives inside a named drawer is visible.
+await steps.on('cartDrawer', 'CartDrawer').findByText('Je winkelwagen is leeg').verifyState('visible');
+
+// Fill an input scoped to a named panel; .first() / .nth() narrowing composes.
+await steps.on('panel', 'Page').findBySelector("input[name='email']").fill('a@b.com');
+await steps.on('table', 'TablePage').findByRole('row').nth(1).getText();
+```
+
+`.first()` / `.nth(i)` narrow the scoped match the same way they narrow a repo-resolved element; count / order terminals see the whole scoped set.
 
 ### Expect Matcher Tree
 
@@ -453,6 +475,8 @@ Every method below automatically fetches the Playwright `Locator` using your `pa
 * **`selectDropdown(elementName, pageName, options?: DropdownSelectOptions)`** — Selects an option from a `<select>` element and returns its `value`. Defaults to `{ type: DropdownSelectType.RANDOM }`. Also supports `VALUE` (exact match) and `INDEX` (zero-based).
 * **`setSliderValue(elementName, pageName, value: number)`** — Sets a range input (`<input type="range">`) to the specified numeric value.
 * **`pressKey(key: string)`** — Presses a keyboard key at the page level (e.g. `'Enter'`, `'Escape'`, `'Tab'`).
+* **`pressKeys(keys: string[])`** — Presses a multi-key chord at the page level; parts are joined with `+`, so `['Control', 'A']` presses `Control+A`. The intent-revealing companion to `pressKey` for shortcuts where listing the modifiers reads clearer. Throws on an empty array.
+* **`dispatchEvent(elementName, pageName, type: string, eventInit?)`** — Dispatches a synthetic DOM event on a named element WITHOUT actionability checks (custom events, firing `input`/`change` on widgets that swallow synthetic typing). Prefer `click`/`fill`/`pressKey` for real user input — this is the controlled escape for driving handlers directly. Example: `await steps.dispatchEvent('searchInput', 'HomePage', 'input')`.
 * **`typeSequentially(elementName, pageName, text: string, delay?: number)`** — Types text character by character with a configurable delay (default `100ms`). Ideal for OTP inputs or fields with `keyup` listeners.
 
 ### 📊 Data Extraction
@@ -469,6 +493,9 @@ Every method below automatically fetches the Playwright `Locator` using your `pa
 * **`removeSessionStorage(key: string)`** — Same shape, against `window.sessionStorage`.
 * **`clearLocalStorage()`** — Removes every key from `window.localStorage` (native `clear` contract). Reset persisted state between phases of a test.
 * **`clearSessionStorage()`** — Same shape, against `window.sessionStorage`.
+* **`getWindowProperty<T>(path: string)`** — Reads a `window`-level value by dotted path — e.g. `'__XSS_FIRED'`, `'dataLayer.length'`, `'document.title'`. Walks the path key-by-key and returns `undefined` for any missing segment (never throws on a missing path). Use to assert window-state the DOM doesn't surface: analytics layers, injected sentinels, feature flags.
+* **`setWindowProperty(path: string, value: unknown)`** — Sets a `window`-level value by dotted path, creating intermediate objects as needed. The mutating companion to `getWindowProperty`; use to seed window-level state a test depends on.
+* **`evaluateScript<T>(fn, arg?)`** — The **single labelled escape hatch** for arbitrary in-page JavaScript: `page.evaluate(fn, arg)`, typed and logged. This is the **last resort** — prefer the targeted steps (`getWindowProperty`, `verifyWindowProperty`, the matcher tree, scoped queries), which stay named, retrying, and grep-able. Reach here only when no targeted step expresses the read. Example: `await steps.evaluateScript<number>(() => document.querySelectorAll('a').length)`.
 
 ### ✅ Verification
 
@@ -482,10 +509,14 @@ Every method below automatically fetches the Playwright `Locator` using your `pa
 * **`verifyState(elementName, pageName, state)`** — Asserts the state of an element. Supported states: `'enabled'`, `'disabled'`, `'editable'`, `'checked'`, `'focused'`, `'visible'`, `'hidden'`, `'attached'`, `'inViewport'`.
 * **`verifyAttribute(elementName, pageName, attributeName: string, expectedValue: string)`** — Asserts that an element has a specific HTML attribute with an exact value.
 * **`verifyUrlContains(text: string)`** — Asserts that the current URL contains the expected substring.
+* **`verifyPageContainsText(text: string | RegExp, options?: { timeout?: number; errorMessage?: string })`** — Page-level mirror of `verifyTextContains`. Asserts the document body contains `text` (substring or RegExp), with web-first retry. Use for page-wide copy where no single element is the natural scope. Example: `await steps.verifyPageContainsText(/404|niet gevonden/i)`.
+* **`verifyPageNotContainsText(text: string | RegExp, options?: { timeout?: number; errorMessage?: string })`** — Negated companion. Asserts the body does **not** contain `text`. Use for "not a 404" / no-error-copy body checks. Text-level: raw markup never appears in rendered text — for markup-level assertions use `verifyPageHtmlContains(html, { negated: true })`. Example: `await steps.verifyPageNotContainsText(/server error/i)`.
+* **`verifyPageTitle(title: string | RegExp, options?: { timeout?: number; errorMessage?: string })`** — Asserts the page `<title>` equals the string or matches the RegExp. Wraps `expect(page).toHaveTitle`.
 * **`verifyInputValue(elementName, pageName, expectedValue: string)`** — Asserts that an input, textarea, or select element has the expected value.
 * **`verifyTabCount(expectedCount: number)`** — Asserts the number of currently open tabs/pages in the browser context.
 * **`verifyLocalStorage(key: string, options: StorageVerifyOptions)`** — Asserts a property of `localStorage[key]`. Pick exactly one matcher in the options: `{ equals: string }` (exact match), `{ contains: string }` (substring), `{ matches: RegExp }`, or `{ present: boolean }` (existence). All four forms also accept `negated`, `timeout`, and `errorMessage`. Polls until the predicate holds or the timeout expires, so it survives the race between a UI action firing and its persistence side-effect landing.
 * **`verifySessionStorage(key: string, options: StorageVerifyOptions)`** — Same shape, against `window.sessionStorage`.
+* **`verifyWindowProperty(path: string, options: WindowVerifyOptions)`** — Retrying assertion over a `window`-level value read by dotted path. Pick exactly one matcher: `{ equals }`, `{ contains }` (substring / array membership), `{ matches: RegExp }`, `{ present: boolean }`, `{ truthy: boolean }`, `{ greaterThan: number }`, or `{ lessThan: number }`. All forms also accept `negated`, `timeout`, and `errorMessage`. Polls until the predicate holds (or its negation) or the timeout expires.
 * **`expectNoRequest(urlPattern: string | RegExp, action, options?: { timeout?: number; methods?: ('GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS')[]; redactQuery?: boolean })`** — Negative companion to `waitForResponse`. Asserts that **no** request matching `urlPattern` fires during `action` (and an observation window after, default `1000`ms). Use to prove a client-side block — HTML5 `required`, native `type=email` validation, custom JS guards — short-circuits before the XHR is issued. Strings are Playwright globs (same semantics as `waitForResponse`); reach for a RegExp for contains-style matches. Throws with the offending `method url` lines when a matching request did fire. **Secret-leak surface**: the offender URL is included verbatim in the thrown error (which flows into runner output and Playwright traces) — pass `{ redactQuery: true }` when your URLs may carry tokens or API keys in query parameters.
 
 ```ts
@@ -496,6 +527,32 @@ await steps.verifyLocalStorage('build', { matches: /^v\d+$/ });
 await steps.verifyLocalStorage('seen', { present: true });
 await steps.verifyLocalStorage('temp', { present: false });                  // absence
 await steps.verifyLocalStorage('theme', { equals: 'light', negated: true }); // not equal
+
+// Window-level state (analytics layers, injected flags, XSS sentinels)
+await steps.verifyWindowProperty('dataLayer.length', { greaterThan: 0 });
+await steps.verifyWindowProperty('__test.flag', { equals: true });
+await steps.verifyWindowProperty('__XSS_FIRED', { present: false });          // sentinel never fired
+await steps.verifyWindowProperty('document.title', { matches: /Wishlist/i });
+```
+
+### 🌐 Session-aware HTTP requests
+
+Backed by Playwright's `page.request` (`APIRequestContext`), which **shares the browser context's cookies/session** — the right tool for authenticated redirect / protected-route contract checks (e.g. "hitting `/account` while logged out 30x-redirects to `/login`"). Distinct from the wasapi `api*` external-service client. Each verb returns a typed `BrowserResponse`; `failOnStatusCode` defaults to `false` so status assertions work on 4xx/5xx responses.
+
+```ts
+import { BrowserResponse, BrowserRequestOptions } from '@civitas-cerebrum/element-interactions';
+```
+
+* **`requestGet(url, opts?)`** / **`requestPost`** / **`requestPut`** / **`requestPatch`** / **`requestDelete`** / **`requestHead`** — Thin wrappers over `page.request.<verb>`. `opts: { maxRedirects?, headers?, params?, data?, form?, failOnStatusCode?, timeout? }` pass through to Playwright's request options. Return a `BrowserResponse`: `{ status, ok, url, headers, statusText, json<T>(), text(), body() }`.
+* **`verifyRequestStatus(res: BrowserResponse, code: number)`** — Asserts the response status equals `code` (simple throw helper; the response is already resolved).
+* **`verifyRequestHeader(res: BrowserResponse, name: string, value?: string | RegExp)`** — Asserts a header is present (name match is case-insensitive). Omit `value` for presence only; a string asserts exact equality (values are case-sensitive, matching `verifyApiHeader` — use a `RegExp` with `/i` for case-insensitive matching); a `RegExp` asserts a match.
+* **`verifyRequestOk(res: BrowserResponse)`** — Asserts the response is a 2xx success.
+
+```ts
+const res = await steps.requestGet('/account', { maxRedirects: 0 });   // uses the logged-in session
+await steps.verifyRequestStatus(res, 307);
+await steps.verifyRequestHeader(res, 'location', /\/login/);
+expect(await res.text()).toContain('Sign in');
 ```
 
 ### 🔍 Visibility — Probe + Gate
@@ -589,6 +646,8 @@ await steps.clickListedElement('tableRows', 'Users', {
 
 * **`waitForNetworkIdle(options?: { timeout?: number; optional?: boolean })`** — Waits until there are no in-flight network requests for at least 500ms. `timeout` sets a per-call bound (without it, Playwright's default timeout applies — configurable via `page.setDefaultTimeout` / the test config). `optional: true` resolves quietly on a `TimeoutError` instead of throwing, for best-effort settling where lingering traffic should not fail the test (real failures still throw). With no options, behaviour is unchanged.
 * **`waitForLoadState(state: LoadState, options?: { timeout?: number })`** — Waits for the page to reach the given lifecycle `state` (`'load'`, `'domcontentloaded'`, or `'networkidle'`). The general-purpose lifecycle-wait companion to `waitForNetworkIdle` (which is fixed to `'networkidle'`): use it for a standalone wait **after an action** that does not navigate — e.g. waiting for `'domcontentloaded'` once a client-side view swap finishes. `options.timeout` bounds the wait.
+* **`pace(ms: number)`** — A deliberate pause, named `pace` (NOT `wait`) to signal intentional timing control — settling a debounce, spacing rapid-fire actions — never a substitute for a wait-for-state (prefer `waitForState` / `waitForUrl` / a web-first assertion when you are actually waiting for the app to reach a condition). Throws on a negative or non-finite duration. Mirrored on `Utils.pace`.
+* **`repeat(action, times, options?: { intervalMs? })`** — Runs `action` `times` times in sequence (passing the zero-based index) and returns every result in order; with `intervalMs`, paces BETWEEN iterations (never before the first or after the last). The intent-revealing form of "do X rapidly N times". Throws unless `times` is a non-negative integer. Example: `await steps.repeat(i => steps.on('swatch', 'PDP').nth(i).click(), 3, { intervalMs: 120 })`. Mirrored on `Utils.repeat`.
 * **`waitForResponse(urlPattern: string | RegExp, action: () => Promise<void>)`** — Executes an action and waits for a matching network response. Returns the `Response` object. For the negative companion (asserting **no** matching request fires), see `expectNoRequest` in the Verification section.
 * **`waitAndClick(elementName, pageName, state?: string, options?)`** — Waits for an element to reach a state (default `'visible'`), then clicks it. Throws when the element never reaches the state — `optional` softness is deliberately not inherited here.
 
@@ -606,6 +665,7 @@ await steps.clickListedElement('tableRows', 'Users', {
 * **`getCount(elementName, pageName)`** — Returns the number of DOM elements matching the locator.
 * **`getInputValue(elementName, pageName)`** — Returns the current `value` property of an input, textarea, or select element.
 * **`getCssProperty(elementName, pageName, property: string)`** — Returns a computed CSS property value (e.g. `'rgb(255, 0, 0)'`).
+* **`getBoundingBox(elementName, pageName, options?)`** — Returns the element's bounding box `{ x, y, width, height }` (CSS pixels, main-frame relative), or `null` when the element is not rendered (short-circuits on zero matches instead of blocking on `boundingBox()`'s auto-wait). Use for layout/geometry assertions the DOM doesn't otherwise surface: overlap, off-screen positioning, collapsed `0×0` regions. Mirrored on `Extractions.getBoundingBox`.
 * **`getPageText()`** — Returns the rendered text of the current page (`document.body.innerText`). The page-level text companion to `getPageHtml` — use for page-level text assertions where no single element is the natural scope (e.g. confirming a 404 body renders known copy).
 
 ### ✅ Additional Verification

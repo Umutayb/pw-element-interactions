@@ -1,6 +1,6 @@
 # RFC: Complementary Steps API — eliminating the raw-`page.*` residual
 
-**Status:** proposed · **Author:** consumer-driven (Mr Marvis e2e residual audit)
+**Status:** adopted — all three phases shipped (#215, #216, #217) · **Author:** consumer-driven (Mr Marvis e2e residual audit)
 
 ## Motivation
 
@@ -75,11 +75,13 @@ cookies — distinct from the wasapi `apiGet` external-service client):
 const res = await steps.requestGet('/account', { maxRedirects: 0 });   // uses the logged-in session
 await steps.verifyRequestStatus(res, 307);
 await steps.verifyRequestHeader(res, 'location', /\/login/);
-// requestGet/Post/Put/Patch/Delete/Head; opts { maxRedirects, headers, params, data, failOnStatusCode };
-// response { status, headers, json(), text() } + verifyRequest{Status,Header,Json}
+// requestGet/Post/Put/Patch/Delete/Head; opts { maxRedirects, headers, params, data, form, failOnStatusCode, timeout };
+// response { status, ok, url, headers, statusText, json(), text(), body() }
+// + verifyRequestStatus / verifyRequestHeader / verifyRequestOk (shipped in place of the
+//   originally-sketched verifyRequestJson — assert on `await res.json()` directly instead)
 ```
 
-### Phase 3 — timing + dispatch/keys/style misc
+### Phase 3 — timing + dispatch/keys/geometry misc
 
 ```ts
 await steps.repeat((i) => steps.on('swatch', 'PDP').nth(i).click({ force: true }), 3, { intervalMs: 120 });
@@ -88,6 +90,10 @@ await steps.dispatchEvent('name', 'Page', 'click');
 await steps.pressKeys(['Control', 'A']);
 await steps.getBoundingBox('name', 'Page');
 ```
+
+(The computed-style slice originally sketched for this phase was already covered
+by the pre-existing `getCssProperty` / `verifyCssProperty`, so phase 3 shipped
+geometry only.)
 
 ## Naming rationale
 
@@ -107,8 +113,8 @@ new methods; the window/HTTP/timing families are new namespaced methods.
 
 ## Rollout
 
-- **PR 1 (this):** page-level family + scoped `findBy*`.
-- **PR 2:** window/script + `request*`.
-- **PR 3:** timing + dispatch/keys/style.
+- **PR 1 (#215):** page-level family + scoped `findBy*`. — shipped
+- **PR 2 (#216):** window/script + `request*`. — shipped
+- **PR 3 (#217):** timing + dispatch/keys/geometry. — shipped
 
 Each phase is independently shippable and closes a distinct slice of the residual.

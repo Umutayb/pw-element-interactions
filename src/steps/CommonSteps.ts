@@ -1912,6 +1912,12 @@ export class Steps {
      * @param ms - Pause duration in milliseconds (non-negative).
      */
     async pace(ms: number): Promise<void> {
+        // Enforce the contract before logging so a rejected duration never
+        // produces a misleading `Pacing for NaNms` line ahead of the throw
+        // (same rationale as pressKeys). Utils.pace re-validates for direct callers.
+        if (!Number.isFinite(ms) || ms < 0) {
+            throw new Error(`pace(ms) requires a non-negative, finite duration, got ${ms}`);
+        }
         log.wait('Pacing for %dms', ms);
         await this.utils.pace(ms);
     }
@@ -1937,7 +1943,12 @@ export class Steps {
         times: number,
         options?: { intervalMs?: number },
     ): Promise<T[]> {
-        log.wait('Repeating action %d time(s)%s', times, options?.intervalMs ? ` (every ${options.intervalMs}ms)` : '');
+        // Validate before logging (see pace); `!== undefined` so an intentional
+        // `intervalMs: 0` still shows in the log line.
+        if (!Number.isInteger(times) || times < 0) {
+            throw new Error(`repeat(fn, times) requires a non-negative integer count, got ${times}`);
+        }
+        log.wait('Repeating action %d time(s)%s', times, options?.intervalMs !== undefined ? ` (every ${options.intervalMs}ms)` : '');
         return await this.utils.repeat(action, times, options);
     }
 

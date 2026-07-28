@@ -371,7 +371,7 @@ export class Interactions {
      */
     async dispatchEvent(element: WebElement, type: string, eventInit?: Record<string, unknown>): Promise<void> {
         await this.softProbe(element, 'attached');
-        await element.locator.dispatchEvent(type, eventInit);
+        await element.locator.dispatchEvent(type, eventInit, { timeout: this.ELEMENT_TIMEOUT });
     }
 
     async clearInput(element: WebElement): Promise<void> {

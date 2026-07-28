@@ -1288,14 +1288,20 @@ export class Steps {
 
     /**
      * Asserts the document body does NOT contain the given text — the negated
-     * companion to {@link verifyPageContainsText}. Closes XSS "no raw `<script>`"
-     * and "not a 404" body checks.
+     * companion to {@link verifyPageContainsText}. Use for "not a 404" /
+     * no-error-copy body checks.
+     *
+     * NOTE: this is a TEXT-level check (`toContainText` reads rendered text),
+     * so it can never see raw markup — injected `<script>` that executes does
+     * not appear in the body text, while inert, escaped markup DOES show up as
+     * text. For markup-level assertions use
+     * {@link verifyPageHtmlContains} with `{ negated: true }`.
      *
      * @param text - Substring or RegExp expected to be absent from the body text.
      * @param options - `{ timeout?, errorMessage? }`.
      * @example
      * ```ts
-     * await steps.verifyPageNotContainsText('<script>alert');
+     * await steps.verifyPageNotContainsText(/page not found/i);
      * await steps.verifyPageNotContainsText(/server error/i);
      * ```
      */

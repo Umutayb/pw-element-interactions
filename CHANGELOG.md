@@ -31,13 +31,15 @@
   hidden) — `.visible()` selects the visible one and proceeds. Disambiguates
   responsive duplicate elements.
 - **Page-level verification family** — document-scoped mirrors of the element
-  verification surface, so page-wide copy / title / XSS checks no longer drop to
+  verification surface, so page-wide copy / title checks no longer drop to
   raw Playwright `page.*`:
   - `steps.verifyPageContainsText(text: string | RegExp, options?)` — web-first
     assert the document body contains `text`. Mirrored on
     `Verifications.pageContainsText`.
   - `steps.verifyPageNotContainsText(text: string | RegExp, options?)` — negated
-    companion; closes XSS "no raw `<script>`" / "not a 404" body checks.
+    companion; "not a 404" / no-error-copy body checks. Text-level — raw markup
+    never appears in rendered text, so for markup-level assertions use
+    `verifyPageHtmlContains(html, { negated: true })` instead.
     Mirrored on `Verifications.pageNotContainsText`.
   - `steps.verifyPageTitle(title: string | RegExp, options?)` — wraps
     `expect(page).toHaveTitle`. Mirrored on `Verifications.pageTitle`.

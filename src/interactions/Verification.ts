@@ -203,8 +203,9 @@ export class Verifications {
 
     /**
      * Asserts the document body does NOT contain the given text — the negated
-     * companion to {@link pageContainsText}. Closes XSS "no raw `<script>`" and
-     * "not a 404" checks.
+     * companion to {@link pageContainsText}. Use for "not a 404" / no-error-copy
+     * checks. Text-level only: raw markup never appears in rendered text — for
+     * markup-level assertions use `pageHtmlContains` with `{ negated: true }`.
      * @param text - Substring or RegExp expected to be absent from the body text.
      */
     async pageNotContainsText(text: string | RegExp, options?: VerifyOptions): Promise<void> {

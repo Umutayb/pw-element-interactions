@@ -228,6 +228,23 @@ export class ElementAction {
     }
 
     /**
+     * Raw, un-waited target for visibility probes (`VisibleChain`). Scoped
+     * chains resolve through `scopedChild` — the repository has no entry for
+     * the stamped scoped name; repository chains construct the `WebElement`
+     * straight from the raw selector so the probe's own `timeout` is the only
+     * wait applied (avoiding the repo-resolution default `repo.get` imposes).
+     * Note the scoped path resolves the PARENT via the repository first, so a
+     * missing parent pays that resolution wait before the probe reports false.
+     */
+    async probeTarget(): Promise<WebElement> {
+        if (this.scopedChild) {
+            return new WebElement(this.narrowScoped(await this.scopedChild()));
+        }
+        const selector = this.repo.getSelector(this.elementName, this.pageName);
+        return new WebElement(this.repo.driver.locator(selector).first());
+    }
+
+    /**
      * Apply this chain's strategy selectors to a scoped child locator. `.nth(i)`
      * narrows by index, the collection strategy returns the whole set,
      * `.visible()` filters to the visible match, and the default / `.first()`
@@ -470,8 +487,16 @@ export class ElementAction {
      * `repo.get(...)` because that would pay the 15s repo-resolution wait
      * waiting for the element to become attached, which is the opposite of
      * what we want when asserting absence.
+     *
+     * Scoped `findBy*` chains assert on the child locator itself (the stamped
+     * scoped name has no repository entry). Resolving the PARENT still waits
+     * for it: asserting "child absent" requires the parent to exist.
      */
     async verifyAbsence(): Promise<void> {
+        if (this.scopedChild) {
+            await this.interactions.verify.absence(new WebElement(this.narrowScoped(await this.scopedChild())));
+            return;
+        }
         const selector = this.repo.getSelector(this.elementName, this.pageName);
         await this.interactions.verify.absence(selector);
     }

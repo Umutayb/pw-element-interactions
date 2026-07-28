@@ -180,6 +180,15 @@ test.describe('Scoped child queries — findByRole / findByText / findBySelector
         await expect(action.findByText('Alice Martin').verifyAbsence()).rejects.toThrow();
     });
 
+    test('probeTarget resolves the probe element for scoped and repo chains', async ({ steps }) => {
+        // The raw, un-waited target VisibleChain probes against: scoped chains
+        // resolve their child locator; repo chains resolve the raw selector.
+        const scoped = await steps.on('table', 'TablePage').findByText('Alice Martin').probeTarget();
+        await scoped.waitFor({ state: 'visible', timeout: 2000 });
+        const fromRepo = await steps.on('table', 'TablePage').probeTarget();
+        await fromRepo.waitFor({ state: 'visible', timeout: 2000 });
+    });
+
     test('.visible() strategy composes with scoped chains', async ({ steps }) => {
         // Regression (merge of .visible() × findBy*): the strategy used to be
         // silently ignored on scoped chains, degrading to .first().

@@ -1458,8 +1458,11 @@ export class Steps {
 
     /**
      * Asserts a {@link BrowserResponse} carries a header. Name match is
-     * case-insensitive. When `value` is omitted, asserts presence only; a
-     * string asserts exact (case-insensitive) equality; a RegExp asserts match.
+     * case-insensitive (header names are, per RFC 9110). When `value` is
+     * omitted, asserts presence only; a string asserts exact equality —
+     * header VALUES are case-sensitive (ETags, redirect Location paths,
+     * nonces), matching `verifyApiHeader`; use a RegExp with the `i` flag
+     * for case-insensitive matching.
      */
     async verifyRequestHeader(res: BrowserResponse, name: string, value?: string | RegExp): Promise<void> {
         log.verify('Verifying response header "%s"', name);
@@ -1477,7 +1480,7 @@ export class Steps {
             }
             return;
         }
-        if (actual.toLowerCase() !== value.toLowerCase()) {
+        if (actual !== value) {
             throw new Error(`expected response header "${name}" to be "${value}", got "${actual}"`);
         }
     }

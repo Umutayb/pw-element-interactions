@@ -579,7 +579,13 @@ export class Verifications {
             await expect.poll(async () => {
                 try {
                     const value = await this.page.evaluate(
-                        (p) => p.split('.').reduce((o: unknown, k: string) => (o == null ? o : (o as Record<string, unknown>)[k]), window as unknown),
+                        (p) => {
+                            const v = p.split('.').reduce((o: unknown, k: string) => (o == null ? o : (o as Record<string, unknown>)[k]), window as unknown);
+                            // Functions/symbols serialize to undefined across the
+                            // evaluate boundary, which would false-negative
+                            // presence/truthiness checks — send a marker instead.
+                            return (typeof v === 'function' || typeof v === 'symbol') ? `[non-serializable: ${typeof v}]` : v;
+                        },
                         path,
                     );
                     lastValue = value;

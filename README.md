@@ -543,7 +543,7 @@ import { BrowserResponse, BrowserRequestOptions } from '@civitas-cerebrum/elemen
 
 * **`requestGet(url, opts?)`** / **`requestPost`** / **`requestPut`** / **`requestPatch`** / **`requestDelete`** / **`requestHead`** — Thin wrappers over `page.request.<verb>`. `opts: { maxRedirects?, headers?, params?, data?, form?, failOnStatusCode?, timeout? }` pass through to Playwright's request options. Return a `BrowserResponse`: `{ status, ok, url, headers, statusText, json<T>(), text(), body() }`.
 * **`verifyRequestStatus(res: BrowserResponse, code: number)`** — Asserts the response status equals `code` (simple throw helper; the response is already resolved).
-* **`verifyRequestHeader(res: BrowserResponse, name: string, value?: string | RegExp)`** — Asserts a header is present (name match is case-insensitive). Omit `value` for presence only; a string asserts case-insensitive equality; a `RegExp` asserts a match.
+* **`verifyRequestHeader(res: BrowserResponse, name: string, value?: string | RegExp)`** — Asserts a header is present (name match is case-insensitive). Omit `value` for presence only; a string asserts exact equality (values are case-sensitive, matching `verifyApiHeader` — use a `RegExp` with `/i` for case-insensitive matching); a `RegExp` asserts a match.
 * **`verifyRequestOk(res: BrowserResponse)`** — Asserts the response is a 2xx success.
 
 ```ts

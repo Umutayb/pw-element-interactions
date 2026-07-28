@@ -207,6 +207,10 @@ export class Extractions {
      *
      * Use for asserting window-level JS state the DOM doesn't surface: analytics
      * layers, injected flags, feature toggles, XSS-fired sentinels, etc.
+     *
+     * Values cross the `page.evaluate` serialization boundary: functions and
+     * symbols arrive as `undefined`. To assert such a property EXISTS, use
+     * `verifyWindowProperty(path, { present: true })`, which detects them in-page.
      */
     async getWindowProperty<T = unknown>(path: string): Promise<T | undefined> {
         return await this.page.evaluate(

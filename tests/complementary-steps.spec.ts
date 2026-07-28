@@ -8,7 +8,7 @@ import { ElementAction, ElementInteractions } from '../src';
  * `page.*` / `page.locator(parent).getBy*` for:
  *
  * - `steps.verifyPageContainsText(text | RegExp)`        — document-body contains
- * - `steps.verifyPageNotContainsText(text | RegExp)`     — document-body absence (XSS / 404)
+ * - `steps.verifyPageNotContainsText(text | RegExp)`     — document-body absence (404 / error copy)
  * - `steps.verifyPageTitle(title | RegExp)`              — page <title>
  * - `steps.getHtml(el, page, { outer })`                 — element-level HTML (inner/outer)
  * - `steps.on(el, page).findByRole / findByText / findBySelector` — scoped child queries
@@ -47,9 +47,10 @@ test.describe('Page-level verification — verifyPageContainsText / NotContainsT
         await steps.verifyPageContainsText(/alice@example\.com/i);
     });
 
-    test('verifyPageNotContainsText passes when the text is absent (XSS-style probe)', async ({ steps }) => {
-        // A raw script payload must never appear as literal body text.
-        await steps.verifyPageNotContainsText('<script>alert');
+    test('verifyPageNotContainsText passes when the text is absent', async ({ steps }) => {
+        // Text-level absence: error copy must not appear in the rendered body.
+        // (Raw markup never appears in rendered text — markup-level checks go
+        // through verifyPageHtmlContains({ negated: true }).)
         await steps.verifyPageNotContainsText(/server error|404 not found/i);
     });
 
@@ -157,5 +158,32 @@ test.describe('Scoped child queries — findByRole / findByText / findBySelector
         await expect(
             steps.on('table', 'TablePage').findByRole('row').random().verifyState('visible'),
         ).rejects.toThrow(/not supported on a scoped findBy\*\(\) chain/);
+    });
+
+    test('isVisible() probe and gate resolve through the scoped chain', async ({ steps }) => {
+        // Regression: the probe used to resolve the stamped scoped name against
+        // the repository, silently returning false for visible scoped elements
+        // and silently skipping gated actions.
+        expect(await steps.on('table', 'TablePage').findByText('Alice Martin').isVisible({ timeout: 2000 })).toBe(true);
+        expect(await steps.on('table', 'TablePage').findByText('Zzz Nobody').isVisible({ timeout: 500 })).toBe(false);
+        // Gate path: the gated action must actually execute on a visible scoped target.
+        await steps.on('table', 'TablePage').findBySelector("[data-testid='table-select-all']").isVisible({ timeout: 2000 }).check();
+        await steps.on('table', 'TablePage').findBySelector("[data-testid='table-select-all']").verifyState('checked');
+    });
+
+    test('verifyAbsence asserts on the scoped child set', async ({ steps, page, repo }) => {
+        // Regression: used to throw a repository-miss error for the stamped scoped name.
+        await steps.on('table', 'TablePage').findByText('Zzz Nobody').verifyAbsence();
+        // And it must still FAIL when the scoped child is present.
+        const fast = new ElementInteractions(page, { timeout: FAST_TIMEOUT });
+        const action = new ElementAction(repo, 'table', 'TablePage', fast, FAST_TIMEOUT);
+        await expect(action.findByText('Alice Martin').verifyAbsence()).rejects.toThrow();
+    });
+
+    test('.visible() strategy composes with scoped chains', async ({ steps }) => {
+        // Regression (merge of .visible() × findBy*): the strategy used to be
+        // silently ignored on scoped chains, degrading to .first().
+        const text = await steps.on('table', 'TablePage').findByRole('cell', { name: 'Alice Martin' }).visible().getText();
+        expect(text).toBe('Alice Martin');
     });
 });

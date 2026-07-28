@@ -37,7 +37,7 @@ await steps.getPageText();                                  // (shipped) documen
 await steps.getPageHtml({ outer });                         // (exists)
 await steps.verifyPageContainsText('Wishlist');             // body text contains (substring | RegExp)
 await steps.verifyPageContainsText(/404|niet gevonden/i);
-await steps.verifyPageNotContainsText('<script>alert');     // absence — XSS / "not a 404" checks
+await steps.verifyPageNotContainsText(/server error/i);     // absence — "not a 404" checks (text-level; markup → verifyPageHtmlContains({ negated: true }))
 await steps.verifyPageTitle(/Wishlist/i);                   // wraps expect(page).toHaveTitle
 await steps.getHtml('name', 'Page', { outer });             // element-level HTML
 ```

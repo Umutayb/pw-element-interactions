@@ -5,11 +5,26 @@ import { Utils } from '../utils/ElementUtilities';
 import { EmailClientConfig, EmailSendOptions, EmailReceiveOptions, ReceivedEmail, EmailMarkOptions, EmailMarkAction, EmailFilter } from '@civitas-cerebrum/email-client';
 import { WasapiClient, ApiResponse } from '@civitas-cerebrum/wasapi';
 import { SqlClient, SqlResult, QueryBuilder, UnsupportedEngineException } from '@civitas-cerebrum/sql-client';
-import { StepOptions, DropdownSelectOptions, TextVerifyOptions, CountVerifyOptions, DragAndDropOptions, ListedElementOptions, ListedElementMatch, VerifyListedOptions, GetListedDataOptions, FillFormValue, GetAllOptions, ScreenshotOptions, IsVisibleOptions, StorageVerifyOptions, VisualMatchOptions, VisualMaskTarget } from '../enum/Options';
+import { StepOptions, DropdownSelectOptions, TextVerifyOptions, CountVerifyOptions, DragAndDropOptions, ListedElementOptions, ListedElementMatch, VerifyListedOptions, GetListedDataOptions, FillFormValue, GetAllOptions, ScreenshotOptions, IsVisibleOptions, StorageVerifyOptions, WindowVerifyOptions, VisualMatchOptions, VisualMaskTarget } from '../enum/Options';
+import { BrowserResponse, BrowserRequestOptions } from '../interactions/BrowserRequest';
 import { ExpectNoRequestOptions, WaitUntilState, WaitForNetworkIdleOptions, LoadState } from '../interactions/Navigation';
 import { stepLog as log } from '../logger/Logger';
 import { ElementAction } from './ElementAction';
 import { ExpectBuilder } from './ExpectMatchers';
+
+/**
+ * `JSON.stringify` that never throws — `bigint` and circular references would
+ * otherwise blow up a verifier's description string before its poll even runs.
+ * Falls back to `String(value)` on any serialisation error.
+ */
+function safeStringify(value: unknown): string {
+    try {
+        const json = JSON.stringify(value);
+        return json === undefined ? String(value) : json;
+    } catch {
+        return String(value);
+    }
+}
 
 /**
  * The `Steps` class serves as a unified Facade for test orchestration.
@@ -23,6 +38,7 @@ export class Steps {
     private navigate;
     private extract;
     private verify;
+    private request;
     private utils;
     private email;
     private apiClients: Map<string, WasapiClient>;
@@ -70,6 +86,7 @@ export class Steps {
         this.navigate = interactions.navigate;
         this.extract = interactions.extract;
         this.verify = interactions.verify;
+        this.request = interactions.request;
         this.timeout = timeout;
         this.utils = new Utils(timeout);
         this.email = interactions.email;
@@ -573,6 +590,46 @@ export class Steps {
     }
 
     /**
+     * Presses a multi-key chord at the page level. Parts are joined with `+`, so
+     * `['Control', 'A']` presses `Control+A`. The intent-revealing companion to
+     * {@link pressKey} for shortcuts where listing the modifiers reads clearer.
+     * @param keys - The keys to press together, e.g. `['Meta', 'K']` or `['Control', 'Shift', 'P']`.
+     */
+    async pressKeys(keys: string[]): Promise<void> {
+        // Enforce the contract before logging so an empty chord never produces a
+        // misleading `Pressing keys: ""` line ahead of the throw.
+        if (keys.length === 0) {
+            throw new Error('pressKeys(keys) requires at least one key');
+        }
+        log.interact('Pressing keys: "%s"', keys.join('+'));
+        await this.interact.pressKeys(keys);
+    }
+
+    /**
+     * Dispatches a synthetic DOM event on a named element, optionally with an
+     * `eventInit` payload. Drives event handlers directly WITHOUT actionability
+     * checks — reach for it only when a real interaction can't express the case
+     * (custom events, firing `input`/`change` on a widget that swallows
+     * synthetic typing). Prefer `click` / `fill` / `pressKey` for real user input.
+     * @param elementName - The element name as defined under the given page.
+     * @param pageName - The page name as defined in `page-repository.json`.
+     * @param type - The DOM event type, e.g. `'click'`, `'input'`, `'focus'`.
+     * @param eventInit - Optional event properties, e.g. `{ key: 'Enter', bubbles: true }`.
+     * @param options - Optional step options for element resolution.
+     */
+    async dispatchEvent(
+        elementName: string,
+        pageName: string,
+        type: string,
+        eventInit?: Record<string, unknown>,
+        options?: StepOptions,
+    ): Promise<void> {
+        log.interact('Dispatching "%s" event on "%s" in "%s"', type, elementName, pageName);
+        const element = await this.getWebElement(elementName, pageName, options);
+        await this.interact.dispatchEvent(element, type, eventInit);
+    }
+
+    /**
      * Types text into an input field one character at a time with a delay between keystrokes.
      * @param elementName - The element name as defined under the given page.
      * @param pageName - The page name as defined in `page-repository.json`.
@@ -690,6 +747,25 @@ export class Steps {
     }
 
     /**
+     * Returns the element's bounding box (`{ x, y, width, height }` in CSS
+     * pixels, relative to the main frame) or `null` when it is not rendered.
+     * Use for geometry the DOM doesn't surface: overlap, off-screen placement,
+     * collapsed (`0×0`) regions.
+     * @param elementName - The element name as defined under the given page.
+     * @param pageName - The page name as defined in `page-repository.json`.
+     * @param options - Optional step options for element resolution.
+     */
+    async getBoundingBox(
+        elementName: string,
+        pageName: string,
+        options?: StepOptions,
+    ): Promise<{ x: number; y: number; width: number; height: number } | null> {
+        log.extract('Getting bounding box of "%s" in "%s"', elementName, pageName);
+        const element = await this.getWebElement(elementName, pageName, options);
+        return await this.extract.getBoundingBox(element);
+    }
+
+    /**
      * Retrieves the raw HTML of an element. Defaults to `innerHTML`; pass
      * `{ outer: true }` to get the element's `outerHTML` (the tag itself plus its subtree).
      *
@@ -729,6 +805,57 @@ export class Steps {
     async getPageText(): Promise<string> {
         log.extract('Getting page text');
         return await this.extract.getPageText();
+    }
+
+    /**
+     * Reads a `window`-level value by dotted path — e.g. `'__XSS_FIRED'`,
+     * `'dataLayer.length'`, `'document.title'`. Walks the path key-by-key and
+     * returns `undefined` for any missing segment (never throws on a missing
+     * path). Use to assert window-state the DOM doesn't surface: analytics
+     * layers, injected sentinels, feature flags.
+     *
+     * @example
+     * ```ts
+     * const fired = await steps.getWindowProperty<boolean>('__XSS_FIRED');
+     * const n = await steps.getWindowProperty<number>('dataLayer.length');
+     * const title = await steps.getWindowProperty<string>('document.title');
+     * ```
+     */
+    async getWindowProperty<T = unknown>(path: string): Promise<T | undefined> {
+        log.extract('Getting window property "%s"', path);
+        return await this.extract.getWindowProperty<T>(path);
+    }
+
+    /**
+     * Sets a `window`-level value by dotted path, creating intermediate objects
+     * as needed — the mutating companion to {@link getWindowProperty}. Use to
+     * seed window-level state a test depends on.
+     *
+     * @example
+     * ```ts
+     * await steps.setWindowProperty('__test.flag', true);
+     * ```
+     */
+    async setWindowProperty(path: string, value: unknown): Promise<void> {
+        log.extract('Setting window property "%s"', path);
+        await this.extract.setWindowProperty(path, value);
+    }
+
+    /**
+     * The SINGLE labelled escape hatch for arbitrary in-page JavaScript:
+     * `page.evaluate(fn, arg)`, typed and logged. This is the LAST RESORT —
+     * prefer the targeted steps (`getWindowProperty`, `verifyWindowProperty`,
+     * the matcher tree, scoped queries) which stay named, retrying, and
+     * grep-able. Reach here only when no targeted step expresses the read.
+     *
+     * @example
+     * ```ts
+     * const links = await steps.evaluateScript<number>(() => document.querySelectorAll('a').length);
+     * ```
+     */
+    async evaluateScript<T = unknown>(fn: (arg?: unknown) => T | Promise<T>, arg?: unknown): Promise<T> {
+        log.extract('Evaluating script (escape hatch)');
+        return await this.extract.evaluateScript<T>(fn, arg);
     }
 
     /**
@@ -1257,12 +1384,243 @@ export class Steps {
     }
 
     /**
+     * Retrying assertion over a `window`-level value read by dotted path. Pick
+     * EXACTLY ONE matcher in the `WindowVerifyOptions` union: `equals` |
+     * `contains` | `matches` (RegExp) | `present` (boolean) | `truthy` (boolean)
+     * | `greaterThan` | `lessThan`. Supports `{ negated?, timeout?, errorMessage? }`
+     * modifiers, exactly like the storage verifiers. Polls until the predicate
+     * holds (or its negation) or the timeout expires.
+     *
+     * @example
+     * ```ts
+     * await steps.verifyWindowProperty('dataLayer.length', { greaterThan: 0 });
+     * await steps.verifyWindowProperty('__test.flag', { equals: true });
+     * await steps.verifyWindowProperty('__XSS_FIRED', { present: false });
+     * await steps.verifyWindowProperty('document.title', { matches: /Vue/i });
+     * ```
+     */
+    async verifyWindowProperty(path: string, options: WindowVerifyOptions): Promise<void> {
+        const modifiers = { negated: options.negated, timeout: options.timeout, errorMessage: options.errorMessage };
+        // Dispatch on PROPERTY PRESENCE, not `!== undefined`: the union types
+        // `equals`/`contains` as `unknown`, so a caller may legally pass an
+        // explicit `undefined` — keying on `'x' in options` keeps that on the
+        // intended branch instead of silently falling through to `present`.
+        if ('equals' in options) {
+            log.verify('Verifying window.%s equals %o', path, options.equals);
+            const expected = options.equals;
+            await this.verify.windowProperty(path, v => v === expected, `to equal ${safeStringify(expected)}`, modifiers);
+            return;
+        }
+        if ('contains' in options) {
+            log.verify('Verifying window.%s contains %o', path, options.contains);
+            const needle = options.contains;
+            await this.verify.windowProperty(
+                path,
+                // Gate on the value being defined first — otherwise a missing
+                // path stringifies to "undefined" and `{ contains: 'undef' }`
+                // would falsely pass (the storage verifiers fail on absence).
+                v => v !== undefined && (Array.isArray(v) ? v.includes(needle) : String(v).includes(String(needle))),
+                `to contain ${safeStringify(needle)}`,
+                modifiers,
+            );
+            return;
+        }
+        if ('matches' in options && options.matches !== undefined) {
+            log.verify('Verifying window.%s matches %s', path, options.matches);
+            const regex = options.matches;
+            await this.verify.windowProperty(path, v => v != null && regex.test(String(v)), `to match ${regex}`, modifiers);
+            return;
+        }
+        if ('truthy' in options && options.truthy !== undefined) {
+            const wantTruthy = options.truthy;
+            log.verify('Verifying window.%s is %s', path, wantTruthy ? 'truthy' : 'falsy');
+            await this.verify.windowProperty(path, v => Boolean(v) === wantTruthy, wantTruthy ? 'to be truthy' : 'to be falsy', modifiers);
+            return;
+        }
+        if ('greaterThan' in options && options.greaterThan !== undefined) {
+            log.verify('Verifying window.%s > %d', path, options.greaterThan);
+            const bound = options.greaterThan;
+            await this.verify.windowProperty(path, v => Number(v) > bound, `to be greater than ${bound}`, modifiers);
+            return;
+        }
+        if ('lessThan' in options && options.lessThan !== undefined) {
+            log.verify('Verifying window.%s < %d', path, options.lessThan);
+            const bound = options.lessThan;
+            await this.verify.windowProperty(path, v => Number(v) < bound, `to be less than ${bound}`, modifiers);
+            return;
+        }
+        // 'present' branch. The base predicate is "value is not undefined"; we
+        // flip via negation to assert absence. `present: false` is an absence
+        // check; an explicit `negated: true` flips again. Two flips cancel.
+        const wantPresent = options.present !== false;
+        const userNegated = modifiers.negated ?? false;
+        const negated = wantPresent === userNegated;
+        log.verify('Verifying window.%s is %spresent', path, negated ? 'not ' : '');
+        await this.verify.windowProperty(path, v => v !== undefined, 'to be present', { ...modifiers, negated });
+    }
+
+    // ==========================================
+    // Session-aware HTTP requests (page.request)
+    // ==========================================
+    //
+    // Backed by Playwright's `page.request` (APIRequestContext), which shares
+    // the browser context's cookies/session. Distinct from the wasapi `api*`
+    // external-service client. `failOnStatusCode` defaults to `false` so status
+    // assertions work on 4xx/5xx responses.
+
+    /** Session-aware `GET`. Shares the browser context's cookies. */
+    async requestGet(url: string, opts?: BrowserRequestOptions): Promise<BrowserResponse> {
+        log.api('Request GET %s', url);
+        return await this.request.get(url, opts);
+    }
+
+    /** Session-aware `POST`. Shares the browser context's cookies. */
+    async requestPost(url: string, opts?: BrowserRequestOptions): Promise<BrowserResponse> {
+        log.api('Request POST %s', url);
+        return await this.request.post(url, opts);
+    }
+
+    /** Session-aware `PUT`. Shares the browser context's cookies. */
+    async requestPut(url: string, opts?: BrowserRequestOptions): Promise<BrowserResponse> {
+        log.api('Request PUT %s', url);
+        return await this.request.put(url, opts);
+    }
+
+    /** Session-aware `PATCH`. Shares the browser context's cookies. */
+    async requestPatch(url: string, opts?: BrowserRequestOptions): Promise<BrowserResponse> {
+        log.api('Request PATCH %s', url);
+        return await this.request.patch(url, opts);
+    }
+
+    /** Session-aware `DELETE`. Shares the browser context's cookies. */
+    async requestDelete(url: string, opts?: BrowserRequestOptions): Promise<BrowserResponse> {
+        log.api('Request DELETE %s', url);
+        return await this.request.delete(url, opts);
+    }
+
+    /** Session-aware `HEAD`. Shares the browser context's cookies. */
+    async requestHead(url: string, opts?: BrowserRequestOptions): Promise<BrowserResponse> {
+        log.api('Request HEAD %s', url);
+        return await this.request.head(url, opts);
+    }
+
+    /**
+     * Asserts a {@link BrowserResponse}'s status equals `code`. Simple throw
+     * helper — not a retrying assertion (the response is already resolved).
+     */
+    async verifyRequestStatus(res: BrowserResponse, code: number): Promise<void> {
+        log.verify('Verifying request status is %d', code);
+        if (res.status !== code) {
+            throw new Error(`expected request to ${res.url} to have status ${code}, got ${res.status} (${res.statusText})`);
+        }
+    }
+
+    /**
+     * Asserts a {@link BrowserResponse} carries a header. Name match is
+     * case-insensitive (header names are, per RFC 9110). When `value` is
+     * omitted, asserts presence only; a string asserts exact equality —
+     * header VALUES are case-sensitive (ETags, redirect Location paths,
+     * nonces), matching `verifyApiHeader`; use a RegExp with the `i` flag
+     * for case-insensitive matching.
+     */
+    async verifyRequestHeader(res: BrowserResponse, name: string, value?: string | RegExp): Promise<void> {
+        log.verify('Verifying response header "%s"', name);
+        const lower = name.toLowerCase();
+        // Playwright lower-cases header keys, but normalise defensively.
+        const entry = Object.entries(res.headers).find(([k]) => k.toLowerCase() === lower);
+        if (!entry) {
+            throw new Error(`expected response from ${res.url} to have header "${name}", but it was absent`);
+        }
+        const actual = entry[1];
+        if (value === undefined) return;
+        if (value instanceof RegExp) {
+            if (!value.test(actual)) {
+                throw new Error(`expected response header "${name}" to match ${value}, got "${actual}"`);
+            }
+            return;
+        }
+        if (actual !== value) {
+            throw new Error(`expected response header "${name}" to be "${value}", got "${actual}"`);
+        }
+    }
+
+    /** Asserts a {@link BrowserResponse} is a 2xx success. Simple throw helper. */
+    async verifyRequestOk(res: BrowserResponse): Promise<void> {
+        log.verify('Verifying request ok (2xx)');
+        if (!res.ok) {
+            throw new Error(`expected request to ${res.url} to be ok (2xx), got ${res.status} (${res.statusText})`);
+        }
+    }
+
+    /**
      * Asserts that the current page URL contains the specified substring.
      * @param text - The substring expected to be found in the current URL.
      */
     async verifyUrlContains(text: string): Promise<void> {
         log.verify('Verifying current URL contains: "%s"', text);
         await this.verify.urlContains(text);
+    }
+
+    /**
+     * Asserts the document body contains the given text — the page-level mirror
+     * of {@link verifyTextContains}. Accepts a substring or a RegExp and retries
+     * with web-first semantics until the body matches or the timeout expires.
+     *
+     * Use for page-wide copy checks where no single element is the natural scope
+     * (a flash message anywhere on the page, a "404 / niet gevonden" body, etc.).
+     *
+     * @param text - Substring or RegExp expected somewhere in the rendered body text.
+     * @param options - `{ timeout?, errorMessage? }`.
+     * @example
+     * ```ts
+     * await steps.verifyPageContainsText('Wishlist');
+     * await steps.verifyPageContainsText(/404|niet gevonden/i);
+     * ```
+     */
+    async verifyPageContainsText(text: string | RegExp, options?: { timeout?: number; errorMessage?: string }): Promise<void> {
+        log.verify('Verifying page body contains: %s', text instanceof RegExp ? text.toString() : `"${text}"`);
+        await this.verify.pageContainsText(text, options);
+    }
+
+    /**
+     * Asserts the document body does NOT contain the given text — the negated
+     * companion to {@link verifyPageContainsText}. Use for "not a 404" /
+     * no-error-copy body checks.
+     *
+     * NOTE: this is a TEXT-level check (`toContainText` reads rendered text),
+     * so it can never see raw markup — injected `<script>` that executes does
+     * not appear in the body text, while inert, escaped markup DOES show up as
+     * text. For markup-level assertions use
+     * {@link verifyPageHtmlContains} with `{ negated: true }`.
+     *
+     * @param text - Substring or RegExp expected to be absent from the body text.
+     * @param options - `{ timeout?, errorMessage? }`.
+     * @example
+     * ```ts
+     * await steps.verifyPageNotContainsText(/page not found/i);
+     * await steps.verifyPageNotContainsText(/server error/i);
+     * ```
+     */
+    async verifyPageNotContainsText(text: string | RegExp, options?: { timeout?: number; errorMessage?: string }): Promise<void> {
+        log.verify('Verifying page body does NOT contain: %s', text instanceof RegExp ? text.toString() : `"${text}"`);
+        await this.verify.pageNotContainsText(text, options);
+    }
+
+    /**
+     * Asserts the page `<title>` equals the given string or matches the RegExp.
+     * Wraps Playwright's `expect(page).toHaveTitle`.
+     *
+     * @param title - Exact title string or a RegExp the title must match.
+     * @param options - `{ timeout?, errorMessage? }`.
+     * @example
+     * ```ts
+     * await steps.verifyPageTitle('Dashboard');
+     * await steps.verifyPageTitle(/Wishlist/i);
+     * ```
+     */
+    async verifyPageTitle(title: string | RegExp, options?: { timeout?: number; errorMessage?: string }): Promise<void> {
+        log.verify('Verifying page title: %s', title instanceof RegExp ? title.toString() : `"${title}"`);
+        await this.verify.pageTitle(title, options);
     }
 
     /**
@@ -1543,6 +1901,55 @@ export class Steps {
     async waitForLoadState(state: LoadState, options?: { timeout?: number }): Promise<void> {
         log.wait('Waiting for load state "%s"', state);
         await this.navigate.waitForLoadState(state, options);
+    }
+
+    /**
+     * Deliberate pause for `ms` milliseconds. Named `pace` — NOT `wait` — to
+     * signal intentional timing control (settling a debounce, spacing
+     * rapid-fire actions), never a substitute for a wait-for-state. Whenever you
+     * are actually waiting for the app to reach a condition, prefer
+     * {@link waitForState}, {@link waitForUrl}, or a web-first assertion.
+     * @param ms - Pause duration in milliseconds (non-negative).
+     */
+    async pace(ms: number): Promise<void> {
+        // Enforce the contract before logging so a rejected duration never
+        // produces a misleading `Pacing for NaNms` line ahead of the throw
+        // (same rationale as pressKeys). Utils.pace re-validates for direct callers.
+        if (!Number.isFinite(ms) || ms < 0) {
+            throw new Error(`pace(ms) requires a non-negative, finite duration, got ${ms}`);
+        }
+        log.wait('Pacing for %dms', ms);
+        await this.utils.pace(ms);
+    }
+
+    /**
+     * Runs `action` `times` times in sequence, passing the zero-based index, and
+     * returns each result in order. With `intervalMs`, paces BETWEEN iterations
+     * (never before the first or after the last). The intent-revealing form of a
+     * hand-rolled "do X rapidly N times" loop — repeated swatch clicks,
+     * double-submit probes, hammering a flaky toggle.
+     *
+     * @example
+     * ```ts
+     * await steps.repeat(i => steps.on('swatch', 'PDP').nth(i).click(), 3, { intervalMs: 120 });
+     * ```
+     * @param action - Callback run per iteration; receives the zero-based index.
+     * @param times - Number of iterations (non-negative integer).
+     * @param options - Optional `{ intervalMs }` pacing between iterations.
+     * @returns The array of every iteration's resolved result, in order.
+     */
+    async repeat<T>(
+        action: (index: number) => Promise<T> | T,
+        times: number,
+        options?: { intervalMs?: number },
+    ): Promise<T[]> {
+        // Validate before logging (see pace); `!== undefined` so an intentional
+        // `intervalMs: 0` still shows in the log line.
+        if (!Number.isInteger(times) || times < 0) {
+            throw new Error(`repeat(fn, times) requires a non-negative integer count, got ${times}`);
+        }
+        log.wait('Repeating action %d time(s)%s', times, options?.intervalMs !== undefined ? ` (every ${options.intervalMs}ms)` : '');
+        return await this.utils.repeat(action, times, options);
     }
 
     /**

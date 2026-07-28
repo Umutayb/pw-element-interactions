@@ -1,4 +1,3 @@
-import { WebElement } from '@civitas-cerebrum/element-repository';
 import { ElementAction } from './ElementAction';
 import { IsVisibleOptions, ClickOptions, DropdownSelectOptions, DragAndDropOptions } from '../enum/Options';
 import { createLogger } from '../logger/Logger';
@@ -61,17 +60,19 @@ export class VisibleChain implements PromiseLike<boolean> {
 
     /**
      * Runs the visibility check (and optional `containsText` filter) without
-     * throwing. Constructs a `WebElement` directly from the raw selector so
-     * the caller-supplied `timeout` is the only wait — avoids the 15s
-     * repository-resolution default that `repo.get(...)` would impose.
+     * throwing. Resolves the probe target through the action's `probeTarget()`
+     * so scoped `findBy*` chains probe their child locator (the stamped scoped
+     * name has no repository entry) while repository chains keep the raw-selector
+     * construction where the caller-supplied `timeout` is the only wait —
+     * avoiding the 15s repository-resolution default that `repo.get(...)`
+     * would impose.
      */
     private async probe(): Promise<boolean> {
-        const { elementName: el, pageName: pg, repo } = this.action;
+        const { elementName: el, pageName: pg } = this.action;
         const timeout = this.options.timeout ?? 2000;
         const containsText = this.options.containsText;
         try {
-            const selector = repo.getSelector(el, pg);
-            const element = new WebElement(repo.driver.locator(selector).first());
+            const element = await this.action.probeTarget();
             await element.waitFor({ state: 'visible', timeout });
             if (containsText) {
                 const text = await element.textContent().catch(() => null);

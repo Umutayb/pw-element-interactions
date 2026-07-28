@@ -65,6 +65,14 @@ test.describe('Window/script family', () => {
         await steps.verifyWindowProperty('__t.missing', { present: false, timeout: FAST_TIMEOUT });
     });
 
+    test('verifyWindowProperty — present/truthy see function-valued properties', async ({ steps }) => {
+        // Regression: functions serialize to undefined across page.evaluate, so
+        // { present: true } used to false-negative on a real window function.
+        await steps.evaluateScript(() => { (window as unknown as Record<string, unknown>).__t_fn = () => 42; });
+        await steps.verifyWindowProperty('__t_fn', { present: true });
+        await steps.verifyWindowProperty('__t_fn', { truthy: true });
+    });
+
     test('verifyWindowProperty — greaterThan / lessThan against a numeric window value', async ({ steps }) => {
         // Drive a real numeric window value off the rendered DOM so the bound is
         // app-agnostic: there is at least one anchor on the page.

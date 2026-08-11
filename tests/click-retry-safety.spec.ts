@@ -1,6 +1,6 @@
 import { test, expect } from './fixture/StepFixture';
-import type { Page } from '@playwright/test';
-import { Interactions, classifyClickFailure } from '../src/interactions/Interaction';
+import { errors, type Page } from '@playwright/test';
+import { Interactions, classifyClickFailure, isTimeoutError } from '../src/interactions/Interaction';
 import { WebElement } from '@civitas-cerebrum/element-repository';
 
 /**
@@ -44,31 +44,35 @@ async function pageWithCountingButton(page: Page, disabled = false): Promise<Web
 
 test.describe('Click retry safety (no double fire)', () => {
     test('deadline click: input dispatched at the timeout is NOT re-clicked', async ({ page }, testInfo) => {
+        test.setTimeout(60000);
         const button = await pageWithCountingButton(page);
 
-        // A one-shot handler blocks the main thread for 3s as soon as the
-        // click's input arrives, so the click action cannot complete within
-        // the 1.5s attempt budget — the attempt times out in the
-        // "performing click action" phase AFTER the input was dispatched.
-        // This is the deterministic equivalent of the CI race where the
-        // actionability wait eats the 5s cap and input lands at the deadline.
+        // A one-shot handler blocks the renderer for 6s as soon as the click's
+        // input arrives — longer than the 5s first-attempt cap, so the attempt
+        // times out in the "performing click action" phase AFTER input was
+        // dispatched. The generous overall budget (15s) deliberately OUTLIVES
+        // the block, so the old blind retry had time to land a real second
+        // click: this reproduces the production signature (count === 2), not
+        // merely a different error.
         await page.evaluate(() => {
             document.getElementById('btn')!.addEventListener('click', () => {
-                const end = Date.now() + 3000;
+                const end = Date.now() + 6000;
                 while (Date.now() < end) { /* block the renderer */ }
             }, { once: true });
         });
 
-        const interactions = new Interactions(page, 1500);
+        const interactions = new Interactions(page, 15000);
 
         // Must resolve (click treated as delivered), not throw and not re-click.
         await interactions.click(button);
 
-        // Causal assertion: exactly ONE click reached the page. The old blind
-        // retry delivered a second physical click here (count === 2).
+        // Causal assertion: exactly ONE click reached the page, and it stays
+        // one for longer than the old retry would have needed to land a second.
         await expect.poll(() => page.evaluate(() => (window as unknown as { __clicks: number }).__clicks), {
             timeout: 10000,
         }).toBe(1);
+        await page.waitForTimeout(2000);
+        expect(await page.evaluate(() => (window as unknown as { __clicks: number }).__clicks)).toBe(1);
 
         // The decision must be report-visible, mirroring interception-fallback.
         const note = testInfo.annotations.find(a => a.type === 'deadline-click');
@@ -76,7 +80,25 @@ test.describe('Click retry safety (no double fire)', () => {
         expect(note?.description).toContain('performing click action');
     });
 
+    test('never-actionable click stays inside the caller budget instead of cap + full retry', async ({ page }) => {
+        test.setTimeout(60000);
+        // Button never becomes enabled, so the click can only fail. The old
+        // shape paid the 5s capped attempt AND a fresh full-timeout retry
+        // (~13s for an 8s budget); the continuation now runs on the REMAINING
+        // budget, so total elapsed stays bounded by the caller's timeout.
+        const button = await pageWithCountingButton(page, true);
+        const interactions = new Interactions(page, 8000);
+
+        const started = Date.now();
+        await expect(interactions.click(button)).rejects.toThrow();
+        const elapsed = Date.now() - started;
+
+        expect(elapsed, `expected the failure inside the 8s budget, took ${elapsed}ms`).toBeLessThan(11000);
+        expect(await page.evaluate(() => (window as unknown as { __clicks: number }).__clicks)).toBe(0);
+    });
+
     test('waiting-phase timeout: full-timeout retry is preserved and clicks exactly once', async ({ page }, testInfo) => {
+        test.setTimeout(60000);
         // Button starts disabled and only becomes enabled AFTER the 5s
         // first-attempt cap, so the capped attempt provably times out while
         // still "waiting for element to be visible, enabled and stable" —
@@ -163,27 +185,50 @@ test.describe('classifyClickFailure', () => {
         expect(classifyClickFailure(deadlineTimeout())).toBe('input-may-have-fired');
     });
 
-    test('timeout still in an actionability waiting phase is safe-to-retry', () => {
-        expect(classifyClickFailure(waitingPhaseTimeout())).toBe('safe-to-retry');
+    test('timeout still in an actionability waiting phase is not-dispatched', () => {
+        expect(classifyClickFailure(waitingPhaseTimeout())).toBe('not-dispatched');
     });
 
     test('interception wins over performing click action (input was NOT dispatched)', () => {
         expect(classifyClickFailure(interceptionTimeout())).toBe('interception');
     });
 
-    test('hard errors are never swallowed as a delivered click', () => {
+    test('hard errors are fatal — never swallowed as a delivered click, never re-clicked', () => {
         // Same call log shape, but not a timeout — e.g. the page closed
-        // mid-action. Must stay on the retry path so the real error surfaces.
+        // mid-action. Must surface as-is rather than be masked by another click.
         const hardError = new Error([
             'locator.click: Target page, context or browser has been closed',
             'Call log:',
             '  - attempting click action',
             '  -   performing click action',
         ].join('\n'));
-        expect(classifyClickFailure(hardError)).toBe('safe-to-retry');
+        expect(classifyClickFailure(hardError)).toBe('fatal');
     });
 
-    test('non-Error values are safe-to-retry', () => {
-        expect(classifyClickFailure('boom')).toBe('safe-to-retry');
+    test('strict-mode violations are fatal, not retried', () => {
+        const strict = new Error(
+            'locator.click: Error: strict mode violation: locator(\'button\') resolved to 2 elements',
+        );
+        expect(classifyClickFailure(strict)).toBe('fatal');
+    });
+
+    test('non-Error values are fatal', () => {
+        expect(classifyClickFailure('boom')).toBe('fatal');
+    });
+
+    test('classification is by error class, not by a "Timeout Nms exceeded" substring', () => {
+        // A non-timeout error whose text merely mentions a timeout must not be
+        // treated as a driver timeout — the old message-sniffing shape did.
+        const impostor = new Error([
+            'locator.click: Error: Timeout 5000ms exceeded was reported by the app under test',
+            'Call log:',
+            '  -   performing click action',
+        ].join('\n'));
+        expect(classifyClickFailure(impostor)).toBe('fatal');
+
+        const real = new errors.TimeoutError('locator.click: some wording the driver may change\n  -   performing click action');
+        expect(classifyClickFailure(real)).toBe('input-may-have-fired');
+        expect(isTimeoutError(real)).toBe(true);
+        expect(isTimeoutError(impostor)).toBe(false);
     });
 });

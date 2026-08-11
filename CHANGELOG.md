@@ -17,14 +17,25 @@
   it) and open-then-wedge (the first click opened a drawer at the deadline;
   every retry then found the trigger covered by the open overlay until the
   budget expired). The retry is now phase-aware via the exported
-  `classifyClickFailure(error)` helper: a timeout whose Playwright call log
-  reached `performing click action` (input may have fired) is treated as a
-  delivered click — surfaced via `log.warn` and a report-visible
-  `deadline-click` annotation, with the caller's next verification as the true
-  gate — while timeouts still inside an actionability waiting phase (input
-  provably never dispatched) keep the full-timeout retry, and the
-  interception → `dispatchEvent('click')` fallback is unchanged. Hard errors
-  (page closed, detached) are never swallowed as a delivered click.
+  `classifyClickFailure(error)` helper, and **a timed-out click is never
+  re-dispatched**:
+  - `interception` → unchanged `dispatchEvent('click')` fallback (checked
+    first: Playwright's hit-target check runs *before* input dispatch).
+  - `input-may-have-fired` (timeout whose call log reached `performing click
+    action`) → the click is accepted as delivered, surfaced via `log.warn` and
+    a report-visible `deadline-click` annotation; the caller's next
+    verification is the real gate.
+  - `not-dispatched` (timeout still in an actionability waiting phase, input
+    provably never delivered) → the click *continues* on the caller's
+    **remaining** budget instead of starting a fresh full-timeout attempt, so
+    total elapsed is bounded by `timeout` rather than `timeout + 5s`. The
+    continuation is classified the same way, keeping the interception fallback
+    reachable when an overlay only appears in the second phase.
+  - `fatal` (not a timeout — page/context closed, strict-mode violation) →
+    rethrown untouched instead of being masked by another click.
+  Timeout detection is class-based (`errors.TimeoutError`), not
+  message-substring sniffing, and the two call-log markers are centralized in
+  one table with pinned test fixtures.
 
 ## 0.3.8 — 2026-07-28
 

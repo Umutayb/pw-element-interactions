@@ -28,6 +28,53 @@ function escapeRegex(input: string): string {
 
 
 /**
+ * Classification of a failed first click attempt inside
+ * `Interactions.clickWithInterceptionRetry`:
+ *
+ * - `'interception'` — the call log reports another element intercepting
+ *   pointer events. Input was NOT dispatched (Playwright's hit-target check
+ *   runs before dispatch), so the `dispatchEvent('click')` fallback is safe.
+ * - `'input-may-have-fired'` — the attempt timed out AFTER the call log
+ *   reached the `performing click action` phase with no interception report:
+ *   actionability passed and Playwright was dispatching (or had dispatched)
+ *   the input when the deadline hit. Re-clicking risks a double fire.
+ * - `'safe-to-retry'` — every other failure (timeout still in an actionability
+ *   waiting phase, transient driver errors). Input was not dispatched; a
+ *   retry cannot double-fire.
+ */
+export type ClickFailureClass = 'interception' | 'input-may-have-fired' | 'safe-to-retry';
+
+/**
+ * Classifies a failed click attempt by parsing Playwright's call log, which
+ * distinguishes the actionability waiting phases (`waiting for element to be
+ * visible, enabled and stable`, `scrolling into view if needed`, …) from the
+ * input-dispatch phase (`performing click action`).
+ *
+ * Order matters: an interception report takes precedence even when
+ * `performing click action` is also present — Playwright logs `performing
+ * click action`, then runs the hit-target check, and only dispatches input
+ * when nothing intercepts. So `performing click action` + interception marker
+ * means input was NOT dispatched, while `performing click action` alone on a
+ * timeout means it may have been.
+ *
+ * Only genuine timeouts qualify for `'input-may-have-fired'`: hard errors
+ * (page closed, element detached) must keep surfacing through the retry path
+ * rather than being silently treated as a delivered click.
+ */
+export function classifyClickFailure(error: unknown): ClickFailureClass {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('intercepts pointer events')) {
+        return 'interception';
+    }
+    const isTimeout = (error instanceof Error && error.name === 'TimeoutError')
+        || /Timeout \d+ms exceeded/.test(message);
+    if (isTimeout && message.includes('performing click action')) {
+        return 'input-may-have-fired';
+    }
+    return 'safe-to-retry';
+}
+
+/**
  * The `Interactions` class provides a robust set of methods for interacting
  * with DOM elements. All operations route through element-repository's
  * `Element` interface, keeping this class framework-agnostic.
@@ -95,6 +142,21 @@ export class Interactions {
      * original interception error is rethrown so genuine overlay bugs
      * (stuck modals, cookie walls) fail the click.
      *
+     * The retry is deliberately NOT blind (fix for the CI double-fire /
+     * open-then-wedge defect): when the capped first attempt times out after
+     * Playwright's call log has reached the `performing click action` phase —
+     * i.e. actionability passed and the input was being dispatched right at
+     * the deadline — the click may have already registered in the page. On
+     * slow environments (CI WebKit mobile emulation) the actionability wait
+     * can consume nearly the whole 5s cap, so a physical re-click at that
+     * point (a) inverts toggle-style controls the first click just switched,
+     * or (b) wedges forever against an overlay the first click just opened.
+     * In that case the click is treated as delivered: a `log.warn` plus a
+     * report-visible `deadline-click` annotation surface the decision, and the
+     * caller's next verification remains the true gate that the click landed.
+     * Timeouts still inside an actionability waiting phase (input provably
+     * not dispatched) keep the full-timeout retry.
+     *
      * @param subject - Optional element identity (`PageName.elementName`)
      *   threaded down from the Steps/ElementAction layer, which is where the
      *   names are known. Included in the log line and the annotation.
@@ -104,15 +166,23 @@ export class Interactions {
             await element.click({ timeout: Math.min(timeout, 5000) });
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : String(error);
-            if (message.includes('intercepts pointer events')) {
+            const lines = message.split('\n');
+            const failure = classifyClickFailure(error);
+            if (failure === 'interception') {
                 if (!this.interceptionRetry) throw error;
-                const lines = message.split('\n');
                 const interceptLine = lines.find(l => l.includes('intercepts pointer events'))?.trim();
                 const detail = `click on ${subject ?? 'element'} intercepted by another element — fell back to dispatchEvent('click'). `
                     + `${lines[0]}${interceptLine ? ` — ${interceptLine}` : ''}`;
                 log.warn(detail);
                 this.annotate('interception-fallback', detail);
                 await element.dispatchEvent('click');
+            } else if (failure === 'input-may-have-fired') {
+                const detail = `click on ${subject ?? 'element'} timed out after its input was already being dispatched `
+                    + `(call log reached "performing click action") — treating the click as delivered instead of re-clicking, `
+                    + `to avoid double-firing a non-idempotent control. The next verification is the gate that the click landed. `
+                    + `${lines[0]}`;
+                log.warn(detail);
+                this.annotate('deadline-click', detail);
             } else {
                 await element.click({ timeout });
             }

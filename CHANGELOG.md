@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Click retry no longer double-fires non-idempotent controls.**
+  `Interactions.clickWithInterceptionRetry` used to blind-retry
+  `element.click()` with the full timeout after *any* non-interception error
+  from the 5s-capped first attempt — including a `TimeoutError` raised after
+  the click's input had already been dispatched. On slow environments (CI
+  WebKit mobile emulation) the actionability wait can consume nearly the whole
+  cap, so the input lands right at the deadline: the click registers in the
+  page, the attempt still throws, and the blind retry delivers a second
+  physical click. Proven production failure modes: toggle inversion (the retry
+  re-clicked a colour-swatch the first click had just selected, deselecting
+  it) and open-then-wedge (the first click opened a drawer at the deadline;
+  every retry then found the trigger covered by the open overlay until the
+  budget expired). The retry is now phase-aware via the exported
+  `classifyClickFailure(error)` helper: a timeout whose Playwright call log
+  reached `performing click action` (input may have fired) is treated as a
+  delivered click — surfaced via `log.warn` and a report-visible
+  `deadline-click` annotation, with the caller's next verification as the true
+  gate — while timeouts still inside an actionability waiting phase (input
+  provably never dispatched) keep the full-timeout retry, and the
+  interception → `dispatchEvent('click')` fallback is unchanged. Hard errors
+  (page closed, detached) are never swallowed as a delivered click.
+
 ## 0.3.8 — 2026-07-28
 
 ### Added

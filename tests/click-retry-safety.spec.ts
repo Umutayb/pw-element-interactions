@@ -93,8 +93,72 @@ test.describe('Click retry safety (no double fire)', () => {
         await expect(interactions.click(button)).rejects.toThrow();
         const elapsed = Date.now() - started;
 
-        expect(elapsed, `expected the failure inside the 8s budget, took ${elapsed}ms`).toBeLessThan(11000);
+        // 9.5s on an 8s budget: tight enough to catch a partial overrun, with
+        // ~1.5s of slack for CI jitter. The old shape took ~13s.
+        expect(elapsed, `expected the failure inside the 8s budget, took ${elapsed}ms`).toBeLessThan(9500);
         expect(await page.evaluate(() => (window as unknown as { __clicks: number }).__clicks)).toBe(0);
+    });
+
+    test('non-timeout failure is rethrown, never masked by a dispatched click', async ({ page }) => {
+        const button = await pageWithCountingButton(page);
+
+        // A hard driver failure (page/context closed, protocol error) surfacing
+        // from the click attempt itself. Stubbing the Element's click is the
+        // only way to produce one deterministically: on the real click path a
+        // closed page or strict-mode violation is raised upstream by
+        // waitForState, so this branch would otherwise never be exercised.
+        const fatal = new Error('locator.click: Target page, context or browser has been closed');
+        (button as unknown as { click: () => Promise<void> }).click = async () => { throw fatal; };
+
+        const interactions = new Interactions(page, 5000);
+        await expect(interactions.click(button)).rejects.toThrow(/has been closed/);
+
+        // Causal assertion: no fallback click was dispatched to paper over the
+        // error — the page saw nothing. (Letting `fatal` fall through to the
+        // dispatchEvent fallback flips this to 1 and stops the rejection.)
+        expect(await page.evaluate(() => (window as unknown as { __clicks: number }).__clicks)).toBe(0);
+    });
+
+    test('ifPresent path: a deadline click reports success without double-firing', async ({ page }, testInfo) => {
+        test.setTimeout(60000);
+        // clickIfPresent routes through the same attempt chain, so it inherits
+        // the deadline handling: one click in the page, reported as clicked.
+        const button = await pageWithCountingButton(page);
+        await page.evaluate(() => {
+            document.getElementById('btn')!.addEventListener('click', () => {
+                const end = Date.now() + 6000;
+                while (Date.now() < end) { /* block the renderer */ }
+            }, { once: true });
+        });
+
+        const interactions = new Interactions(page, 15000);
+        expect(await interactions.clickIfPresent(button)).toBe(true);
+
+        await expect.poll(() => page.evaluate(() => (window as unknown as { __clicks: number }).__clicks), {
+            timeout: 10000,
+        }).toBe(1);
+        expect(testInfo.annotations.find(a => a.type === 'deadline-click')).toBeTruthy();
+    });
+
+    test('interceptionRetry: false does not turn a deadline click into a failure', async ({ page }) => {
+        test.setTimeout(60000);
+        // The opt-out is scoped to the interception fallback (surfacing genuine
+        // overlay bugs). It deliberately does NOT re-arm a re-click after input
+        // was already delivered — that would reintroduce the double fire.
+        const button = await pageWithCountingButton(page);
+        await page.evaluate(() => {
+            document.getElementById('btn')!.addEventListener('click', () => {
+                const end = Date.now() + 6000;
+                while (Date.now() < end) { /* block the renderer */ }
+            }, { once: true });
+        });
+
+        const interactions = new Interactions(page, 15000, false);
+        await interactions.click(button);
+
+        await expect.poll(() => page.evaluate(() => (window as unknown as { __clicks: number }).__clicks), {
+            timeout: 10000,
+        }).toBe(1);
     });
 
     test('waiting-phase timeout: full-timeout retry is preserved and clicks exactly once', async ({ page }, testInfo) => {
@@ -205,7 +269,11 @@ test.describe('classifyClickFailure', () => {
         expect(classifyClickFailure(hardError)).toBe('fatal');
     });
 
-    test('strict-mode violations are fatal, not retried', () => {
+    // Classifier contract only: on the main click path a strict-mode violation
+    // is raised upstream by waitForState and never reaches the classifier. This
+    // pins the behaviour for the paths that do (continuation attempt, callers
+    // using Interactions directly).
+    test('strict-mode violations classify as fatal', () => {
         const strict = new Error(
             'locator.click: Error: strict mode violation: locator(\'button\') resolved to 2 elements',
         );

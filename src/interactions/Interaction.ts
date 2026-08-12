@@ -1,4 +1,4 @@
-import { Page, test } from '@playwright/test';
+import { Page, test, errors } from '@playwright/test';
 import { ClickOptions, DropdownSelectOptions, DropdownSelectType, DragAndDropOptions, ListedElementMatch, ActionTimeoutOptions, TextMatcher } from '../enum/Options';
 import { Utils } from '../utils/ElementUtilities';
 import { Element, WebElement } from '@civitas-cerebrum/element-repository';
@@ -26,6 +26,65 @@ function escapeRegex(input: string): string {
     return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+
+/**
+ * Playwright call-log markers the click classifier keys on. Centralized so a
+ * driver reword is a one-line change with a pinned test fixture behind it.
+ */
+const CALL_LOG_MARKERS = {
+    /** Hit-target check reported another element covering the target. */
+    interception: 'intercepts pointer events',
+    /** Actionability passed; Playwright is dispatching (or dispatched) input. */
+    inputDispatchPhase: 'performing click action',
+} as const;
+
+/** Upper bound on the first click attempt, so interception is detected fast. */
+const INTERCEPTION_PROBE_CAP_MS = 5000;
+
+/**
+ * Classification of a failed click attempt:
+ *
+ * - `'interception'` — another element covers the target; input was NOT
+ *   dispatched, so the `dispatchEvent('click')` fallback is safe.
+ * - `'input-may-have-fired'` — timed out after the call log reached the
+ *   input-dispatch phase. Clicking again risks a double fire.
+ * - `'not-dispatched'` — timed out still waiting for actionability; input
+ *   provably never reached the page, so continuing the click is safe.
+ * - `'fatal'` — not a timeout (page closed, strict-mode violation): rethrow.
+ */
+export type ClickFailureClass = 'interception' | 'input-may-have-fired' | 'not-dispatched' | 'fatal';
+
+/**
+ * True when `error` is a Playwright timeout. Class-based, deliberately NOT a
+ * message-substring test — driver wording reworded silently between releases
+ * (see `Navigation.waitForNetworkIdle` for the same pattern). The `name`
+ * fallback covers errors that crossed a serialization boundary.
+ */
+export function isTimeoutError(error: unknown): boolean {
+    return error instanceof errors.TimeoutError
+        || (error instanceof Error && error.name === 'TimeoutError');
+}
+
+/**
+ * Classifies a failed click attempt by error class, then by the phase
+ * Playwright's call log reached.
+ *
+ * Interception is checked first, and wins even when the input-dispatch marker
+ * is also present: Playwright logs `performing click action`, *then* runs the
+ * hit-target check, and only dispatches input when nothing intercepts.
+ */
+export function classifyClickFailure(error: unknown): ClickFailureClass {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes(CALL_LOG_MARKERS.interception)) {
+        return 'interception';
+    }
+    if (!isTimeoutError(error)) {
+        return 'fatal';
+    }
+    return message.includes(CALL_LOG_MARKERS.inputDispatchPhase)
+        ? 'input-may-have-fired'
+        : 'not-dispatched';
+}
 
 /**
  * The `Interactions` class provides a robust set of methods for interacting
@@ -95,28 +154,82 @@ export class Interactions {
      * original interception error is rethrown so genuine overlay bugs
      * (stuck modals, cookie walls) fail the click.
      *
+     * The first attempt is capped so interception is detected fast, and its
+     * failure is routed by {@link ClickFailureClass} rather than by "was it an
+     * interception, else click again". A timed-out click is NEVER re-dispatched:
+     * `input-may-have-fired` is accepted as delivered (a physical re-click would
+     * invert a toggle or wedge against an overlay the first click just opened),
+     * `not-dispatched` continues within the REMAINING budget, `fatal` rethrows.
+     *
      * @param subject - Optional element identity (`PageName.elementName`)
      *   threaded down from the Steps/ElementAction layer, which is where the
      *   names are known. Included in the log line and the annotation.
      */
     private async clickWithInterceptionRetry(element: WebElement, timeout: number, subject?: string): Promise<void> {
+        const deadline = Date.now() + timeout;
         try {
-            await element.click({ timeout: Math.min(timeout, 5000) });
+            await element.click({ timeout: Math.min(timeout, INTERCEPTION_PROBE_CAP_MS) });
+            return;
         } catch (error: unknown) {
-            const message = error instanceof Error ? error.message : String(error);
-            if (message.includes('intercepts pointer events')) {
-                if (!this.interceptionRetry) throw error;
-                const lines = message.split('\n');
-                const interceptLine = lines.find(l => l.includes('intercepts pointer events'))?.trim();
-                const detail = `click on ${subject ?? 'element'} intercepted by another element — fell back to dispatchEvent('click'). `
-                    + `${lines[0]}${interceptLine ? ` — ${interceptLine}` : ''}`;
-                log.warn(detail);
-                this.annotate('interception-fallback', detail);
-                await element.dispatchEvent('click');
-            } else {
-                await element.click({ timeout });
+            const failure = classifyClickFailure(error);
+            if (failure !== 'not-dispatched') {
+                await this.resolveClickFailure(element, error, failure, subject);
+                return;
+            }
+
+            // Input provably never dispatched — continue the click with what is
+            // left of the caller's budget. Cannot double-fire; cannot overrun.
+            const remaining = deadline - Date.now();
+            if (remaining <= 0) throw error;
+            try {
+                await element.click({ timeout: remaining });
+            } catch (continuationError: unknown) {
+                await this.resolveClickFailure(
+                    element,
+                    continuationError,
+                    classifyClickFailure(continuationError),
+                    subject,
+                );
             }
         }
+    }
+
+    /**
+     * Terminal handling for a failed click attempt — dispatch fallback,
+     * accept-as-delivered, or rethrow. Never issues another real click, so it
+     * is safe to call from any attempt in the chain.
+     */
+    private async resolveClickFailure(
+        element: WebElement,
+        error: unknown,
+        failure: ClickFailureClass,
+        subject?: string,
+    ): Promise<void> {
+        const message = error instanceof Error ? error.message : String(error);
+        const lines = message.split('\n');
+
+        if (failure === 'interception') {
+            if (!this.interceptionRetry) throw error;
+            const interceptLine = lines.find(l => l.includes(CALL_LOG_MARKERS.interception))?.trim();
+            const detail = `click on ${subject ?? 'element'} intercepted by another element — fell back to dispatchEvent('click'). `
+                + `${lines[0]}${interceptLine ? ` — ${interceptLine}` : ''}`;
+            log.warn(detail);
+            this.annotate('interception-fallback', detail);
+            await element.dispatchEvent('click');
+            return;
+        }
+
+        if (failure === 'input-may-have-fired') {
+            const detail = `click on ${subject ?? 'element'} timed out after its input was already being dispatched `
+                + `(call log reached "${CALL_LOG_MARKERS.inputDispatchPhase}") — treating it as delivered rather than `
+                + `clicking again. The next verification is the gate that it landed. ${lines[0]}`;
+            log.warn(detail);
+            this.annotate('deadline-click', detail);
+            return;
+        }
+
+        // 'fatal', and 'not-dispatched' once the budget is spent: surface it.
+        throw error;
     }
 
     /**

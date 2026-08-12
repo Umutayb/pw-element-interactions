@@ -2,7 +2,7 @@ import { test, expect } from './fixture/StepFixture';
 
 /**
  * Phase-3 coverage for the complementary-steps RFC — the timing + dispatch/keys
- * surface a consumer suite (Mr Marvis e2e) previously dropped to raw Playwright
+ * surface a consumer suite previously dropped to raw Playwright
  * `page.*` for:
  *
  *   A) Timing family — `steps.pace(ms)` (deliberate, semantic pause) and

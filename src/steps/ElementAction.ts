@@ -322,7 +322,7 @@ export class ElementAction {
     /**
      * Query by text content WITHIN this element. Scopes `parent.getByText(text, options)`.
      * @example
-     * await steps.on('cartDrawer', 'CartDrawer').findByText('Je winkelwagen is leeg').verifyState('visible');
+     * await steps.on('cartPanel', 'CartPage').findByText('Your cart is empty').verifyState('visible');
      */
     findByText(text: string | RegExp, options?: { exact?: boolean }): ElementAction {
         return this.spawnScoped(`findByText(${String(text)})`, parent => parent.getByText(text, options));

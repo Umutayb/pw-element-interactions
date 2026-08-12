@@ -4,38 +4,16 @@
 
 ### Fixed
 
-- **Click retry no longer double-fires non-idempotent controls.**
-  `Interactions.clickWithInterceptionRetry` used to blind-retry
-  `element.click()` with the full timeout after *any* non-interception error
-  from the 5s-capped first attempt — including a `TimeoutError` raised after
-  the click's input had already been dispatched. On slow environments (CI
-  WebKit mobile emulation) the actionability wait can consume nearly the whole
-  cap, so the input lands right at the deadline: the click registers in the
-  page, the attempt still throws, and the blind retry delivers a second
-  physical click. Proven production failure modes: toggle inversion (the retry
-  re-clicked a colour-swatch the first click had just selected, deselecting
-  it) and open-then-wedge (the first click opened a drawer at the deadline;
-  every retry then found the trigger covered by the open overlay until the
-  budget expired). The retry is now phase-aware via the exported
-  `classifyClickFailure(error)` helper, and **a timed-out click is never
-  re-dispatched**:
-  - `interception` → unchanged `dispatchEvent('click')` fallback (checked
-    first: Playwright's hit-target check runs *before* input dispatch).
-  - `input-may-have-fired` (timeout whose call log reached `performing click
-    action`) → the click is accepted as delivered, surfaced via `log.warn` and
-    a report-visible `deadline-click` annotation; the caller's next
-    verification is the real gate.
-  - `not-dispatched` (timeout still in an actionability waiting phase, input
-    provably never delivered) → the click *continues* on the caller's
-    **remaining** budget instead of starting a fresh full-timeout attempt, so
-    total elapsed is bounded by `timeout` rather than `timeout + 5s`. The
-    continuation is classified the same way, keeping the interception fallback
-    reachable when an overlay only appears in the second phase.
-  - `fatal` (not a timeout — page/context closed, strict-mode violation) →
-    rethrown untouched instead of being masked by another click.
-  Timeout detection is class-based (`errors.TimeoutError`), not
-  message-substring sniffing, and the two call-log markers are centralized in
-  one table with pinned test fixtures.
+- **A timed-out click is never re-dispatched.** The 5s-capped first click
+  attempt used to be blind-retried with the full timeout after any
+  non-interception error — including a timeout raised *after* the click's input
+  had already been dispatched, which delivered a second physical click. Failed
+  attempts are now classified: interception → unchanged `dispatchEvent('click')`
+  fallback; timeout after input dispatch → accepted as delivered (`log.warn` +
+  a `deadline-click` annotation), never clicked again; timeout still waiting for
+  actionability → continues on the *remaining* budget, so total elapsed stays
+  within the caller's `timeout`; anything else → rethrown. Timeout detection is
+  class-based (`errors.TimeoutError`), not message-substring sniffing.
 
 ## 0.3.8 — 2026-07-28
 

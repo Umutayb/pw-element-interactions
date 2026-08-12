@@ -8,24 +8,193 @@ import { WebElement } from '@civitas-cerebrum/element-repository';
  * Interactions.clickWithInterceptionRetry.
  *
  * The capped (5s max) first click attempt can time out AFTER Playwright has
- * already dispatched the click's input — on slow environments the
- * actionability wait consumes almost the whole cap and the input lands right
- * at the deadline. The old catch-all branch then blind-re-clicked with the
- * full timeout, which:
- *   (a) inverts toggle-style controls the first click just switched on, and
- *   (b) wedges forever against an overlay/drawer the first click just opened.
- * The fix classifies the failed attempt by its call-log phase and only
- * retries when the log proves input was never dispatched.
+ * dispatched the click's input. The old catch-all branch then blind-re-clicked
+ * with the full timeout, which (a) inverted toggle controls and (b) wedged
+ * against an overlay the first click had just opened. The fix classifies the
+ * failed attempt by its call-log phase and only retries when the log proves
+ * input was never dispatched.
  *
- * Like tests/upload-drop-unit.spec.ts, the Interactions-level tests here use
- * page.setContent() — no server required — because reproducing the deadline
- * race deterministically needs precise control over the page's main thread.
+ * The first describe isolates those two mechanisms in purpose-built widgets:
+ * a toggle group inside a dialog, and a trigger whose overlay covers it once
+ * open (fixed positioning above the trigger's stacking context, plus a 300ms
+ * entry animation so the actionability wait is realistic). The deadline race
+ * itself is driven by a blocking handler — real environment slowness cannot be
+ * summoned on demand.
+ *
+ * Like tests/upload-drop-unit.spec.ts, these Interactions-level tests use
+ * page.setContent() — no server required.
  */
 
+const counter = (page: Page, key: '__optionClicks' | '__triggerClicks') =>
+    page.evaluate(k => (window as unknown as Record<string, number>)[k], key);
+
 /**
- * Renders a click-counting button and returns its WebElement. The page keeps
- * an authoritative count in `window.__clicks` so a double-fired click is
- * directly observable (count 2 instead of 1).
+ * A toggle group inside a dialog: each button flips its own `data-state` /
+ * `aria-pressed`, so a second physical click deselects what the first selected.
+ */
+const TOGGLE_GROUP = `
+    <style>
+        body { margin: 0; font-family: system-ui, sans-serif; }
+        .sheet { position: fixed; inset-inline: 0; bottom: 0; height: 100dvh; z-index: 50;
+                 background: #fff; overflow: auto; animation: slide-up .3s ease-out; }
+        @keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .option-list { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 16px; margin: 0; }
+        .option-button { width: 54px; height: 59px; border: 1.5px solid #ccc; background: #eee; }
+        .option-button[data-state="on"] { border-color: #000; }
+    </style>
+    <div class="sheet" role="dialog" data-testid="option-sheet" data-state="open" tabindex="-1" aria-label="Options">
+        <h2>Options</h2>
+        <ul class="option-list">
+            <li class="option-item"><button class="option-button" type="button" data-state="off" aria-pressed="false">Option A</button></li>
+            <li class="option-item"><button class="option-button" type="button" data-state="off" aria-pressed="false">Option B</button></li>
+            <li class="option-item"><button class="option-button" type="button" data-state="off" aria-pressed="false">Option C</button></li>
+            <li class="option-item"><button class="option-button" type="button" data-state="off" aria-pressed="false">Option D</button></li>
+        </ul>
+    </div>
+    <script>
+        window.__optionClicks = 0;
+        document.querySelectorAll('li.option-item > button.option-button').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                window.__optionClicks++;
+                var on = btn.getAttribute('data-state') === 'on';
+                btn.setAttribute('data-state', on ? 'off' : 'on');
+                btn.setAttribute('aria-pressed', on ? 'false' : 'true');
+            });
+        });
+    </script>
+`;
+
+/**
+ * A trigger in a low-stacking-context header that mounts a full-bleed overlay
+ * above itself: once open, the panel covers the very button that opened it.
+ */
+const COVERING_OVERLAY = `
+    <style>
+        body { margin: 0; font-family: system-ui, sans-serif; }
+        .site-header { position: sticky; top: 0; z-index: 40; background: #fff;
+                       display: flex; justify-content: flex-end; padding: 12px 16px; border-bottom: 1px solid #ddd; }
+        .filler { height: 200vh; }
+        .scrim { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.5); animation: fade-in .3s ease-out; }
+        .panel { position: fixed; top: 0; bottom: 0; right: 0; width: 100%; z-index: 50; background: #fff;
+                 display: flex; flex-direction: column; animation: slide-in .3s ease-out; }
+        @keyframes slide-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+    <header class="site-header">
+        <button data-testid="overlay-trigger" type="button">Open panel</button>
+    </header>
+    <div class="filler"></div>
+    <template id="panel-template">
+        <div class="scrim"></div>
+        <div class="panel" role="dialog" data-testid="overlay-panel" data-state="open" tabindex="-1" aria-label="Panel">
+            <button type="button">Close</button>
+            <p>Panel body</p>
+        </div>
+    </template>
+    <script>
+        window.__triggerClicks = 0;
+        document.querySelector('[data-testid="overlay-trigger"]').addEventListener('click', function () {
+            window.__triggerClicks++;
+            if (document.querySelector('[data-testid="overlay-panel"]')) return;
+            document.body.appendChild(document.getElementById('panel-template').content.cloneNode(true));
+        });
+    </script>
+`;
+
+/**
+ * Stalls the renderer for 6s the first time `selector` is clicked — longer than
+ * the 5s first-attempt cap, so the attempt times out in the "performing click
+ * action" phase AFTER input was dispatched. Registered after the widget's own
+ * handler, so the state change lands first.
+ */
+async function blockRendererOnFirstClick(page: Page, selector: string): Promise<void> {
+    await page.evaluate((sel) => {
+        document.querySelector(sel)!.addEventListener('click', () => {
+            const end = Date.now() + 6000;
+            while (Date.now() < end) { /* block the renderer */ }
+        }, { once: true });
+    }, selector);
+}
+
+test.describe('Deadline click on non-idempotent controls', () => {
+    // A small mobile-ish viewport, so the overlay covers the whole header.
+    test.use({ viewport: { width: 390, height: 640 } });
+
+    const OPTION = "[role='dialog'] li.option-item button.option-button";
+    const SELECTED = `${OPTION}[data-state='on']`;
+    const TRIGGER = "[data-testid='overlay-trigger']";
+
+    test('toggle inversion: a deadline click on a toggle is not re-clicked', async ({ page }, testInfo) => {
+        test.setTimeout(60000);
+        await page.setContent(TOGGLE_GROUP);
+        await blockRendererOnFirstClick(page, OPTION);
+
+        const interactions = new Interactions(page, 15000);
+        await interactions.click(new WebElement(page.locator(OPTION).nth(0)));
+        await interactions.click(new WebElement(page.locator(OPTION).nth(1)));
+
+        // End state, not "two clicks happened": the blind retry re-clicked the
+        // first toggle and switched it back off, leaving one selected.
+        await expect(page.locator(SELECTED)).toHaveCount(2);
+        expect(await page.locator(OPTION).nth(0).getAttribute('aria-pressed')).toBe('true');
+        expect(await counter(page, '__optionClicks'), 'one click per toggle, no re-fire').toBe(2);
+
+        const note = testInfo.annotations.find(a => a.type === 'deadline-click');
+        expect(note, 'expected a deadline-click annotation on the test').toBeTruthy();
+        expect(note?.description).toContain('performing click action');
+    });
+
+    test('open-then-wedge: a deadline click that opens a covering overlay is not re-clicked', async ({ page }, testInfo) => {
+        test.setTimeout(60000);
+        await page.setContent(COVERING_OVERLAY);
+        await blockRendererOnFirstClick(page, TRIGGER);
+
+        const interactions = new Interactions(page, 15000);
+        const started = Date.now();
+        await interactions.click(new WebElement(page.locator(TRIGGER)));
+        const elapsed = Date.now() - started;
+
+        // The panel the first click opened now covers its own trigger. The old
+        // shape re-clicked into it and burned the whole budget before failing
+        // with "subtree intercepts pointer events".
+        await expect(page.locator("[data-testid='overlay-panel'][data-state='open']")).toBeVisible();
+        expect(await counter(page, '__triggerClicks'), 'the panel opened exactly once').toBe(1);
+        expect(elapsed, `expected the call to settle at the cap, took ${elapsed}ms`).toBeLessThan(10000);
+        expect(testInfo.annotations.find(a => a.type === 'deadline-click')).toBeTruthy();
+    });
+
+    test('ifPresent path inherits the deadline handling', async ({ page }, testInfo) => {
+        test.setTimeout(60000);
+        await page.setContent(TOGGLE_GROUP);
+        await blockRendererOnFirstClick(page, OPTION);
+
+        const interactions = new Interactions(page, 15000);
+        expect(await interactions.clickIfPresent(new WebElement(page.locator(OPTION).nth(0)))).toBe(true);
+
+        await expect(page.locator(SELECTED)).toHaveCount(1);
+        expect(await counter(page, '__optionClicks')).toBe(1);
+        expect(testInfo.annotations.find(a => a.type === 'deadline-click')).toBeTruthy();
+    });
+
+    test('interceptionRetry: false does not re-arm the re-click on the deadline path', async ({ page }) => {
+        test.setTimeout(60000);
+        // The opt-out is scoped to the interception fallback (surfacing genuine
+        // overlay bugs). It must not reintroduce the wedge.
+        await page.setContent(COVERING_OVERLAY);
+        await blockRendererOnFirstClick(page, TRIGGER);
+
+        const interactions = new Interactions(page, 15000, false);
+        await interactions.click(new WebElement(page.locator(TRIGGER)));
+
+        await expect(page.locator("[data-testid='overlay-panel'][data-state='open']")).toBeVisible();
+        expect(await counter(page, '__triggerClicks')).toBe(1);
+    });
+});
+
+/**
+ * Renders a click-counting button and returns its WebElement. Used by the
+ * branches the widget fixtures above cannot reach — a permanently disabled
+ * control, and a driver-level failure that cannot be provoked from the page.
  */
 async function pageWithCountingButton(page: Page, disabled = false): Promise<WebElement> {
     await page.setContent(`
@@ -42,44 +211,9 @@ async function pageWithCountingButton(page: Page, disabled = false): Promise<Web
     return new WebElement(page.locator('#btn'));
 }
 
-test.describe('Click retry safety (no double fire)', () => {
-    test('deadline click: input dispatched at the timeout is NOT re-clicked', async ({ page }, testInfo) => {
-        test.setTimeout(60000);
-        const button = await pageWithCountingButton(page);
+const btnClicks = (page: Page) => page.evaluate(() => (window as unknown as { __clicks: number }).__clicks);
 
-        // A one-shot handler blocks the renderer for 6s as soon as the click's
-        // input arrives — longer than the 5s first-attempt cap, so the attempt
-        // times out in the "performing click action" phase AFTER input was
-        // dispatched. The generous overall budget (15s) deliberately OUTLIVES
-        // the block, so the old blind retry had time to land a real second
-        // click: this reproduces the production signature (count === 2), not
-        // merely a different error.
-        await page.evaluate(() => {
-            document.getElementById('btn')!.addEventListener('click', () => {
-                const end = Date.now() + 6000;
-                while (Date.now() < end) { /* block the renderer */ }
-            }, { once: true });
-        });
-
-        const interactions = new Interactions(page, 15000);
-
-        // Must resolve (click treated as delivered), not throw and not re-click.
-        await interactions.click(button);
-
-        // Causal assertion: exactly ONE click reached the page, and it stays
-        // one for longer than the old retry would have needed to land a second.
-        await expect.poll(() => page.evaluate(() => (window as unknown as { __clicks: number }).__clicks), {
-            timeout: 10000,
-        }).toBe(1);
-        await page.waitForTimeout(2000);
-        expect(await page.evaluate(() => (window as unknown as { __clicks: number }).__clicks)).toBe(1);
-
-        // The decision must be report-visible, mirroring interception-fallback.
-        const note = testInfo.annotations.find(a => a.type === 'deadline-click');
-        expect(note, 'expected a deadline-click annotation on the test').toBeTruthy();
-        expect(note?.description).toContain('performing click action');
-    });
-
+test.describe('Click retry safety (branches the widget fixtures cannot reach)', () => {
     test('never-actionable click stays inside the caller budget instead of cap + full retry', async ({ page }) => {
         test.setTimeout(60000);
         // Button never becomes enabled, so the click can only fail. The old
@@ -96,7 +230,7 @@ test.describe('Click retry safety (no double fire)', () => {
         // 9.5s on an 8s budget: tight enough to catch a partial overrun, with
         // ~1.5s of slack for CI jitter. The old shape took ~13s.
         expect(elapsed, `expected the failure inside the 8s budget, took ${elapsed}ms`).toBeLessThan(9500);
-        expect(await page.evaluate(() => (window as unknown as { __clicks: number }).__clicks)).toBe(0);
+        expect(await btnClicks(page)).toBe(0);
     });
 
     test('non-timeout failure is rethrown, never masked by a dispatched click', async ({ page }) => {
@@ -116,49 +250,7 @@ test.describe('Click retry safety (no double fire)', () => {
         // Causal assertion: no fallback click was dispatched to paper over the
         // error — the page saw nothing. (Letting `fatal` fall through to the
         // dispatchEvent fallback flips this to 1 and stops the rejection.)
-        expect(await page.evaluate(() => (window as unknown as { __clicks: number }).__clicks)).toBe(0);
-    });
-
-    test('ifPresent path: a deadline click reports success without double-firing', async ({ page }, testInfo) => {
-        test.setTimeout(60000);
-        // clickIfPresent routes through the same attempt chain, so it inherits
-        // the deadline handling: one click in the page, reported as clicked.
-        const button = await pageWithCountingButton(page);
-        await page.evaluate(() => {
-            document.getElementById('btn')!.addEventListener('click', () => {
-                const end = Date.now() + 6000;
-                while (Date.now() < end) { /* block the renderer */ }
-            }, { once: true });
-        });
-
-        const interactions = new Interactions(page, 15000);
-        expect(await interactions.clickIfPresent(button)).toBe(true);
-
-        await expect.poll(() => page.evaluate(() => (window as unknown as { __clicks: number }).__clicks), {
-            timeout: 10000,
-        }).toBe(1);
-        expect(testInfo.annotations.find(a => a.type === 'deadline-click')).toBeTruthy();
-    });
-
-    test('interceptionRetry: false does not turn a deadline click into a failure', async ({ page }) => {
-        test.setTimeout(60000);
-        // The opt-out is scoped to the interception fallback (surfacing genuine
-        // overlay bugs). It deliberately does NOT re-arm a re-click after input
-        // was already delivered — that would reintroduce the double fire.
-        const button = await pageWithCountingButton(page);
-        await page.evaluate(() => {
-            document.getElementById('btn')!.addEventListener('click', () => {
-                const end = Date.now() + 6000;
-                while (Date.now() < end) { /* block the renderer */ }
-            }, { once: true });
-        });
-
-        const interactions = new Interactions(page, 15000, false);
-        await interactions.click(button);
-
-        await expect.poll(() => page.evaluate(() => (window as unknown as { __clicks: number }).__clicks), {
-            timeout: 10000,
-        }).toBe(1);
+        expect(await btnClicks(page)).toBe(0);
     });
 
     test('waiting-phase timeout: full-timeout retry is preserved and clicks exactly once', async ({ page }, testInfo) => {
@@ -175,7 +267,7 @@ test.describe('Click retry safety (no double fire)', () => {
         const interactions = new Interactions(page, 15000);
         await interactions.click(button);
 
-        expect(await page.evaluate(() => (window as unknown as { __clicks: number }).__clicks)).toBe(1);
+        expect(await btnClicks(page)).toBe(1);
         expect(testInfo.annotations.find(a => a.type === 'deadline-click')).toBeFalsy();
     });
 
@@ -185,7 +277,7 @@ test.describe('Click retry safety (no double fire)', () => {
         const interactions = new Interactions(page);
         await interactions.click(button);
 
-        expect(await page.evaluate(() => (window as unknown as { __clicks: number }).__clicks)).toBe(1);
+        expect(await btnClicks(page)).toBe(1);
         expect(testInfo.annotations.find(a => a.type === 'deadline-click')).toBeFalsy();
         expect(testInfo.annotations.find(a => a.type === 'interception-fallback')).toBeFalsy();
     });

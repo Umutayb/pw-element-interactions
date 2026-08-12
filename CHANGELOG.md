@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.9 — 2026-08-12
+
+### Fixed
+
+- **A timed-out click is never re-dispatched.** The 5s-capped first click
+  attempt used to be blind-retried with the full timeout after any
+  non-interception error — including a timeout raised *after* the click's input
+  had already been dispatched, which delivered a second physical click. Failed
+  attempts are now classified: interception → unchanged `dispatchEvent('click')`
+  fallback; timeout after input dispatch → accepted as delivered (`log.warn` +
+  a `deadline-click` annotation), never clicked again; timeout still waiting for
+  actionability → continues on the *remaining* budget, so total elapsed stays
+  within the caller's `timeout`; anything else → rethrown. Timeout detection is
+  class-based (`errors.TimeoutError`), not message-substring sniffing.
+
 ## 0.3.8 — 2026-07-28
 
 ### Added

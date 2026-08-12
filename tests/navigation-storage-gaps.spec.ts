@@ -3,7 +3,7 @@ import { gotoButtons } from './fixture/pageHelpers';
 
 /**
  * Coverage for the Steps-API gaps closed in 0.3.7 — the surface a consumer
- * suite (Mr Marvis e2e) previously had to drop to raw Playwright `page.*` for:
+ * suite previously had to drop to raw Playwright `page.*` for:
  *
  * - `steps.navigateTo(url, { waitUntil })`            — non-`'load'` lifecycle wait
  * - `steps.getUrl()` / `steps.getCurrentPath()`       — current-URL getters

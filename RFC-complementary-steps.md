@@ -1,6 +1,6 @@
 # RFC: Complementary Steps API — eliminating the raw-`page.*` residual
 
-**Status:** adopted — all three phases shipped (#215, #216, #217) · **Author:** consumer-driven (Mr Marvis e2e residual audit)
+**Status:** adopted — all three phases shipped (#215, #216, #217) · **Author:** consumer-driven (residual raw-`page.*` audit of a real consumer suite)
 
 ## Motivation
 
@@ -47,8 +47,8 @@ a parent `Locator`. Resolves the parent via the repo, then queries within it:
 
 ```ts
 await steps.on('cookieDialog', 'CookieBanner').findByRole('button').count.toBe(2);
-await steps.on('cookieDialog', 'CookieBanner').findByRole('button', { name: /voorkeuren|manage/i }).count.toBe(0);
-await steps.on('cartDrawer', 'CartDrawer').findByText('Je winkelwagen is leeg').verifyState('visible');
+await steps.on('cookieDialog', 'CookieBanner').findByRole('button', { name: /preferences|manage/i }).count.toBe(0);
+await steps.on('cartPanel', 'CartPage').findByText('Your cart is empty').verifyState('visible');
 await steps.on('panel', 'Page').findBySelector("input[name='email']").fill('a@b.com');
 ```
 

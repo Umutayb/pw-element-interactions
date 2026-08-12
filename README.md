@@ -212,10 +212,10 @@ Query "X within a named element" without ever exposing the parent `Locator` to y
 ```ts
 // Count the buttons inside a named dialog — no parent selector in the test.
 await steps.on('cookieDialog', 'CookieBanner').findByRole('button').count.toBe(2);
-await steps.on('cookieDialog', 'CookieBanner').findByRole('button', { name: /voorkeuren|manage/i }).count.toBe(0);
+await steps.on('cookieDialog', 'CookieBanner').findByRole('button', { name: /preferences|manage/i }).count.toBe(0);
 
 // Assert text that lives inside a named drawer is visible.
-await steps.on('cartDrawer', 'CartDrawer').findByText('Je winkelwagen is leeg').verifyState('visible');
+await steps.on('cartPanel', 'CartPage').findByText('Your cart is empty').verifyState('visible');
 
 // Fill an input scoped to a named panel; .first() / .nth() narrowing composes.
 await steps.on('panel', 'Page').findBySelector("input[name='email']").fill('a@b.com');

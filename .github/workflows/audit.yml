@@ -139,6 +139,22 @@ jobs:
             the commit message or the PR body. Do not name any AI model
             anywhere in the commit or PR.
 
+      # A green dispatch step means the action process exited cleanly — NOT that
+      # a pull request exists. Claude may deliberately open nothing (the prompt
+      # tells it to stop rather than accept a breaking change), or fail to push
+      # while still exiting 0. The first live run did exactly that: dispatch
+      # succeeded, no branch and no PR were created, and the job went green with
+      # the advisory untouched. Verify the artifact, never the exit code.
+      - name: 🔎 Confirm a fix PR actually exists
+        id: confirm
+        if: always() && steps.audit.outputs.vulnerable == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          opened=$(gh pr list --state open --head "$FIX_BRANCH" --json number --jq 'length' 2>/dev/null || echo "")
+          echo "count=${opened}" >> "$GITHUB_OUTPUT"
+          echo "Open PRs on $FIX_BRANCH after dispatch: ${opened:-<lookup failed>}"
+
       # The honest verdict. Green means either nothing was found, or something
       # was found AND there is now an open PR to fix it. Red means a finding is
       # sitting unactioned and needs a human.
@@ -147,21 +163,23 @@ jobs:
         run: |
           vulnerable="${{ steps.audit.outputs.vulnerable }}"
           existing="${{ steps.existing.outputs.count }}"
-          dispatched="${{ steps.fix.outcome }}"
+          confirmed="${{ steps.confirm.outputs.count }}"
 
           if [ "$vulnerable" != "true" ]; then
             echo "✅ No high-severity vulnerabilities."
             exit 0
           fi
-          # Non-empty AND non-zero: an empty value means the lookup itself did
-          # not run or failed, which must not be read as "a PR already exists".
+          # Non-empty AND non-zero. An empty value means the lookup did not run
+          # or failed, which must never be read as "a PR exists".
           if [ -n "$existing" ] && [ "$existing" != "0" ]; then
-            echo "⚠️ Vulnerabilities found; a fix PR is already open on $FIX_BRANCH."
+            echo "⚠️ Vulnerabilities found; a fix PR was already open on $FIX_BRANCH."
             exit 0
           fi
-          if [ "$dispatched" = "success" ]; then
-            echo "⚠️ Vulnerabilities found; dispatched Claude Code to open a fix PR."
+          if [ -n "$confirmed" ] && [ "$confirmed" != "0" ]; then
+            echo "⚠️ Vulnerabilities found; a fix PR is now open on $FIX_BRANCH."
             exit 0
           fi
-          echo "❌ Vulnerabilities found and no fix PR was opened — needs a human."
+          echo "❌ Vulnerabilities found and no fix PR exists — needs a human."
+          echo "   (The fixer may have declined deliberately, e.g. the only"
+          echo "    available remedy was a breaking change. Read its log.)"
           exit 1

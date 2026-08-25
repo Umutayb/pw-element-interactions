@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Workflow — Pipeline Stages</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+  :root {
+    --bg-primary: #0d1117;
+    --bg-secondary: #161b22;
+    --bg-card: #21262d;
+    --text-bright: #e6edf3;
+    --text-muted: #7d8590;
+    --text-faint: #484f58;
+    --accent-green: #3fb950;
+    --accent-green-dim: rgba(63, 185, 80, 0.15);
+    --accent-blue: #58a6ff;
+    --accent-blue-dim: rgba(88, 166, 255, 0.15);
+    --accent-purple: #bc8cff;
+    --accent-purple-dim: rgba(188, 140, 255, 0.15);
+    --accent-orange: #d29922;
+    --accent-orange-dim: rgba(210, 153, 34, 0.15);
+    --accent-red: #f85149;
+    --accent-red-dim: rgba(248, 81, 73, 0.1);
+    --accent-cyan: #56d4dd;
+    --accent-cyan-dim: rgba(86, 212, 221, 0.15);
+    --border: #30363d;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-bright);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .slide {
+    min-height: 100vh;
+    padding: 48px 64px 40px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  .slide::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg,
+      var(--accent-green) 0%,
+      var(--accent-blue) 30%,
+      var(--accent-purple) 60%,
+      var(--accent-orange) 100%
+    );
+  }
+
+  .brand-mark {
+    position: absolute;
+    bottom: 28px;
+    left: 64px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .brand-mark span {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-faint);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .slide-footer {
+    position: absolute;
+    bottom: 28px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 64px;
+    font-size: 11px;
+    color: var(--text-faint);
+    letter-spacing: 1px;
+  }
+
+  .slide-footer .center { font-weight: 500; }
+  .slide-footer .right { font-weight: 500; letter-spacing: 2px; }
+
+  /* Header */
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--accent-green);
+    margin-bottom: 8px;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  }
+
+  h2 {
+    font-size: 34px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    margin-bottom: 6px;
+  }
+
+  .section-subtitle {
+    font-size: 14px;
+    color: var(--text-muted);
+    margin-bottom: 28px;
+    max-width: 720px;
+    line-height: 1.5;
+  }
+
+  /* Pipeline layout */
+  .pipeline-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-height: 0;
+  }
+
+  .pipeline-group-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin-bottom: 4px;
+  }
+
+  /* Core pipeline — horizontal flow */
+  .core-pipeline {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  .stage-card {
+    flex: 1;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    padding: 18px 16px 14px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .stage-card:first-child { border-radius: 10px 0 0 10px; }
+  .stage-card:last-child { border-radius: 0 10px 10px 0; }
+
+  .stage-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-size: 13px;
+    font-weight: 800;
+    margin-bottom: 10px;
+    flex-shrink: 0;
+  }
+
+  .stage-num.green  { background: var(--accent-green-dim); color: var(--accent-green); }
+  .stage-num.blue   { background: var(--accent-blue-dim);  color: var(--accent-blue); }
+  .stage-num.purple { background: var(--accent-purple-dim); color: var(--accent-purple); }
+  .stage-num.orange { background: var(--accent-orange-dim); color: var(--accent-orange); }
+
+  .stage-card h4 {
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    line-height: 1.3;
+  }
+
+  .stage-card p {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.45;
+    flex: 1;
+  }
+
+  .gate-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 10px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 4px;
+    width: fit-content;
+  }
+
+  .gate-badge.approval {
+    color: var(--accent-orange);
+    background: var(--accent-orange-dim);
+    border: 1px solid rgba(210, 153, 34, 0.25);
+  }
+
+  .gate-badge.commit {
+    color: var(--accent-green);
+    background: var(--accent-green-dim);
+    border: 1px solid rgba(63, 185, 80, 0.25);
+  }
+
+  .gate-badge.loop {
+    color: var(--accent-blue);
+    background: var(--accent-blue-dim);
+    border: 1px solid rgba(88, 166, 255, 0.25);
+  }
+
+  .gate-badge svg {
+    width: 10px;
+    height: 10px;
+    flex-shrink: 0;
+  }
+
+  /* Connector arrows between stages */
+  .connector {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    flex-shrink: 0;
+    color: var(--text-faint);
+    font-size: 14px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Sub-stage split for 4a/4b */
+  .sub-stage-split {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    flex: 1;
+  }
+
+  .sub-stage-split .stage-card {
+    border-radius: 0;
+    flex: 1;
+    padding: 12px 14px 10px;
+  }
+
+  .sub-stage-split .stage-card:first-child { border-radius: 0 10px 0 0; }
+  .sub-stage-split .stage-card:last-child  { border-radius: 0 0 10px 0; }
+
+  .sub-stage-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--accent-orange);
+    margin-bottom: 4px;
+  }
+
+  .sub-stage-split .stage-card h4 { font-size: 12px; }
+  .sub-stage-split .stage-card p  { font-size: 10px; }
+
+  /* Extended pipeline — 3-column cards */
+  .extended-pipeline {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+
+  .ext-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px 14px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .ext-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 20px;
+    right: 20px;
+    height: 2px;
+    border-radius: 0 0 2px 2px;
+  }
+
+  .ext-card:nth-child(1)::before { background: var(--accent-cyan); }
+  .ext-card:nth-child(2)::before { background: var(--accent-red); }
+  .ext-card:nth-child(3)::before { background: var(--accent-purple); }
+
+  .ext-card .stage-num.cyan   { background: var(--accent-cyan-dim); color: var(--accent-cyan); }
+  .ext-card .stage-num.red    { background: var(--accent-red-dim);  color: var(--accent-red); }
+
+  .ext-card h4 { font-size: 13px; font-weight: 700; margin-bottom: 5px; }
+  .ext-card p  { font-size: 11px; color: var(--text-muted); line-height: 1.45; flex: 1; }
+
+  .skill-dispatch {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 8px;
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--text-faint);
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    letter-spacing: 0.5px;
+  }
+
+  .skill-dispatch svg {
+    width: 10px;
+    height: 10px;
+    flex-shrink: 0;
+  }
+
+  /* Guardrail bar */
+  .guardrail {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--accent-red-dim);
+    border: 1px solid rgba(248, 81, 73, 0.2);
+    border-radius: 8px;
+    padding: 10px 18px;
+  }
+
+  .guardrail-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(248, 81, 73, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .guardrail-icon svg { width: 12px; height: 12px; }
+
+  .guardrail-text {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent-red);
+  }
+
+  .guardrail-text span {
+    color: var(--text-muted);
+    font-weight: 400;
+    margin-left: 6px;
+  }
+
+  @media print {
+    .slide { page-break-after: always; page-break-inside: avoid; }
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+
+  @page { size: landscape; margin: 0; }
+</style>
+</head>
+<body>
+
+<section class="slide">
+
+  <div class="section-label">the workflow</div>
+  <h2>An end-to-end pipeline</h2>
+  <p class="section-subtitle">
+    From a single prompt to a persistent, production-grade E2E test suite &mdash; every stage is governed
+    by the methodology, gated by human approval, and dispatched to specialist skills.
+  </p>
+
+  <div class="pipeline-wrapper">
+
+    <div class="pipeline-group-label">Core pipeline &mdash; per scenario</div>
+    <div class="core-pipeline">
+
+      <!-- Stage 1 -->
+      <div class="stage-card">
+        <div class="stage-num green">1</div>
+        <h4>Scenario Discovery</h4>
+        <p>Explore the app via Playwright MCP. Produce Given / When / Then scenarios with the user.</p>
+        <div class="gate-badge approval">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm3.78 5.28-4.5 4.5a.75.75 0 0 1-1.06 0l-2-2a.75.75 0 1 1 1.06-1.06L6.75 8.19l3.97-3.97a.75.75 0 1 1 1.06 1.06z"/></svg>
+          Hard gate &mdash; user approves scenario
+        </div>
+      </div>
+
+      <div class="connector">&rsaquo;</div>
+
+      <!-- Stage 2 -->
+      <div class="stage-card">
+        <div class="stage-num blue">2</div>
+        <h4>Element Inspection</h4>
+        <p>Inspect the live DOM for stable selectors. Propose page&#8209;repository entries &mdash; never invent.</p>
+        <div class="gate-badge approval">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm3.78 5.28-4.5 4.5a.75.75 0 0 1-1.06 0l-2-2a.75.75 0 1 1 1.06-1.06L6.75 8.19l3.97-3.97a.75.75 0 1 1 1.06 1.06z"/></svg>
+          Hard gate &mdash; user approves selectors
+        </div>
+      </div>
+
+      <div class="connector">&rsaquo;</div>
+
+      <!-- Stage 3 -->
+      <div class="stage-card">
+        <div class="stage-num purple">3</div>
+        <h4>Write Automation</h4>
+        <p>Compose the test with the Steps API. No raw selectors, no boilerplate. Failure screenshots built in.</p>
+        <div class="gate-badge loop">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M5.22 14.78a.75.75 0 0 0 1.06-1.06L4.56 12h8.69a.75.75 0 0 0 0-1.5H4.56l1.72-1.72a.75.75 0 0 0-1.06-1.06l-3 3a.75.75 0 0 0 0 1.06l3 3zm5.56-6.5a.75.75 0 1 1-1.06-1.06L11.44 5.5H2.75a.75.75 0 0 1 0-1.5h8.69L9.72 2.28a.75.75 0 0 1 1.06-1.06l3 3a.75.75 0 0 1 0 1.06l-3 3z"/></svg>
+          Run &rarr; diagnose &rarr; fix loop
+        </div>
+      </div>
+
+      <div class="connector">&rsaquo;</div>
+
+      <!-- Stage 4a / 4b split -->
+      <div class="sub-stage-split">
+        <div class="stage-card">
+          <div class="sub-stage-label">Stage 4a</div>
+          <h4>Test Optimization</h4>
+          <p>7-check protocol: dedup, anti-tautology, timing, readability, resilience, coverage, performance.</p>
+        </div>
+        <div class="stage-card">
+          <div class="sub-stage-label">Stage 4b</div>
+          <h4>API Compliance</h4>
+          <p>11-point review of every steps.* call against the API reference.</p>
+          <div class="gate-badge commit">
+            <svg viewBox="0 0 16 16" fill="currentColor"><path d="M11.93 8.5a4.002 4.002 0 0 1-7.86 0H.75a.75.75 0 0 1 0-1.5h3.32a4.002 4.002 0 0 1 7.86 0h3.32a.75.75 0 0 1 0 1.5h-3.32zm-1.43-.25a2.5 2.5 0 1 0-5 0 2.5 2.5 0 0 0 5 0z"/></svg>
+            Commit on success
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pipeline-group-label" style="margin-top: 8px;">Extended pipeline &mdash; companion-skill dispatches</div>
+    <div class="extended-pipeline">
+
+      <!-- Stage 5 -->
+      <div class="ext-card">
+        <div class="stage-num cyan">5</div>
+        <h4>Coverage Expansion</h4>
+        <p>Systematically add edge cases, negative paths, and boundary scenarios to the existing suite.</p>
+        <div class="skill-dispatch">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8.22 2.97a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06l2.97-2.97H3.75a.75.75 0 0 1 0-1.5h7.44L8.22 4.03a.75.75 0 0 1 0-1.06z"/></svg>
+          coverage-expansion
+        </div>
+      </div>
+
+      <!-- Stage 6 -->
+      <div class="ext-card">
+        <div class="stage-num red">6</div>
+        <h4>Bug Discovery</h4>
+        <p>Adversarial test runs that hunt real application bugs &mdash; not test bugs.</p>
+        <div class="skill-dispatch">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8.22 2.97a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06l2.97-2.97H3.75a.75.75 0 0 1 0-1.5h7.44L8.22 4.03a.75.75 0 0 1 0-1.06z"/></svg>
+          bug-discovery
+        </div>
+      </div>
+
+      <!-- Stage 7 -->
+      <div class="ext-card">
+        <div class="stage-num purple">7</div>
+        <h4>Adversarial AI Testing</h4>
+        <p>Multi-agent adversarial runs &mdash; agents stress the app under conditions a single tester would miss.</p>
+        <div class="skill-dispatch">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8.22 2.97a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06l2.97-2.97H3.75a.75.75 0 0 1 0-1.5h7.44L8.22 4.03a.75.75 0 0 1 0-1.06z"/></svg>
+          agents-vs-agents
+        </div>
+      </div>
+    </div>
+
+    <!-- Guardrail -->
+    <div class="guardrail">
+      <div class="guardrail-icon">
+        <svg viewBox="0 0 16 16" fill="var(--accent-red)"><path d="M9.504.43a1.516 1.516 0 0 0-3.008 0L5.08 6.637A1.75 1.75 0 0 0 6.824 8.75h2.352a1.75 1.75 0 0 0 1.744-2.113L9.504.43zM8 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z"/></svg>
+      </div>
+      <div class="guardrail-text">
+        Secrets Sweep<span>&mdash; pre-publish guardrail scans every commit for leaked credentials before the suite ships</span>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="slide-footer">
+    <span>spriteCloud</span>
+    <span class="center">Automating Quality Assurance Processes</span>
+    <span class="right">7 / 9</span>
+  </div>
+
+</section>
+
+</body>
+</html>

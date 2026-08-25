@@ -9,6 +9,11 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # claude-code-action mints a GitHub App token via OIDC to do its repo
+  # work. That is separate from the Anthropic credential and fails the
+  # whole step without this scope:
+  #   "Unable to get ACTIONS_ID_TOKEN_REQUEST_URL env variable"
+  id-token: write
 
 # One audit at a time. A scheduled run and a manual one landing together would
 # otherwise race to open the same fix branch.

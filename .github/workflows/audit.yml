@@ -81,7 +81,13 @@ jobs:
         if: steps.audit.outputs.vulnerable == 'true' && steps.existing.outputs.count == '0'
         uses: anthropics/claude-code-action@v1
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Subscription auth (Claude Pro/Max). Generate the token locally with
+          # `claude setup-token` and store the output as a repository secret
+          # named CLAUDE_CODE_OAUTH_TOKEN. It EXPIRES — when it does this step
+          # fails on auth rather than on a vulnerability, and the job goes red
+          # with the audit report still in the summary. Regenerate and re-add
+          # the secret to restore it.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
             --allowedTools Bash,Read,Edit,Write,Glob,Grep
             --max-turns 40
